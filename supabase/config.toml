@@ -1,0 +1,49 @@
+project_id = "vycktqjiaomxvsbvgzly"
+
+[functions.admin-subscription-management]
+verify_jwt = true
+
+[functions.ai-assistant]
+verify_jwt = true
+
+[functions.ai-vessel-port-search]
+verify_jwt = true
+
+[functions.ai-vessel-search]
+verify_jwt = true
+
+[functions.autofill-company-data]
+verify_jwt = true
+
+[functions.autofill-port-data]
+verify_jwt = true
+
+[functions.autofill-refinery-data]
+verify_jwt = true
+
+[functions.autofill-vessel-data]
+verify_jwt = true
+
+[functions.check-broker-membership]
+verify_jwt = true
+
+[functions.check-subscription]
+verify_jwt = true
+
+[functions.create-broker-checkout]
+verify_jwt = true
+
+[functions.create-checkout]
+verify_jwt = true
+
+[functions.customer-portal]
+verify_jwt = true
+
+[functions.fetch-oil-prices]
+verify_jwt = false
+
+[functions.generate-vessel-document]
+verify_jwt = true
+
+[functions.send-confirmation-email]
+verify_jwt = false
