@@ -37,7 +37,7 @@ WITH CHECK (
     SELECT 1 FROM public.broker_memberships bm 
     WHERE bm.user_id = auth.uid() 
     AND bm.membership_status = 'active' 
-    AND bm.payment_status = 'completed'
+    AND bm.payment_status = 'paid'
   )
 );
 
@@ -64,7 +64,7 @@ AS $$
       SELECT 1 FROM public.broker_memberships 
       WHERE user_id = user_id_param 
       AND membership_status = 'active' 
-      AND payment_status = 'completed'
+      AND payment_status = 'paid'
     ),
     'membership_status', (
       SELECT membership_status 

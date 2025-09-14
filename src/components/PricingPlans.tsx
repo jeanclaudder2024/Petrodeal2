@@ -31,6 +31,7 @@ interface Discount {
   discount_percentage: number;
   discount_name: string | null;
   plan_tier: string;
+  billing_cycle: 'monthly' | 'annual';
 }
 
 interface DatabasePlan {
@@ -68,7 +69,7 @@ const PricingPlans: React.FC<PricingPlansProps> = ({
     try {
       const { data, error } = await db
         .from('subscription_discounts')
-        .select('discount_percentage, discount_name, plan_tier')
+        .select('discount_percentage, discount_name, plan_tier, billing_cycle')
         .eq('is_active', true)
         .or(`valid_until.is.null,valid_until.gt.${new Date().toISOString()}`);
 
@@ -106,7 +107,12 @@ const PricingPlans: React.FC<PricingPlansProps> = ({
   };
 
   const getDiscountForPlan = (planTier: string) => {
-    return discounts.find(d => d.plan_tier === planTier);
+    const billingCycle = isAnnual ? 'annual' : 'monthly';
+    return discounts.find(d => d.plan_tier === planTier && d.billing_cycle === billingCycle);
+  };
+
+  const calculateDiscountedPrice = (originalPrice: number, discountPercentage: number) => {
+    return originalPrice * (1 - discountPercentage / 100);
   };
 
   const handleSubscribe = (tier: string) => {
@@ -224,7 +230,7 @@ const PricingPlans: React.FC<PricingPlansProps> = ({
           const period = isAnnual ? 'year' : 'month';
           const isCurrentPlan = currentTier === plan.tier;
           const discount = getDiscountForPlan(plan.tier);
-          const discountedPrice = discount ? price * (100 - discount.discount_percentage) / 100 : price;
+          const discountedPrice = discount ? calculateDiscountedPrice(price, discount.discount_percentage) : price;
           
           return (
             <Card 

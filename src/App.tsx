@@ -67,10 +67,10 @@ const queryClient = new QueryClient();
 
 const AppLayout = ({ children }: { children: React.ReactNode }) => (
   <SidebarProvider>
-    <div className="min-h-screen flex w-full">
+    <div className="min-h-screen flex w-full light" data-theme="light">
       <AppSidebar />
       <div className="flex-1">
-        <header className="h-12 flex items-center justify-between border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-4">
+        <header className="h-12 flex items-center justify-between border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-4 light">
           <SidebarTrigger className="ml-2" />
           <div className="flex items-center gap-2">
             <LanguageSelector />
@@ -78,7 +78,7 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => (
             <UserProfileMenu />
           </div>
         </header>
-        <main className="flex-1">
+        <main className="flex-1 light">
           {children}
         </main>
       </div>

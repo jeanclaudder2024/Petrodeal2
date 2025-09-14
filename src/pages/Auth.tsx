@@ -101,11 +101,11 @@ const Auth = () => {
     setIsLoading(false);
   };
   if (loading) {
-    return <div className="min-h-screen bg-gradient-to-b from-background via-background/95 to-background flex items-center justify-center">
+    return <div className="min-h-screen bg-gradient-to-b from-background via-background/95 to-background flex items-center justify-center light" data-theme="light">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
       </div>;
   }
-  return <div className="min-h-screen bg-gradient-to-b from-background via-background/95 to-background flex items-center justify-center p-4">
+  return <div className="min-h-screen bg-gradient-to-b from-background via-background/95 to-background flex items-center justify-center p-4 light" data-theme="light">
       <div className="w-full max-w-md">
         {/* Logo */}
         <div className="text-center mb-8">

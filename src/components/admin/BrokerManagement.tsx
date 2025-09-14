@@ -25,7 +25,8 @@ import {
   MessageCircle, 
   XCircle, 
   Eye, 
-  Send
+  Send,
+  User
 } from 'lucide-react';
 import { db, supabase } from '@/lib/supabase-helper';
 import { useToast } from '@/hooks/use-toast';
@@ -33,22 +34,40 @@ import { useToast } from '@/hooks/use-toast';
 interface BrokerProfile {
   id: string;
   user_id: string;
+  membership_id?: string;
   full_name: string;
   company_name?: string;
   phone: string;
-  bio?: string;
-  specializations?: string[];
-  years_experience?: number;
-  verified_at?: string;
-  created_at: string;
-  profile_image_url?: string;
-  id_document_url?: string;
-  passport_document_url?: string;
+  email?: string;
+  address?: string;
   country?: string;
   city?: string;
-  address?: string;
   license_number?: string;
+  years_experience?: number;
+  specializations?: string[];
+  id_document_url?: string;
+  passport_document_url?: string;
+  additional_documents?: string[];
+  bio?: string;
+  profile_image_url?: string;
+  website?: string;
+  linkedin_url?: string;
+  twitter_url?: string;
+  languages?: string[];
+  certifications?: string[];
+  education?: string;
+  trading_volume?: string;
+  commission_rate?: number;
+  preferred_regions?: string[];
+  company_size?: string;
+  company_type?: string;
+  business_registration?: string;
+  tax_id?: string;
   verification_notes?: string;
+  verified_at?: string;
+  verified_by?: string;
+  created_at: string;
+  updated_at?: string;
 }
 
 interface BrokerDeal {
@@ -108,39 +127,11 @@ const BrokerManagement = () => {
   const [chatMessage, setChatMessage] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isStepDialogOpen, setIsStepDialogOpen] = useState(false);
-  const [isRejectDialogOpen, setIsRejectDialogOpen] = useState(false);
-  const [rejectionMessage, setRejectionMessage] = useState('');
-  const [imageLoadingStates, setImageLoadingStates] = useState<{[key: string]: boolean}>({});
-  const [imageErrorStates, setImageErrorStates] = useState<{[key: string]: boolean}>({});
   const { toast } = useToast();
-
-  // Image loading helpers
-  const handleImageLoad = (imageKey: string) => {
-    setImageLoadingStates(prev => ({ ...prev, [imageKey]: false }));
-    setImageErrorStates(prev => ({ ...prev, [imageKey]: false }));
-  };
-
-  const handleImageError = (imageKey: string) => {
-    setImageLoadingStates(prev => ({ ...prev, [imageKey]: false }));
-    setImageErrorStates(prev => ({ ...prev, [imageKey]: true }));
-  };
-
-  const handleImageLoadStart = (imageKey: string) => {
-    setImageLoadingStates(prev => ({ ...prev, [imageKey]: true }));
-    setImageErrorStates(prev => ({ ...prev, [imageKey]: false }));
-  };
 
   useEffect(() => {
     fetchData();
   }, []);
-
-  // Reset image states when broker changes
-  useEffect(() => {
-    if (selectedBroker) {
-      setImageLoadingStates({});
-      setImageErrorStates({});
-    }
-  }, [selectedBroker]);
 
   const fetchData = async () => {
     setLoading(true);
@@ -148,26 +139,7 @@ const BrokerManagement = () => {
       // Fetch brokers
       const { data: brokersData, error: brokersError } = await db
         .from('broker_profiles')
-        .select(`
-          id,
-          user_id,
-          full_name,
-          company_name,
-          phone,
-          bio,
-          specializations,
-          years_experience,
-          verified_at,
-          created_at,
-          profile_image_url,
-          id_document_url,
-          passport_document_url,
-          country,
-          city,
-          address,
-          license_number,
-          verification_notes
-        `)
+        .select('*')
         .order('created_at', { ascending: false });
 
       if (brokersError) throw brokersError;
@@ -279,7 +251,7 @@ const BrokerManagement = () => {
 
       if (error) throw error;
       
-      toast({ title: "Success", description: "Step rejected with feedback sent to broker" });
+      toast({ title: "Success", description: "Step rejected" });
       fetchData();
     } catch (error) {
       console.error('Failed to reject step:', error);
@@ -289,15 +261,6 @@ const BrokerManagement = () => {
         variant: "destructive"
       });
     }
-  };
-
-  const handleRejectWithMessage = async () => {
-    if (!selectedStep || !rejectionMessage.trim()) return;
-    
-    await handleRejectStep(selectedStep.id, rejectionMessage);
-    setIsRejectDialogOpen(false);
-    setRejectionMessage('');
-    setSelectedStep(null);
   };
 
   const handleSendMessage = async () => {
@@ -502,11 +465,10 @@ const BrokerManagement = () => {
                           <TableCell>{broker.company_name || 'N/A'}</TableCell>
                           <TableCell>{broker.years_experience ? `${broker.years_experience} years` : 'N/A'}</TableCell>
                           <TableCell>
-                            {broker.verified_at ? (
-                              <Badge variant="default">Verified</Badge>
-                            ) : (
+                            {broker.verified_at ? 
+                              <Badge variant="default">Verified</Badge> : 
                               <Badge variant="secondary">Pending</Badge>
-                            )}
+                            }
                           </TableCell>
                           <TableCell>
                             <div className="flex gap-2">
@@ -644,14 +606,12 @@ const BrokerManagement = () => {
                            <TableCell>{deal.deal_type}</TableCell>
                            <TableCell>{deal.cargo_type || 'N/A'}</TableCell>
                            <TableCell>
-                             {deal.total_value ? (
+                             {deal.total_value ? 
                                deal.total_value.toLocaleString('en-US', { 
                                  style: 'currency', 
                                  currency: 'USD' 
-                               })
-                             ) : (
-                               'N/A'
-                             )}
+                               }) : 'N/A'
+                             }
                            </TableCell>
                            <TableCell>
                              <div className="flex items-center gap-2">
@@ -846,11 +806,9 @@ const BrokerManagement = () => {
                              </div>
                            </TableCell>
                            <TableCell>
-                             {step.completed_at ? (
-                               new Date(step.completed_at).toLocaleDateString()
-                             ) : (
-                               'N/A'
-                             )}
+                             {step.completed_at ? 
+                               new Date(step.completed_at).toLocaleDateString() : 'N/A'
+                             }
                            </TableCell>
                            <TableCell>
                              <div className="flex gap-2">
@@ -877,10 +835,7 @@ const BrokerManagement = () => {
                                    <Button
                                      size="sm"
                                      variant="outline"
-                                     onClick={() => {
-                                       setSelectedStep(step);
-                                       setIsRejectDialogOpen(true);
-                                     }}
+                                     onClick={() => handleRejectStep(step.id)}
                                      className="text-red-600 hover:text-red-700"
                                    >
                                      <XCircle className="h-4 w-4" />
@@ -905,168 +860,122 @@ const BrokerManagement = () => {
         </TabsContent>
       </Tabs>
 
+      {/* Broker Profile Details Dialog */}
       <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Broker Details</DialogTitle>
+            <DialogTitle>Broker Profile Details</DialogTitle>
             <DialogDescription>
-              View detailed information about the broker
+              Complete broker profile information for verification and approval
             </DialogDescription>
           </DialogHeader>
           {selectedBroker && (
-            <div className="space-y-8 max-h-[80vh] overflow-y-auto">
-              {/* Header with Status */}
-              <div className="flex items-center justify-between pb-4 border-b">
-                <div className="flex items-center space-x-4">
-                  <div className="w-16 h-16 rounded-full bg-gradient-to-br from-blue-500 to-purple-600 flex items-center justify-center text-white text-xl font-bold shadow-lg">
-                    {selectedBroker.full_name?.charAt(0) || '?'}
-                  </div>
-                  <div>
-                    <h3 className="text-xl font-bold text-foreground">{selectedBroker.full_name}</h3>
-                    <p className="text-muted-foreground">{selectedBroker.company_name || 'Independent Broker'}</p>
-                  </div>
-                </div>
-                <div className="text-right">
-                  {selectedBroker.verified_at ? (
-                    <Badge variant="default" className="bg-green-100 text-green-800 border-green-200">
-                      <CheckCircle className="h-3 w-3 mr-1" />
-                      Verified
-                    </Badge>
-                  ) : (
-                    <Badge variant="secondary" className="bg-yellow-100 text-yellow-800 border-yellow-200">
-                      <Clock className="h-3 w-3 mr-1" />
-                      Pending Verification
-                    </Badge>
-                  )}
-                </div>
-              </div>
-
-              {/* Profile and Passport Images */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <div className="space-y-3">
-                  <Label className="text-base font-semibold flex items-center">
-                    <div className="w-2 h-2 bg-blue-500 rounded-full mr-2"></div>
-                    Profile Photo
-                  </Label>
-                  <div className="relative border-2 border-dashed border-gray-200 rounded-xl p-6 min-h-56 bg-gradient-to-br from-gray-50 to-gray-100 hover:from-gray-100 hover:to-gray-150 transition-all duration-200">
+            <div className="space-y-6">
+              {/* Profile and Document Images */}
+              <div className="grid grid-cols-3 gap-4">
+                <div>
+                  <Label className="text-base font-semibold">Profile Photo</Label>
+                  <div className="mt-2 border rounded-lg p-4 min-h-48 bg-muted/30">
                     {selectedBroker.profile_image_url ? (
-                      <div className="space-y-3">
-                        <div className="relative group">
-                          {imageLoadingStates['profile'] && (
-                            <div className="absolute inset-0 flex items-center justify-center bg-gray-100 rounded-lg z-10">
-                              <div className="flex flex-col items-center space-y-2">
-                                <RefreshCw className="h-6 w-6 animate-spin text-blue-500" />
-                                <p className="text-sm text-gray-600">Loading image...</p>
-                              </div>
-                            </div>
-                          )}
-                          {imageErrorStates['profile'] ? (
-                            <div className="flex items-center justify-center h-48 text-center py-16 text-muted-foreground">
-                              <div>
-                                <AlertCircle className="h-8 w-8 mx-auto mb-2 text-red-400" />
-                                <p className="text-sm font-medium text-red-600">Profile image failed to load</p>
-                                <p className="text-xs text-muted-foreground mt-1">The image may be corrupted or unavailable</p>
-                              </div>
-                            </div>
-                          ) : (
-                            <img 
-                              src={selectedBroker.profile_image_url} 
-                              alt="Profile" 
-                              className="w-full h-48 object-cover rounded-lg border-2 border-white shadow-md group-hover:shadow-lg transition-shadow duration-200"
-                              onLoadStart={() => handleImageLoadStart('profile')}
-                              onLoad={() => handleImageLoad('profile')}
-                              onError={() => handleImageError('profile')}
-                              style={{ display: imageLoadingStates['profile'] ? 'none' : 'block' }}
-                            />
-                          )}
-                          <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-10 rounded-lg transition-all duration-200"></div>
+                      <div className="space-y-2">
+                        <img 
+                          src={selectedBroker.profile_image_url} 
+                          alt="Profile" 
+                          className="w-full h-40 object-cover rounded-md border"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).style.display = 'none';
+                            (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');
+                          }}
+                        />
+                        <div className="hidden text-center py-16 text-muted-foreground">
+                          <p>Profile image not available</p>
                         </div>
-                        {!imageErrorStates['profile'] && (
-                          <Button 
-                            size="sm" 
-                            variant="outline" 
-                            className="w-full hover:bg-blue-50 hover:border-blue-300"
-                            onClick={() => window.open(selectedBroker.profile_image_url, '_blank')}
-                          >
-                            <Eye className="h-4 w-4 mr-2" />
-                            View Full Image
-                          </Button>
-                        )}
                       </div>
                     ) : (
-                      <div className="flex items-center justify-center h-48 text-muted-foreground">
+                      <div className="flex items-center justify-center h-40 text-muted-foreground">
                         <div className="text-center">
-                          <div className="w-20 h-20 rounded-full bg-gradient-to-br from-gray-300 to-gray-400 mx-auto mb-3 flex items-center justify-center shadow-inner">
-                            <span className="text-2xl font-bold text-white">
+                          <div className="w-16 h-16 rounded-full bg-muted mx-auto mb-2 flex items-center justify-center">
+                            <span className="text-2xl font-semibold">
                               {selectedBroker.full_name?.charAt(0) || '?'}
                             </span>
                           </div>
-                          <p className="text-sm font-medium">No profile photo uploaded</p>
-                          <p className="text-xs text-muted-foreground mt-1">Broker hasn't provided a profile image</p>
+                          <p className="text-sm">No profile photo uploaded</p>
                         </div>
                       </div>
                     )}
                   </div>
                 </div>
                 
-                <div className="space-y-3">
-                  <Label className="text-base font-semibold flex items-center">
-                    <div className="w-2 h-2 bg-purple-500 rounded-full mr-2"></div>
-                    Passport/ID Document
-                  </Label>
-                  <div className="relative border-2 border-dashed border-gray-200 rounded-xl p-6 min-h-56 bg-gradient-to-br from-gray-50 to-gray-100 hover:from-gray-100 hover:to-gray-150 transition-all duration-200">
-                    {selectedBroker.passport_document_url ? (
-                      <div className="space-y-3">
-                        <div className="relative group">
-                          {imageLoadingStates['document'] && (
-                            <div className="absolute inset-0 flex items-center justify-center bg-gray-100 rounded-lg z-10">
-                              <div className="flex flex-col items-center space-y-2">
-                                <RefreshCw className="h-6 w-6 animate-spin text-purple-500" />
-                                <p className="text-sm text-gray-600">Loading document...</p>
-                              </div>
-                            </div>
-                          )}
-                          {imageErrorStates['document'] ? (
-                            <div className="flex items-center justify-center h-48 text-center py-16 text-muted-foreground">
-                              <div>
-                                <AlertCircle className="h-8 w-8 mx-auto mb-2 text-red-400" />
-                                <p className="text-sm font-medium text-red-600">ID document failed to load</p>
-                                <p className="text-xs text-muted-foreground mt-1">The document may be corrupted or unavailable</p>
-                              </div>
-                            </div>
-                          ) : (
-                            <img 
-                              src={selectedBroker.passport_document_url} 
-                              alt="ID Document" 
-                              className="w-full h-48 object-cover rounded-lg border-2 border-white shadow-md group-hover:shadow-lg transition-shadow duration-200"
-                              onLoadStart={() => handleImageLoadStart('document')}
-                              onLoad={() => handleImageLoad('document')}
-                              onError={() => handleImageError('document')}
-                              style={{ display: imageLoadingStates['document'] ? 'none' : 'block' }}
-                            />
-                          )}
-                          <div className="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-10 rounded-lg transition-all duration-200"></div>
+                <div>
+                  <Label className="text-base font-semibold">ID Document</Label>
+                  <div className="mt-2 border rounded-lg p-4 min-h-48 bg-muted/30">
+                    {selectedBroker.id_document_url ? (
+                      <div className="space-y-2">
+                        <img 
+                          src={selectedBroker.id_document_url} 
+                          alt="ID Document" 
+                          className="w-full h-40 object-cover rounded-md border"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).style.display = 'none';
+                            (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');
+                          }}
+                        />
+                        <div className="hidden text-center py-16 text-muted-foreground">
+                          <p>ID document image not available</p>
                         </div>
-                        {!imageErrorStates['document'] && (
-                          <Button 
-                            size="sm" 
-                            variant="outline" 
-                            className="w-full hover:bg-purple-50 hover:border-purple-300"
-                            onClick={() => window.open(selectedBroker.passport_document_url, '_blank')}
-                          >
-                            <Eye className="h-4 w-4 mr-2" />
-                            View Full Document
-                          </Button>
-                        )}
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          className="w-full"
+                          onClick={() => window.open(selectedBroker.id_document_url, '_blank')}
+                        >
+                          <Eye className="h-4 w-4 mr-2" />
+                          View Full Document
+                        </Button>
                       </div>
                     ) : (
-                      <div className="flex items-center justify-center h-48 text-muted-foreground">
+                      <div className="flex items-center justify-center h-40 text-muted-foreground">
                         <div className="text-center">
-                          <div className="w-16 h-16 rounded-lg bg-gradient-to-br from-red-100 to-red-200 mx-auto mb-3 flex items-center justify-center">
-                            <FileText className="h-8 w-8 text-red-400" />
-                          </div>
-                          <p className="text-sm font-medium text-red-600">No ID document uploaded</p>
-                          <p className="text-xs text-muted-foreground mt-1">Required for verification</p>
+                          <FileText className="h-12 w-12 mx-auto mb-2 text-muted-foreground/50" />
+                          <p className="text-sm">No ID document uploaded</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div>
+                  <Label className="text-base font-semibold">Passport Document</Label>
+                  <div className="mt-2 border rounded-lg p-4 min-h-48 bg-muted/30">
+                    {selectedBroker.passport_document_url ? (
+                      <div className="space-y-2">
+                        <img 
+                          src={selectedBroker.passport_document_url} 
+                          alt="Passport Document" 
+                          className="w-full h-40 object-cover rounded-md border"
+                          onError={(e) => {
+                            (e.target as HTMLImageElement).style.display = 'none';
+                            (e.target as HTMLImageElement).nextElementSibling?.classList.remove('hidden');
+                          }}
+                        />
+                        <div className="hidden text-center py-16 text-muted-foreground">
+                          <p>Passport document image not available</p>
+                        </div>
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          className="w-full"
+                          onClick={() => window.open(selectedBroker.passport_document_url, '_blank')}
+                        >
+                          <Eye className="h-4 w-4 mr-2" />
+                          View Full Document
+                        </Button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-center h-40 text-muted-foreground">
+                        <div className="text-center">
+                          <FileText className="h-12 w-12 mx-auto mb-2 text-muted-foreground/50" />
+                          <p className="text-sm">No passport document uploaded</p>
                         </div>
                       </div>
                     )}
@@ -1074,139 +983,266 @@ const BrokerManagement = () => {
                 </div>
               </div>
 
-              <Separator className="my-6" />
+              <Separator />
 
-              {/* Basic Information */}
-              <div className="space-y-6">
-                <div className="flex items-center space-x-2 mb-4">
-                  <div className="w-3 h-3 bg-gradient-to-r from-blue-500 to-purple-500 rounded-full"></div>
-                  <h4 className="text-lg font-semibold text-foreground">Broker Information</h4>
-                </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-4">
-                    <div className="bg-gradient-to-r from-blue-50 to-indigo-50 p-4 rounded-lg border border-blue-100">
-                      <Label className="text-sm font-medium text-blue-700">Full Name</Label>
-                      <p className="text-base font-semibold text-blue-900 mt-1">{selectedBroker.full_name}</p>
-                    </div>
-                    
-                    <div className="bg-gradient-to-r from-purple-50 to-pink-50 p-4 rounded-lg border border-purple-100">
-                      <Label className="text-sm font-medium text-purple-700">Company</Label>
-                      <p className="text-base font-semibold text-purple-900 mt-1">{selectedBroker.company_name || 'Independent Broker'}</p>
-                    </div>
-                    
-                    <div className="bg-gradient-to-r from-green-50 to-emerald-50 p-4 rounded-lg border border-green-100">
-                      <Label className="text-sm font-medium text-green-700">Phone</Label>
-                      <p className="text-base font-semibold text-green-900 mt-1">{selectedBroker.phone}</p>
-                    </div>
-                    
-                    <div className="bg-gradient-to-r from-orange-50 to-red-50 p-4 rounded-lg border border-orange-100">
-                      <Label className="text-sm font-medium text-orange-700">Experience</Label>
-                      <p className="text-base font-semibold text-orange-900 mt-1">
-                        {selectedBroker.years_experience ? `${selectedBroker.years_experience} years` : 'Not specified'}
-                      </p>
-                    </div>
+              {/* Personal Information */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold text-primary">Personal Information</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label>Full Name</Label>
+                    <p className="text-sm font-medium">{selectedBroker.full_name}</p>
                   </div>
-                  
-                  <div className="space-y-4">
-                    <div className="bg-gradient-to-r from-teal-50 to-cyan-50 p-4 rounded-lg border border-teal-100">
-                      <Label className="text-sm font-medium text-teal-700">Country</Label>
-                      <p className="text-base font-semibold text-teal-900 mt-1">{selectedBroker.country || 'Not specified'}</p>
-                    </div>
-                    
-                    <div className="bg-gradient-to-r from-indigo-50 to-blue-50 p-4 rounded-lg border border-indigo-100">
-                      <Label className="text-sm font-medium text-indigo-700">City</Label>
-                      <p className="text-base font-semibold text-indigo-900 mt-1">{selectedBroker.city || 'Not specified'}</p>
-                    </div>
-                    
-                    <div className="bg-gradient-to-r from-violet-50 to-purple-50 p-4 rounded-lg border border-violet-100">
-                      <Label className="text-sm font-medium text-violet-700">License Number</Label>
-                      <p className="text-base font-semibold text-violet-900 mt-1">{selectedBroker.license_number || 'Not provided'}</p>
-                    </div>
-                    
-                    <div className="bg-gradient-to-r from-rose-50 to-pink-50 p-4 rounded-lg border border-rose-100">
-                      <Label className="text-sm font-medium text-rose-700">Address</Label>
-                      <p className="text-base font-semibold text-rose-900 mt-1">{selectedBroker.address || 'Not provided'}</p>
-                    </div>
+                  <div>
+                    <Label>Email</Label>
+                    <p className="text-sm font-medium">{selectedBroker.email || 'N/A'}</p>
                   </div>
                 </div>
                 
-                {selectedBroker.specializations && selectedBroker.specializations.length > 0 && (
-                  <div className="mt-6">
-                    <div className="flex items-center space-x-2 mb-3">
-                      <div className="w-2 h-2 bg-gradient-to-r from-green-500 to-blue-500 rounded-full"></div>
-                      <Label className="text-base font-semibold">Specializations</Label>
-                    </div>
-                    <div className="flex flex-wrap gap-3">
-                      {selectedBroker.specializations.map((spec, index) => (
-                        <Badge key={index} className="bg-gradient-to-r from-blue-500 to-purple-500 text-white px-3 py-1 text-sm font-medium hover:from-blue-600 hover:to-purple-600 transition-all duration-200">
-                          {spec}
-                        </Badge>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label>Phone</Label>
+                    <p className="text-sm font-medium">{selectedBroker.phone}</p>
+                  </div>
+                  <div>
+                    <Label>Years of Experience</Label>
+                    <p className="text-sm font-medium">
+                      {selectedBroker.years_experience ? `${selectedBroker.years_experience} years` : 'N/A'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label>Country</Label>
+                    <p className="text-sm font-medium">{selectedBroker.country || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <Label>City</Label>
+                    <p className="text-sm font-medium">{selectedBroker.city || 'N/A'}</p>
+                  </div>
+                </div>
+
+                <div>
+                  <Label>Address</Label>
+                  <p className="text-sm font-medium">{selectedBroker.address || 'N/A'}</p>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label>Education</Label>
+                    <p className="text-sm font-medium">{selectedBroker.education || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <Label>License Number</Label>
+                    <p className="text-sm font-medium">{selectedBroker.license_number || 'N/A'}</p>
+                  </div>
+                </div>
+
+                {selectedBroker.languages && selectedBroker.languages.length > 0 && (
+                  <div>
+                    <Label>Languages</Label>
+                    <div className="flex flex-wrap gap-2 mt-1">
+                      {selectedBroker.languages.map((lang, index) => (
+                        <Badge key={index} variant="outline">{lang}</Badge>
                       ))}
                     </div>
                   </div>
                 )}
+              </div>
+
+              <Separator />
+
+              {/* Professional Information */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold text-primary">Professional Information</h3>
                 
                 {selectedBroker.bio && (
-                  <div className="mt-6">
-                    <div className="flex items-center space-x-2 mb-3">
-                      <div className="w-2 h-2 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full"></div>
-                      <Label className="text-base font-semibold">Professional Bio</Label>
-                    </div>
-                    <div className="bg-gradient-to-br from-gray-50 to-gray-100 p-4 rounded-lg border border-gray-200">
-                      <p className="text-sm leading-relaxed text-gray-700">{selectedBroker.bio}</p>
+                  <div>
+                    <Label>Professional Bio</Label>
+                    <p className="text-sm mt-1 p-3 bg-muted/50 rounded-md">{selectedBroker.bio}</p>
+                  </div>
+                )}
+
+                {selectedBroker.specializations && selectedBroker.specializations.length > 0 && (
+                  <div>
+                    <Label>Specializations</Label>
+                    <div className="flex flex-wrap gap-2 mt-1">
+                      {selectedBroker.specializations.map((spec, index) => (
+                        <Badge key={index} variant="secondary">{spec}</Badge>
+                      ))}
                     </div>
                   </div>
                 )}
 
-                {selectedBroker.verification_notes && (
-                  <div className="mt-6">
-                    <div className="flex items-center space-x-2 mb-3">
-                      <div className="w-2 h-2 bg-gradient-to-r from-yellow-500 to-orange-500 rounded-full"></div>
-                      <Label className="text-base font-semibold">Admin Verification Notes</Label>
-                    </div>
-                    <div className="bg-gradient-to-br from-yellow-50 to-orange-50 p-4 rounded-lg border border-yellow-200">
-                      <p className="text-sm leading-relaxed text-yellow-800">{selectedBroker.verification_notes}</p>
+                {selectedBroker.certifications && selectedBroker.certifications.length > 0 && (
+                  <div>
+                    <Label>Certifications</Label>
+                    <div className="flex flex-wrap gap-2 mt-1">
+                      {selectedBroker.certifications.map((cert, index) => (
+                        <Badge key={index} variant="outline">{cert}</Badge>
+                      ))}
                     </div>
                   </div>
                 )}
-                
-                <div className="mt-6 pt-4 border-t border-gray-200">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <Label className="text-base font-semibold">Verification Status</Label>
-                      <div className="mt-2">
-                        {selectedBroker.verified_at ? (
-                          <div className="flex items-center space-x-2">
-                            <Badge className="bg-green-100 text-green-800 border-green-200 px-3 py-1">
-                              <CheckCircle className="h-3 w-3 mr-1" />
-                              Verified
-                            </Badge>
-                            <span className="text-xs text-muted-foreground">
-                              on {new Date(selectedBroker.verified_at).toLocaleDateString()}
-                            </span>
-                          </div>
-                        ) : (
-                          <Badge className="bg-yellow-100 text-yellow-800 border-yellow-200 px-3 py-1">
-                            <Clock className="h-3 w-3 mr-1" />
-                            Pending Verification
-                          </Badge>
-                        )}
-                      </div>
-                    </div>
-                    <div>
-                      <Label className="text-base font-semibold">Member Since</Label>
-                      <div className="mt-2">
-                        <div className="flex items-center space-x-2">
-                          <Badge className="bg-blue-100 text-blue-800 border-blue-200 px-3 py-1">
-                            <UserCheck className="h-3 w-3 mr-1" />
-                            {new Date(selectedBroker.created_at).toLocaleDateString()}
-                          </Badge>
-                        </div>
-                      </div>
-                    </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label>Trading Volume</Label>
+                    <p className="text-sm font-medium">{selectedBroker.trading_volume || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <Label>Commission Rate</Label>
+                    <p className="text-sm font-medium">
+                      {selectedBroker.commission_rate ? `${selectedBroker.commission_rate}%` : 'N/A'}
+                    </p>
                   </div>
                 </div>
+
+                {selectedBroker.preferred_regions && selectedBroker.preferred_regions.length > 0 && (
+                  <div>
+                    <Label>Preferred Trading Regions</Label>
+                    <div className="flex flex-wrap gap-2 mt-1">
+                      {selectedBroker.preferred_regions.map((region, index) => (
+                        <Badge key={index} variant="outline">{region}</Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <Label>Website</Label>
+                    <p className="text-sm font-medium">
+                      {selectedBroker.website ? (
+                        <a href={selectedBroker.website} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+                          View Website
+                        </a>
+                      ) : 'N/A'}
+                    </p>
+                  </div>
+                  <div>
+                    <Label>LinkedIn</Label>
+                    <p className="text-sm font-medium">
+                      {selectedBroker.linkedin_url ? (
+                        <a href={selectedBroker.linkedin_url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+                          View Profile
+                        </a>
+                      ) : 'N/A'}
+                    </p>
+                  </div>
+                  <div>
+                    <Label>Twitter</Label>
+                    <p className="text-sm font-medium">
+                      {selectedBroker.twitter_url ? (
+                        <a href={selectedBroker.twitter_url} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">
+                          View Profile
+                        </a>
+                      ) : 'N/A'}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Company Information */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold text-primary">Company Information</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label>Company Name</Label>
+                    <p className="text-sm font-medium">{selectedBroker.company_name || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <Label>Company Type</Label>
+                    <p className="text-sm font-medium">{selectedBroker.company_type || 'N/A'}</p>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label>Company Size</Label>
+                    <p className="text-sm font-medium">{selectedBroker.company_size || 'N/A'}</p>
+                  </div>
+                  <div>
+                    <Label>Business Registration</Label>
+                    <p className="text-sm font-medium">{selectedBroker.business_registration || 'N/A'}</p>
+                  </div>
+                </div>
+
+                <div>
+                  <Label>Tax ID / VAT Number</Label>
+                  <p className="text-sm font-medium">{selectedBroker.tax_id || 'N/A'}</p>
+                </div>
+              </div>
+
+              <Separator />
+
+              {/* Additional Documents */}
+              {selectedBroker.additional_documents && selectedBroker.additional_documents.length > 0 && (
+                <div className="space-y-4">
+                  <h3 className="text-lg font-semibold text-primary">Additional Documents</h3>
+                  <div className="grid grid-cols-2 gap-4">
+                    {selectedBroker.additional_documents.map((docUrl, index) => (
+                      <div key={index} className="border rounded-lg p-4">
+                        <div className="flex items-center gap-2">
+                          <FileText className="h-5 w-5 text-muted-foreground" />
+                          <span className="text-sm font-medium">Document {index + 1}</span>
+                        </div>
+                        <Button 
+                          size="sm" 
+                          variant="outline" 
+                          className="w-full mt-2"
+                          onClick={() => window.open(docUrl, '_blank')}
+                        >
+                          <Eye className="h-4 w-4 mr-2" />
+                          View Document
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <Separator />
+
+              {/* Status and Verification */}
+              <div className="space-y-4">
+                <h3 className="text-lg font-semibold text-primary">Status & Verification</h3>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label>Status</Label>
+                    <div className="mt-1">
+                      {selectedBroker.verified_at ? 
+                        <Badge variant="default">Verified</Badge> : 
+                        <Badge variant="secondary">Pending Verification</Badge>
+                      }
+                    </div>
+                  </div>
+                  <div>
+                    <Label>Joined</Label>
+                    <p className="text-sm font-medium">
+                      {new Date(selectedBroker.created_at).toLocaleDateString()}
+                    </p>
+                  </div>
+                </div>
+
+                {selectedBroker.verified_at && (
+                  <div>
+                    <Label>Verified At</Label>
+                    <p className="text-sm font-medium">
+                      {new Date(selectedBroker.verified_at).toLocaleString()}
+                    </p>
+                  </div>
+                )}
+
+                {selectedBroker.verification_notes && (
+                  <div>
+                    <Label>Verification Notes</Label>
+                    <p className="text-sm mt-1 p-3 bg-muted/50 rounded-md">{selectedBroker.verification_notes}</p>
+                  </div>
+                )}
               </div>
 
               {/* Verification Actions */}
@@ -1347,8 +1383,8 @@ const BrokerManagement = () => {
                   <Button
                     variant="outline"
                     onClick={() => {
+                      handleRejectStep(selectedStep.id, 'Please review and resubmit with required corrections');
                       setIsStepDialogOpen(false);
-                      setIsRejectDialogOpen(true);
                     }}
                     className="text-red-600 border-red-200 hover:bg-red-50"
                   >
@@ -1359,49 +1395,6 @@ const BrokerManagement = () => {
               )}
             </div>
           )}
-        </DialogContent>
-      </Dialog>
-
-      {/* Step Rejection Dialog */}
-      <Dialog open={isRejectDialogOpen} onOpenChange={setIsRejectDialogOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Reject Step: {selectedStep?.step_name}</DialogTitle>
-            <DialogDescription>
-              Provide detailed feedback to help the broker understand what needs to be corrected.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label htmlFor="rejection-message">Rejection Message</Label>
-              <Textarea
-                id="rejection-message"
-                placeholder="Please specify what needs to be corrected. For example: 'The uploaded document is not clear enough. Please provide a higher quality scan of your ICPO with all text clearly visible.'"
-                value={rejectionMessage}
-                onChange={(e) => setRejectionMessage(e.target.value)}
-                className="mt-1 min-h-[120px]"
-              />
-            </div>
-            <div className="flex gap-3 pt-4">
-              <Button
-                onClick={handleRejectWithMessage}
-                disabled={!rejectionMessage.trim()}
-                className="bg-red-600 hover:bg-red-700 text-white flex-1"
-              >
-                <XCircle className="h-4 w-4 mr-2" />
-                Reject Step
-              </Button>
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setIsRejectDialogOpen(false);
-                  setRejectionMessage('');
-                }}
-              >
-                Cancel
-              </Button>
-            </div>
-          </div>
         </DialogContent>
       </Dialog>
     </div>

@@ -90,17 +90,13 @@ const VesselDocuments: React.FC<VesselDocumentsProps> = ({ vesselId, vesselData 
         .select('membership_status, payment_status')
         .eq('user_id', user.id)
         .eq('membership_status', 'active')
-        .eq('payment_status', 'completed')
-        .maybeSingle();
+        .eq('payment_status', 'paid')
+        .single();
 
-      if (error && error.code !== 'PGRST116') {
-        console.error('Error fetching broker membership:', error);
-        return;
-      }
+      if (error && error.code !== 'PGRST116') throw error;
       setBrokerMembership(data);
     } catch (error) {
       console.error('Error fetching broker membership:', error);
-      setBrokerMembership(null);
     }
   };
 
@@ -121,56 +117,6 @@ const VesselDocuments: React.FC<VesselDocumentsProps> = ({ vesselId, vesselData 
     }
     
     return false;
-  };
-
-  const saveToUserDocumentStorage = async (documentId: string, fileUrl: string, fileName: string) => {
-    try {
-      if (!user) {
-        throw new Error('User not authenticated');
-      }
-
-      // Check if document already exists for this user
-      const { data: existingDoc } = await supabase
-        .from('user_document_storage')
-        .select('id')
-        .eq('user_id', user.id)
-        .eq('document_id', documentId)
-        .eq('vessel_id', vesselId)
-        .single();
-
-      if (existingDoc) {
-        console.log('Document already exists in user storage');
-        return;
-      }
-
-      // Get document details
-      const document = documents.find(doc => doc.id === documentId);
-      if (!document) {
-        throw new Error('Document not found');
-      }
-
-      // Save to user document storage
-       const { error } = await supabase
-         .from('user_document_storage')
-         .insert({
-           user_id: user.id,
-           document_id: documentId,
-           vessel_id: vesselId,
-           file_url: fileUrl,
-           document_title: document.title,
-           vessel_name: vesselData?.name || 'Unknown Vessel',
-           downloaded_at: new Date().toISOString()
-         });
-
-      if (error) {
-        throw error;
-      }
-
-      console.log('Document saved to user storage successfully');
-    } catch (error) {
-      console.error('Error saving to user document storage:', error);
-      throw error;
-    }
   };
 
   const generateDocument = async (documentId: string) => {
@@ -199,27 +145,6 @@ const VesselDocuments: React.FC<VesselDocumentsProps> = ({ vesselId, vesselData 
         userEmail: user.email
       });
 
-      // Call the edge function to generate the PDF
-      // Find the document being generated to show its details
-      const selectedDocument = documents.find(doc => doc.id === documentId);
-      console.log('=== FRONTEND DOCUMENT GENERATION DEBUG ===');
-      console.log('Document being generated:', {
-        id: documentId,
-        title: selectedDocument?.title || 'Unknown',
-        description: selectedDocument?.description || 'Unknown',
-        subscription_level: selectedDocument?.subscription_level || 'Unknown'
-      });
-      console.log('Calling edge function with data:', {
-        documentId,
-        vesselId,
-        vesselData: {
-          name: vesselData?.name,
-          imo: vesselData?.imo,
-          mmsi: vesselData?.mmsi
-        }
-      });
-      console.log('=== END FRONTEND DEBUG ===');
-
       const { data, error } = await supabase.functions.invoke('generate-vessel-document', {
         body: {
           documentId,
@@ -235,92 +160,41 @@ const VesselDocuments: React.FC<VesselDocumentsProps> = ({ vesselId, vesselData 
         throw error;
       }
 
-      if (error) {
-        console.error('Function error details:', error);
-        throw error;
+      if (data?.error && data?.alreadyExists) {
+        toast.error(data.error);
+        return;
+      }
+
+      if (data?.error) {
+        throw new Error(data.error);
+      }
+
+      if (data?.success && data?.stored) {
+        toast.success(data.message || 'Document generated and stored successfully!');
+        // Refresh the document storage to show new document
+        if ((window as any).refreshUserDocuments) {
+          setTimeout(() => {
+            (window as any).refreshUserDocuments();
+          }, 1000);
+        }
+        return;
       }
 
       if (!data) {
         throw new Error('No data returned from function');
-      }
-
-      if (data.error) {
-        throw new Error(data.error);
-      }
-
-      if (data?.content) {
-        console.log('PDF content received, length:', data.content.length);
-        
-        try {
-          // Create PDF blob directly from base64
-          const byteCharacters = atob(data.content);
-          const byteNumbers = new Array(byteCharacters.length);
-          for (let i = 0; i < byteCharacters.length; i++) {
-            byteNumbers[i] = byteCharacters.charCodeAt(i);
-          }
-          const byteArray = new Uint8Array(byteNumbers);
-          const pdfBlob = new Blob([byteArray], { type: data.contentType || 'application/pdf' });
-          
-          console.log('Created PDF blob with size:', pdfBlob.size, 'bytes');
-
-          if (pdfBlob.size === 0) {
-            throw new Error('PDF blob is empty');
-          }
-
-          // Save PDF to project folder and database
-          try {
-            const fileName = data.fileName || `vessel-document-${vesselId}-${Date.now()}`;
-            
-            const saveResponse = await supabase.functions.invoke('save-vessel-document', {
-              body: {
-                documentId: documentId,
-                vesselId: vesselId,
-                vesselName: vesselData?.name || 'Unknown Vessel',
-                documentTitle: data.fileName || 'Vessel Document',
-                pdfBase64: data.content,
-                fileName: fileName
-              }
-            });
-
-            if (saveResponse.error) {
-              throw new Error(saveResponse.error.message || 'Failed to save document');
-            }
-
-            console.log('Document saved successfully:', saveResponse.data);
-            toast.success(`Document saved successfully! You can view or download it from the "My Downloaded Documents" section below.`);
-            
-          } catch (saveError) {
-            console.error('Error saving document:', saveError);
-            toast.error(`Document generated but failed to save: ${saveError.message}`);
-          }
-          
-          // Also trigger immediate download
-          const blobUrl = URL.createObjectURL(pdfBlob);
-          const downloadLink = document.createElement('a');
-          downloadLink.href = blobUrl;
-          downloadLink.download = `${data.fileName || `vessel-document-${vesselId}-${Date.now()}`}.pdf`;
-          downloadLink.style.display = 'none';
-          document.body.appendChild(downloadLink);
-          downloadLink.click();
-          document.body.removeChild(downloadLink);
-          URL.revokeObjectURL(blobUrl);
-          
-        } catch (blobError) {
-          console.error('Error creating PDF blob:', blobError);
-          throw new Error(`Failed to create PDF file: ${blobError.message}`);
-        }
-      } else {
-        console.error('No PDF data in response:', data);
-        throw new Error('No PDF data received from server');
       }
     } catch (error: any) {
       console.error('Error generating document - Full error object:', error);
       console.error('Error message:', error?.message);
       console.error('Error details:', error?.details);
       
-      let errorMessage = 'Failed to download document. Please try again.';
+      let errorMessage = 'Failed to generate document. Please try again.';
       
-      if (error.message?.includes('OpenAI API')) {
+      if (error.message?.includes('corrupted AI prompt')) {
+        errorMessage = 'Document template is corrupted. Please contact admin to fix the template.';
+      } else if (error.message?.includes('no AI prompt')) {
+        errorMessage = 'Document template is missing AI instructions. Please contact admin.';
+      } else if (error.message?.includes('OpenAI API')) {
         errorMessage = 'AI service error. Please check your API configuration.';
       } else if (error.message?.includes('subscription')) {
         errorMessage = 'Insufficient subscription level for this document type.';
@@ -332,8 +206,10 @@ const VesselDocuments: React.FC<VesselDocumentsProps> = ({ vesselId, vesselData 
         errorMessage = 'AI model configuration issue. Please contact support.';
       } else if (error.message?.includes('broker membership')) {
         errorMessage = 'Active broker membership required for this document.';
+      } else if (error.message?.includes('Edge Function returned a non-2xx status code')) {
+        errorMessage = 'Document generation service error. Please try again or contact support.';
       } else {
-        errorMessage = `Download failed: ${error?.message || 'Unknown error'}`;
+        errorMessage = `Generation failed: ${error?.message || 'Unknown error'}`;
       }
       
       toast.error(errorMessage);
@@ -504,16 +380,18 @@ const VesselDocuments: React.FC<VesselDocumentsProps> = ({ vesselId, vesselData 
                           onClick={() => generateDocument(doc.id)}
                           disabled={isGenerating}
                           className="flame-button"
-                          size="sm"
                         >
                           {isGenerating ? (
                             <>
                               <Clock className="h-4 w-4 mr-2 animate-spin" />
-                              Generating...
+                              Downloading...
                             </>
-                          ) : (
-                            <>                              <Download className="h-4 w-4 mr-2" />                              Download                            </>
-                          )}
+                        ) : (
+                          <>
+                            <Download className="h-4 w-4 mr-2" />
+                            Download
+                          </>
+                        )}
                         </Button>
                       ) : (
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">

@@ -93,7 +93,7 @@ serve(async (req) => {
       logStep("No existing customer found, will create during checkout");
     }
 
-    // Check for active discounts for this plan tier
+    // Check for active discounts for this plan tier and billing cycle
     const supabaseService = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
@@ -106,6 +106,7 @@ serve(async (req) => {
         .from('subscription_discounts')
         .select('discount_percentage')
         .eq('plan_tier', tier)
+        .eq('billing_cycle', billing_cycle)
         .eq('is_active', true)
         .or(`valid_until.is.null,valid_until.gt.${new Date().toISOString()}`)
         .order('discount_percentage', { ascending: false })
@@ -114,7 +115,7 @@ serve(async (req) => {
 
       if (discountData) {
         discountPercentage = discountData.discount_percentage;
-        logStep("Discount found", { discountPercentage });
+        logStep("Discount found", { discountPercentage, billing_cycle });
       }
     } catch (discountError) {
       logStep("Error fetching discount, continuing without", { error: discountError.message });

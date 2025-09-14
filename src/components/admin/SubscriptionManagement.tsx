@@ -47,6 +47,7 @@ interface Subscriber {
 interface Discount {
   id: string;
   plan_tier: string;
+  billing_cycle?: 'monthly' | 'annual';
   discount_percentage: number;
   discount_name: string | null;
   valid_from: string;
@@ -97,6 +98,7 @@ const SubscriptionManagement = () => {
   // New discount form state
   const [newDiscount, setNewDiscount] = useState({
     plan_tier: '',
+    billing_cycle: 'monthly' as 'monthly' | 'annual',
     discount_percentage: 0,
     discount_name: '',
     valid_until: ''
@@ -198,22 +200,40 @@ const SubscriptionManagement = () => {
   };
 
   const handleCreateDiscount = async () => {
+    // Validation
+    if (!newDiscount.plan_tier) {
+      toast.error('Please select a plan tier');
+      return;
+    }
+    if (newDiscount.discount_percentage <= 0 || newDiscount.discount_percentage > 100) {
+      toast.error('Discount percentage must be between 1 and 100');
+      return;
+    }
+
     try {
       const { error } = await db
         .from('subscription_discounts')
         .insert({
           plan_tier: newDiscount.plan_tier,
+          billing_cycle: newDiscount.billing_cycle,
           discount_percentage: newDiscount.discount_percentage,
           discount_name: newDiscount.discount_name || null,
-          valid_until: newDiscount.valid_until || null
+          valid_from: new Date().toISOString(),
+          valid_until: newDiscount.valid_until || null,
+          is_active: true
         });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Supabase error creating discount:', error);
+        toast.error(`Failed to create discount: ${error.message}`);
+        return;
+      }
 
       toast.success('Discount created successfully');
       setIsDiscountDialogOpen(false);
       setNewDiscount({
         plan_tier: '',
+        billing_cycle: 'monthly' as 'monthly' | 'annual',
         discount_percentage: 0,
         discount_name: '',
         valid_until: ''
@@ -221,7 +241,7 @@ const SubscriptionManagement = () => {
       fetchData();
     } catch (error) {
       console.error('Error creating discount:', error);
-      toast.error('Failed to create discount');
+      toast.error(`Failed to create discount: ${error instanceof Error ? error.message : 'Unknown error'}`);
     }
   };
 
@@ -364,7 +384,7 @@ const SubscriptionManagement = () => {
     total: subscribers.length,
     active: subscribers.filter(s => s.subscribed).length,
     basic: subscribers.filter(s => s.subscription_tier === 'basic').length,
-    premium: subscribers.filter(s => s.subscription_tier === 'premium').length,
+    professional: subscribers.filter(s => s.subscription_tier === 'professional').length,
     enterprise: subscribers.filter(s => s.subscription_tier === 'enterprise').length,
   };
 
@@ -423,8 +443,8 @@ const SubscriptionManagement = () => {
             <div className="flex items-center gap-2">
               <Crown className="h-4 w-4 text-purple-600" />
               <div>
-                <p className="text-sm text-muted-foreground">Premium</p>
-                <p className="text-2xl font-bold text-purple-600">{stats.premium}</p>
+                <p className="text-sm text-muted-foreground">Professional</p>
+                <p className="text-2xl font-bold text-purple-600">{stats.professional}</p>
               </div>
             </div>
           </CardContent>
@@ -473,7 +493,7 @@ const SubscriptionManagement = () => {
                   <SelectContent>
                     <SelectItem value="all">All Tiers</SelectItem>
                     <SelectItem value="basic">Basic</SelectItem>
-                    <SelectItem value="premium">Premium</SelectItem>
+                    <SelectItem value="professional">Professional</SelectItem>
                     <SelectItem value="enterprise">Enterprise</SelectItem>
                   </SelectContent>
                 </Select>
@@ -921,8 +941,24 @@ const SubscriptionManagement = () => {
                           </SelectTrigger>
                           <SelectContent>
                             <SelectItem value="basic">Basic Plan</SelectItem>
-                            <SelectItem value="premium">Premium Plan</SelectItem>
+                            <SelectItem value="professional">Professional Plan</SelectItem>
                             <SelectItem value="enterprise">Enterprise Plan</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      
+                      <div>
+                        <Label>Billing Cycle</Label>
+                        <Select 
+                          value={newDiscount.billing_cycle} 
+                          onValueChange={(value: 'monthly' | 'annual') => setNewDiscount({...newDiscount, billing_cycle: value})}
+                        >
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select billing cycle" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="monthly">Monthly</SelectItem>
+                            <SelectItem value="annual">Annual</SelectItem>
                           </SelectContent>
                         </Select>
                       </div>
@@ -971,6 +1007,7 @@ const SubscriptionManagement = () => {
                   <thead>
                     <tr className="border-b">
                       <th className="text-left py-2">Plan</th>
+                      <th className="text-left py-2">Billing Cycle</th>
                       <th className="text-left py-2">Discount</th>
                       <th className="text-left py-2">Name</th>
                       <th className="text-left py-2">Valid Until</th>
@@ -984,6 +1021,11 @@ const SubscriptionManagement = () => {
                         <td className="py-3">
                           <Badge variant="outline">
                             {discount.plan_tier.toUpperCase()}
+                          </Badge>
+                        </td>
+                        <td className="py-3">
+                          <Badge variant={discount.billing_cycle === 'annual' ? "default" : "secondary"}>
+                            {discount.billing_cycle ? discount.billing_cycle.charAt(0).toUpperCase() + discount.billing_cycle.slice(1) : 'N/A'}
                           </Badge>
                         </td>
                         <td className="py-3">
@@ -1053,7 +1095,7 @@ const SubscriptionManagement = () => {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="basic">Basic</SelectItem>
-                    <SelectItem value="premium">Premium</SelectItem>
+                    <SelectItem value="professional">Professional</SelectItem>
                     <SelectItem value="enterprise">Enterprise</SelectItem>
                   </SelectContent>
                 </Select>

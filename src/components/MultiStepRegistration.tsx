@@ -30,6 +30,17 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from '@/hooks/use-toast';
 import EmailVerificationWaiting from './EmailVerificationWaiting';
 
+interface Discount {
+  id: string;
+  discount_percentage: number;
+  discount_name: string;
+  plan_tier: string;
+  billing_cycle: 'monthly' | 'annual';
+  is_active: boolean;
+  valid_from?: string;
+  valid_until?: string;
+}
+
 interface Vessel {
   id: number;
   name: string;
@@ -91,6 +102,7 @@ const MultiStepRegistration = () => {
   const [ports, setPorts] = useState<Port[]>([]);
   const [vessels, setVessels] = useState<Vessel[]>([]);
   const [regions, setRegions] = useState<string[]>([]);
+  const [discounts, setDiscounts] = useState<Discount[]>([]);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [formData, setFormData] = useState<RegistrationForm>({
@@ -236,11 +248,12 @@ const MultiStepRegistration = () => {
     setDataError(null);
     
     try {
-      // Fetch regions from filter management, ports and vessels for selection
-      const [regionsRes, portsRes, vesselsRes] = await Promise.all([
+      // Fetch regions from filter management, ports, vessels, and discounts for selection
+      const [regionsRes, portsRes, vesselsRes, discountsRes] = await Promise.all([
         supabase.from('filter_options').select('label').eq('filter_type', 'region').eq('is_active', true).order('sort_order'),
         supabase.from('ports').select('id, name, country, region').limit(20),
-        supabase.from('vessels').select('id, name, vessel_type, flag').limit(50)
+        supabase.from('vessels').select('id, name, vessel_type, flag').limit(50),
+        supabase.from('subscription_discounts').select('*').eq('is_active', true)
       ]);
 
       // Check for errors in any of the responses
@@ -252,6 +265,9 @@ const MultiStepRegistration = () => {
       }
       if (vesselsRes.error) {
         throw new Error('Failed to load vessels data');
+      }
+      if (discountsRes.error) {
+        console.warn('Failed to load discounts data:', discountsRes.error);
       }
 
       // Set data if successful
@@ -285,6 +301,10 @@ const MultiStepRegistration = () => {
         setVessels(sampleVessels);
       }
       
+      if (discountsRes.data) {
+        setDiscounts(discountsRes.data);
+      }
+      
       setDataLoading(false);
     } catch (error) {
       setDataError(error instanceof Error ? error.message : 'Failed to load data. Please try again.');
@@ -311,7 +331,17 @@ const MultiStepRegistration = () => {
     }
   };
 
+  // Discount helper functions
+  const getDiscountForPlan = (planName: string, billingCycle: 'monthly' | 'annual') => {
+    return discounts.find(discount => 
+      discount.plan_tier === planName && 
+      discount.billing_cycle === billingCycle
+    );
+  };
 
+  const calculateDiscountedPrice = (originalPrice: number, discountPercentage: number) => {
+    return originalPrice * (1 - discountPercentage / 100);
+  };
 
   const handleInputChange = (field: keyof RegistrationForm, value: string | string[] | boolean) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -442,17 +472,13 @@ const MultiStepRegistration = () => {
               .upsert({
                 user_id: data.user.id,
                 email: formData.email,
-                full_name: formData.fullName,
-                company: formData.company,
-                country: formData.country,
-                phone: `${formData.countryCode}${formData.phone}`,
                 subscribed: false,
                 is_trial_active: true,
+                trial_start_date: new Date().toISOString(),
                 trial_end_date: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(),
-                subscription_tier: null,
+                subscription_tier: 'trial',
                 vessel_limit: 10,
-                port_limit: 20,
-                created_at: new Date().toISOString()
+                port_limit: 20
               }, {
                 onConflict: 'email'
               });
@@ -1143,15 +1169,35 @@ const MultiStepRegistration = () => {
                             <p className="text-sm text-muted-foreground">Perfect for small brokers</p>
                           </div>
                           <div className="text-right">
-                            <div className="text-lg font-bold">
-                              ${formData.billingCycle === 'annual' ? '24.99' : '29.99'}
-                              <span className="text-sm font-normal text-muted-foreground">
-                                /{formData.billingCycle === 'annual' ? 'month' : 'month'}
-                              </span>
-                            </div>
-                            {formData.billingCycle === 'annual' && (
-                              <div className="text-xs text-green-600">Save $60/year</div>
-                            )}
+                            {(() => {
+                              const originalPrice = formData.billingCycle === 'annual' ? 24.99 : 29.99;
+                              const discount = getDiscountForPlan('basic', formData.billingCycle);
+                              const discountedPrice = discount ? calculateDiscountedPrice(originalPrice, discount.discount_percentage) : originalPrice;
+                              
+                              return (
+                                <>
+                                  {discount && (
+                                    <div className="text-xs text-red-500 line-through">
+                                      ${originalPrice.toFixed(2)}
+                                    </div>
+                                  )}
+                                  <div className="text-lg font-bold">
+                                    ${discountedPrice.toFixed(2)}
+                                    <span className="text-sm font-normal text-muted-foreground">
+                                      /{formData.billingCycle === 'annual' ? 'month' : 'month'}
+                                    </span>
+                                  </div>
+                                  {discount && (
+                                    <div className="text-xs text-green-600">
+                                      {discount.discount_percentage}% OFF - {discount.discount_name}
+                                    </div>
+                                  )}
+                                  {formData.billingCycle === 'annual' && !discount && (
+                                    <div className="text-xs text-green-600">Save $60/year</div>
+                                  )}
+                                </>
+                              );
+                            })()}
                           </div>
                         </div>
                         <ul className="mt-3 space-y-1 text-sm text-muted-foreground">
@@ -1179,15 +1225,35 @@ const MultiStepRegistration = () => {
                             <p className="text-sm text-muted-foreground">For growing firms</p>
                           </div>
                           <div className="text-right">
-                            <div className="text-lg font-bold">
-                              ${formData.billingCycle === 'annual' ? '74.99' : '89.99'}
-                              <span className="text-sm font-normal text-muted-foreground">
-                                /{formData.billingCycle === 'annual' ? 'month' : 'month'}
-                              </span>
-                            </div>
-                            {formData.billingCycle === 'annual' && (
-                              <div className="text-xs text-green-600">Save $180/year</div>
-                            )}
+                            {(() => {
+                              const originalPrice = formData.billingCycle === 'annual' ? 74.99 : 89.99;
+                              const discount = getDiscountForPlan('premium', formData.billingCycle);
+                              const discountedPrice = discount ? calculateDiscountedPrice(originalPrice, discount.discount_percentage) : originalPrice;
+                              
+                              return (
+                                <>
+                                  {discount && (
+                                    <div className="text-xs text-red-500 line-through">
+                                      ${originalPrice.toFixed(2)}
+                                    </div>
+                                  )}
+                                  <div className="text-lg font-bold">
+                                    ${discountedPrice.toFixed(2)}
+                                    <span className="text-sm font-normal text-muted-foreground">
+                                      /{formData.billingCycle === 'annual' ? 'month' : 'month'}
+                                    </span>
+                                  </div>
+                                  {discount && (
+                                    <div className="text-xs text-green-600">
+                                      {discount.discount_percentage}% OFF - {discount.discount_name}
+                                    </div>
+                                  )}
+                                  {formData.billingCycle === 'annual' && !discount && (
+                                    <div className="text-xs text-green-600">Save $180/year</div>
+                                  )}
+                                </>
+                              );
+                            })()}
                           </div>
                         </div>
                         <ul className="mt-3 space-y-1 text-sm text-muted-foreground">
@@ -1214,15 +1280,35 @@ const MultiStepRegistration = () => {
                             <p className="text-sm text-muted-foreground">For large corporations</p>
                           </div>
                           <div className="text-right">
-                            <div className="text-lg font-bold">
-                              ${formData.billingCycle === 'annual' ? '166.66' : '199.99'}
-                              <span className="text-sm font-normal text-muted-foreground">
-                                /{formData.billingCycle === 'annual' ? 'month' : 'month'}
-                              </span>
-                            </div>
-                            {formData.billingCycle === 'annual' && (
-                              <div className="text-xs text-green-600">Save $400/year</div>
-                            )}
+                            {(() => {
+                              const discount = getDiscountForPlan('enterprise', formData.billingCycle);
+                              const originalPrice = formData.billingCycle === 'annual' ? 166.66 : 199.99;
+                              const discountedPrice = discount ? calculateDiscountedPrice(originalPrice, discount.discount_percentage) : originalPrice;
+                              const hasDiscount = discount && discountedPrice < originalPrice;
+                              
+                              return (
+                                <>
+                                  <div className="text-lg font-bold">
+                                    {hasDiscount && (
+                                      <div className="text-sm line-through text-muted-foreground mb-1">
+                                        ${originalPrice.toFixed(2)}
+                                      </div>
+                                    )}
+                                    ${discountedPrice.toFixed(2)}
+                                    <span className="text-sm font-normal text-muted-foreground">
+                                      /{formData.billingCycle === 'annual' ? 'month' : 'month'}
+                                    </span>
+                                  </div>
+                                  {hasDiscount ? (
+                                    <div className="text-xs text-green-600">
+                                      {discount.discount_percentage}% off - {discount.discount_name}
+                                    </div>
+                                  ) : formData.billingCycle === 'annual' ? (
+                                    <div className="text-xs text-green-600">Save $400/year</div>
+                                  ) : null}
+                                </>
+                              );
+                            })()}
                           </div>
                         </div>
                         <ul className="mt-3 space-y-1 text-sm text-muted-foreground">

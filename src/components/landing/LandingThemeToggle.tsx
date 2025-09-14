@@ -14,20 +14,17 @@ const LandingThemeToggle = () => {
 
   const applyTheme = (newTheme: 'light' | 'dark') => {
     const landingContainer = document.querySelector('.landing-page-container');
-    const html = document.documentElement;
     
     if (landingContainer) {
       landingContainer.classList.remove('light', 'dark');
       landingContainer.classList.add(newTheme);
-    }
-    
-    // Also apply to html for proper CSS variable inheritance
-    if (newTheme === 'light') {
-      html.classList.remove('dark');
-      html.classList.add('light');
-    } else {
-      html.classList.remove('light'); 
-      html.classList.add('dark');
+      
+      // Apply theme-specific CSS variables to the landing container only
+      if (newTheme === 'dark') {
+        landingContainer.setAttribute('data-theme', 'dark');
+      } else {
+        landingContainer.setAttribute('data-theme', 'light');
+      }
     }
   };
 

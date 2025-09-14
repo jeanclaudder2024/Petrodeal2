@@ -84,27 +84,8 @@ const PaymentSuccess = () => {
           console.error('Error adding to subscribers:', subscriberError);
         }
 
-        // Send custom confirmation email
-        try {
-          await supabase.functions.invoke('send-confirmation-email', {
-            body: {
-              user: {
-                email: data.user.email,
-                user_metadata: { full_name: registrationData.fullName }
-              },
-              email_data: {
-                token: '',
-                token_hash: '',
-                redirect_to: `${window.location.origin}/auth?verified=true`,
-                email_action_type: 'signup',
-                site_url: window.location.origin
-              }
-            }
-          });
-        } catch (emailError) {
-          console.error('Failed to send confirmation email:', emailError);
-          // Continue with registration even if email fails
-        }
+        // Supabase will automatically send email verification
+        // No custom email function needed
 
         // Clear the pending registration data
         localStorage.removeItem('pendingRegistration');

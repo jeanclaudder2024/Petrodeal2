@@ -2,8 +2,9 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
+import { db } from "@/lib/supabase-helper";
 import { 
   Check, 
   Crown, 
@@ -19,9 +20,57 @@ import {
   Zap
 } from "lucide-react";
 
+interface Discount {
+  id: string;
+  plan_tier: string;
+  billing_cycle: 'monthly' | 'annual';
+  discount_percentage: number;
+  discount_name: string | null;
+  valid_from: string;
+  valid_until: string | null;
+  is_active: boolean;
+}
+
 const Pricing = () => {
   const [isAnnual, setIsAnnual] = useState(false);
+  const [discounts, setDiscounts] = useState<Discount[]>([]);
   const navigate = useNavigate();
+
+  useEffect(() => {
+    fetchDiscounts();
+  }, []);
+
+  const fetchDiscounts = async () => {
+    try {
+      const { data, error } = await db
+        .from('subscription_discounts')
+        .select('*')
+        .eq('is_active', true)
+        .gte('valid_until', new Date().toISOString())
+        .or('valid_until.is.null');
+
+      if (error) {
+        console.error('Error fetching discounts:', error);
+        return;
+      }
+
+      setDiscounts(data || []);
+    } catch (error) {
+      console.error('Error fetching discounts:', error);
+    }
+  };
+
+  const getDiscountForPlan = (planName: string, billingCycle: 'monthly' | 'annual') => {
+    return discounts.find(discount => 
+      discount.plan_tier.toLowerCase() === planName.toLowerCase() && 
+      discount.billing_cycle === billingCycle
+    );
+  };
+
+  const calculateDiscountedPrice = (originalPrice: number, discount?: Discount) => {
+    if (!discount) return originalPrice;
+    return originalPrice * (1 - discount.discount_percentage / 100);
+  };
 
   const handlePlanSelect = () => {
     navigate('/auth');
@@ -138,7 +187,10 @@ const Pricing = () => {
         {/* Pricing Cards */}
         <div className="grid md:grid-cols-3 gap-8 max-w-7xl mx-auto">
           {plans.map((plan, index) => {
-            const price = isAnnual ? plan.annualPrice : plan.monthlyPrice;
+            const originalPrice = isAnnual ? plan.annualPrice : plan.monthlyPrice;
+            const billingCycle = isAnnual ? 'annual' : 'monthly';
+            const discount = getDiscountForPlan(plan.name, billingCycle);
+            const discountedPrice = calculateDiscountedPrice(originalPrice, discount);
             const period = isAnnual ? 'year' : 'month';
             
             return (
@@ -165,15 +217,37 @@ const Pricing = () => {
                   </CardDescription>
                   
                   <div className="space-y-2">
+                    {discount && (
+                      <div className="flex items-center justify-center gap-2 mb-2">
+                        <Badge variant="destructive" className="bg-red-100 text-red-700 dark:bg-red-900 dark:text-red-300">
+                          {discount.discount_percentage}% OFF
+                        </Badge>
+                        {discount.discount_name && (
+                          <Badge variant="outline" className="text-xs">
+                            {discount.discount_name}
+                          </Badge>
+                        )}
+                      </div>
+                    )}
                     <div className="text-4xl font-bold text-foreground">
-                      ${price}
+                      {discount && (
+                        <div className="text-2xl text-muted-foreground line-through mb-1">
+                          ${originalPrice.toFixed(2)}
+                        </div>
+                      )}
+                      ${discountedPrice.toFixed(2)}
                       <span className="text-lg text-muted-foreground font-normal">
                         /{period}
                       </span>
                     </div>
                     {isAnnual && (
                       <div className="text-sm text-muted-foreground">
-                        ${plan.monthlyPrice}/month when billed annually
+                        ${(discountedPrice / 12).toFixed(2)}/month when billed annually
+                      </div>
+                    )}
+                    {discount && (
+                      <div className="text-sm text-green-600 font-medium">
+                        Save ${(originalPrice - discountedPrice).toFixed(2)} {period}ly!
                       </div>
                     )}
                   </div>
