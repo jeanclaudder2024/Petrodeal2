@@ -73,7 +73,7 @@ const PreviewDashboard = () => {
   };
 
   const handleGetStarted = () => {
-    navigate('/auth');
+    navigate('/auth?mode=register');
   };
 
   if (loading) {

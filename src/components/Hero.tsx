@@ -8,7 +8,7 @@ const Hero = () => {
   const {
     content
   } = useLandingPageContent("hero");
-  const handleStartTrial = () => navigate("/auth");
+  const handleStartTrial = () => navigate("/auth?mode=register");
   const handleSystemOverview = () => {
     const el = document.getElementById("about");
     if (el) el.scrollIntoView({

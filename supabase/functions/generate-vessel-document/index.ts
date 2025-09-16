@@ -98,10 +98,27 @@ serve(async (req) => {
       throw new Error('Document template not found or inactive');
     }
 
+    // Check for vessel-specific custom prompt
+    const { data: customPrompt } = await supabaseClient
+      .from('vessel_document_prompts')
+      .select('custom_prompt')
+      .eq('vessel_id', vesselId)
+      .eq('document_id', documentId)
+      .single();
+
+    // Use custom prompt if available, otherwise use default
+    const finalPrompt = customPrompt?.custom_prompt || document.ai_prompt;
+    
+    if (!finalPrompt) {
+      throw new Error('Document template has no AI prompt configured');
+    }
+
     console.log('Document template loaded:', {
       title: document.title,
       subscription_level: document.subscription_level,
-      broker_membership_required: document.broker_membership_required
+      broker_membership_required: document.broker_membership_required,
+      hasCustomPrompt: !!customPrompt?.custom_prompt,
+      promptSource: customPrompt?.custom_prompt ? 'vessel-specific' : 'default-template'
     });
 
     // Check broker membership if required
@@ -111,7 +128,7 @@ serve(async (req) => {
         .select('membership_status, payment_status')
         .eq('user_id', user.id)
         .eq('membership_status', 'active')
-        .eq('payment_status', 'paid')
+        .eq('payment_status', 'completed')
         .single();
 
       if (brokerError || !brokerMembership) {
@@ -149,29 +166,49 @@ serve(async (req) => {
       const vesselDataString = formatVesselDataForAI(enhancedVesselData);
       
       // Validate the AI prompt exists and is not corrupted
-      if (!document.ai_prompt || document.ai_prompt.trim().length === 0) {
+      if (!finalPrompt || finalPrompt.trim().length === 0) {
         throw new Error('Document template has no AI prompt configured');
       }
 
       // Check for corrupted prompt data
-      if (document.ai_prompt.length < 10 || !/[a-zA-Z\s]/.test(document.ai_prompt)) {
-        console.error('Corrupted AI prompt detected:', document.ai_prompt);
+      if (finalPrompt.length < 10 || !/[a-zA-Z\s]/.test(finalPrompt)) {
+        console.error('Corrupted AI prompt detected:', finalPrompt);
         throw new Error('Document template has corrupted AI prompt. Please update the template in admin panel.');
       }
 
-      console.log('Original AI prompt from database:', document.ai_prompt);
-      console.log('AI prompt length:', document.ai_prompt.length);
+      console.log('Original AI prompt from database:', finalPrompt);
+      console.log('AI prompt length:', finalPrompt.length);
+      console.log('Prompt source:', customPrompt?.custom_prompt ? 'Custom vessel-specific prompt' : 'Default document template');
       
       // Process the document prompt and replace vessel data placeholders
-      let processedPrompt = document.ai_prompt;
+      let processedPrompt = finalPrompt;
       
-      // Replace common placeholders with actual vessel data
+      // Replace all vessel data placeholders with actual data
       processedPrompt = processedPrompt.replace(/\{vessel_data\}/g, vesselDataString);
       processedPrompt = processedPrompt.replace(/\{vessel_name\}/g, enhancedVesselData.name || 'Unknown Vessel');
       processedPrompt = processedPrompt.replace(/\{vessel_type\}/g, enhancedVesselData.vessel_type || 'Oil Tanker');
       processedPrompt = processedPrompt.replace(/\{mmsi\}/g, enhancedVesselData.mmsi || 'N/A');
       processedPrompt = processedPrompt.replace(/\{imo\}/g, enhancedVesselData.imo || 'N/A');
       processedPrompt = processedPrompt.replace(/\{flag\}/g, enhancedVesselData.flag_country || enhancedVesselData.flag || 'N/A');
+      processedPrompt = processedPrompt.replace(/\{deadweight\}/g, enhancedVesselData.deadweight || 'N/A');
+      processedPrompt = processedPrompt.replace(/\{cargo_capacity\}/g, enhancedVesselData.cargo_capacity || 'N/A');
+      processedPrompt = processedPrompt.replace(/\{built_year\}/g, enhancedVesselData.built || 'N/A');
+      processedPrompt = processedPrompt.replace(/\{current_position\}/g, `${enhancedVesselData.current_lat || 'N/A'}, ${enhancedVesselData.current_lng || 'N/A'}`);
+      processedPrompt = processedPrompt.replace(/\{speed\}/g, enhancedVesselData.speed || 'N/A');
+      processedPrompt = processedPrompt.replace(/\{status\}/g, enhancedVesselData.status || 'N/A');
+      
+      // Additional placeholders for common document fields
+      processedPrompt = processedPrompt.replace(/\{deal_data\}/g, vesselDataString);
+      processedPrompt = processedPrompt.replace(/\{buyer_name\}/g, enhancedVesselData.buyer_name || '[BUYER NAME TO BE GENERATED]');
+      processedPrompt = processedPrompt.replace(/\{seller_name\}/g, enhancedVesselData.seller_name || '[SELLER NAME TO BE GENERATED]');
+      processedPrompt = processedPrompt.replace(/\{cargo_type\}/g, enhancedVesselData.cargo_type || enhancedVesselData.oil_type || '[CARGO TYPE TO BE GENERATED]');
+      processedPrompt = processedPrompt.replace(/\{quantity\}/g, enhancedVesselData.cargo_quantity || enhancedVesselData.quantity || '[QUANTITY TO BE GENERATED]');
+      processedPrompt = processedPrompt.replace(/\{loading_port\}/g, enhancedVesselData.loading_port_name || enhancedVesselData.departure_port_name || '[LOADING PORT TO BE GENERATED]');
+      processedPrompt = processedPrompt.replace(/\{discharge_port\}/g, enhancedVesselData.destination_port_name || '[DISCHARGE PORT TO BE GENERATED]');
+      processedPrompt = processedPrompt.replace(/\{deal_value\}/g, enhancedVesselData.deal_value || enhancedVesselData.dealvalue || '[DEAL VALUE TO BE GENERATED]');
+      processedPrompt = processedPrompt.replace(/\{price\}/g, enhancedVesselData.price || enhancedVesselData.market_price || '[PRICE TO BE GENERATED]');
+      processedPrompt = processedPrompt.replace(/\{duration\}/g, '[CONTRACT DURATION TO BE GENERATED]');
+      processedPrompt = processedPrompt.replace(/\{timestamp\}/g, Date.now().toString());
 
       console.log('Processed prompt with vessel data:', processedPrompt.substring(0, 300) + '...');
       console.log('Processed prompt length:', processedPrompt.length);

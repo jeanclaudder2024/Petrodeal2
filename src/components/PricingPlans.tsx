@@ -116,6 +116,21 @@ const PricingPlans: React.FC<PricingPlansProps> = ({
   };
 
   const handleSubscribe = (tier: string) => {
+    // For professional plan, use direct Stripe checkout link
+    if (tier === 'professional') {
+      const baseUrl = 'https://buy.stripe.com/test_8x2eVfgFy3xHaob3BE00001';
+      const returnUrl = `${window.location.origin}/subscription?payment_success=true`;
+      const cancelUrl = `${window.location.origin}/subscription?payment_canceled=true`;
+      
+      // Add return URLs to the Stripe link
+      const stripeUrl = `${baseUrl}?success_url=${encodeURIComponent(returnUrl)}&cancel_url=${encodeURIComponent(cancelUrl)}`;
+      
+      // Open Stripe checkout in the same tab
+      window.location.href = stripeUrl;
+      return;
+    }
+    
+    // For other plans, use the existing flow
     const billingCycle = isAnnual ? 'annual' : 'monthly';
     onSubscribe(tier, billingCycle);
   };

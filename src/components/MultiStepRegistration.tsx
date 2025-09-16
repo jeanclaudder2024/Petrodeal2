@@ -29,6 +29,7 @@ import { useAccess } from '@/contexts/AccessContext';
 import { useNavigate } from 'react-router-dom';
 import { toast } from '@/hooks/use-toast';
 import EmailVerificationWaiting from './EmailVerificationWaiting';
+import StripePaymentForm from './StripePaymentForm';
 
 interface Discount {
   id: string;
@@ -105,6 +106,9 @@ const MultiStepRegistration = () => {
   const [discounts, setDiscounts] = useState<Discount[]>([]);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
+  const [paymentValid, setPaymentValid] = useState(false);
+  const [stripePaymentMethod, setStripePaymentMethod] = useState<any>(null);
+  const [userId, setUserId] = useState<string | null>(null);
   const [formData, setFormData] = useState<RegistrationForm>({
     email: '',
     password: '',
@@ -196,47 +200,183 @@ const MultiStepRegistration = () => {
   useEffect(() => {
     fetchPreviewData();
     
-    // Check URL parameters for trial setup success
-    const urlParams = new URLSearchParams(window.location.search);
-    const trialSetup = urlParams.get('trial_setup');
+    // Check for stored trial user ID
+    const storedUserId = localStorage.getItem('trialUserId');
+    if (storedUserId) {
+      setUserId(storedUserId);
+    }
     
-    if (trialSetup === 'success') {
-      // User completed payment method setup, check for stored registration data
-      const trialRegistration = localStorage.getItem('trialRegistration');
-      if (trialRegistration) {
-        try {
-          const data = JSON.parse(trialRegistration);
-          if (data.userId && data.email) {
-            // User has completed payment method setup, show step 6 waiting for verification
-            setTrialPaymentCompleted(true);
-            setCurrentStep(6);
-            setFormData(prev => ({ ...prev, paymentMethod: 'trial', email: data.email }));
+    // Check URL parameters for trial payment success
+    const urlParams = new URLSearchParams(window.location.search);
+    const trialPayment = urlParams.get('trial_payment');
+    const paymentSuccess = urlParams.get('payment_success');
+    const sessionId = urlParams.get('session_id');
+    const pendingActivation = localStorage.getItem('pendingTrialActivation');
+    
+    if ((trialPayment === 'success' && sessionId) || (paymentSuccess === 'true' && pendingActivation)) {
+      // User completed external trial checkout successfully
+      const storedUserId = localStorage.getItem('trialUserId');
+      const storedEmail = localStorage.getItem('trialUserEmail');
+      
+      if (storedUserId || storedEmail) {
+        // User has completed trial checkout, show step 6 waiting for verification
+        setTrialPaymentCompleted(true);
+        setCurrentStep(6);
+        setFormData(prev => ({ 
+          ...prev, 
+          paymentMethod: 'trial',
+          email: storedEmail || prev.email
+        }));
+        
+        // Store session ID for webhook processing if available
+        if (sessionId) {
+          localStorage.setItem('trialSessionId', sessionId);
+        }
+        
+        // Clear URL parameters
+        window.history.replaceState({}, document.title, window.location.pathname);
+        
+        // Show success message
+        toast({
+          title: "Payment Complete!",
+          description: "Your 5-day free trial has been activated. Welcome to AIVessel!",
+        });
+        
+        // Clean up stored data
+        localStorage.removeItem('trialUserId');
+        localStorage.removeItem('trialUserEmail');
+        localStorage.removeItem('pendingTrialActivation');
+      } else {
+        // No stored user data, something went wrong
+        toast({
+          title: "Setup Error",
+          description: "There was an issue with your trial setup. Please try again.",
+          variant: "destructive"
+        });
+        setCurrentStep(5); // Go back to payment step
+         window.history.replaceState({}, document.title, window.location.pathname);
+       }
+     } else if (urlParams.get('cancelled') === 'true' || urlParams.get('payment_cancelled') === 'true') {
+       // User cancelled the external checkout
+       toast({
+         title: "Payment Cancelled",
+         description: "Your payment was cancelled. You can try again or choose a different option.",
+         variant: "destructive"
+       });
+       
+       // Go back to payment step
+       setCurrentStep(5);
+       
+       // Clear URL parameters
+       window.history.replaceState({}, document.title, window.location.pathname);
+     } else {
+      // Check for legacy trial setup success
+      const trialSetup = urlParams.get('trial_setup');
+      if (trialSetup === 'success') {
+        // User completed payment method setup, check for stored registration data
+        const trialRegistration = localStorage.getItem('trialRegistration');
+        if (trialRegistration) {
+          try {
+            const data = JSON.parse(trialRegistration);
+            if (data.email) {
+              // User has completed payment method setup, show step 6 waiting for verification
+              setTrialPaymentCompleted(true);
+              setCurrentStep(6);
+              setFormData(prev => ({ 
+                ...prev, 
+                paymentMethod: 'trial', 
+                email: data.email,
+                fullName: data.fullName,
+                company: data.company,
+                country: data.country,
+                selectedRegions: data.selectedRegions,
+                selectedPorts: data.selectedPorts,
+                selectedVessels: data.selectedVessels
+              }));
+              // Clear URL parameters
+              window.history.replaceState({}, document.title, window.location.pathname);
+              
+              // Show success message
+              toast({
+                title: "Payment Method Setup Complete",
+                description: "Your payment method has been set up successfully. Please complete your registration by creating your account.",
+              });
+            }
+          } catch (error) {
+            console.error('Error parsing trial registration data:', error);
             localStorage.removeItem('trialRegistration');
-            // Clear URL parameters
-            window.history.replaceState({}, document.title, window.location.pathname);
           }
-        } catch (error) {
-          console.error('Error parsing trial registration data:', error);
-          localStorage.removeItem('trialRegistration');
+        }
+      } else {
+        // Check if user is returning from trial payment method setup (fallback)
+        const trialRegistration = localStorage.getItem('trialRegistration');
+        if (trialRegistration) {
+          try {
+            const data = JSON.parse(trialRegistration);
+            if (data.email) {
+              // User has completed payment method setup, show step 6 waiting for verification
+              setTrialPaymentCompleted(true);
+              setCurrentStep(6);
+              setFormData(prev => ({ 
+                ...prev, 
+                paymentMethod: 'trial', 
+                email: data.email,
+                fullName: data.fullName,
+                company: data.company,
+                country: data.country,
+                selectedRegions: data.selectedRegions,
+                selectedPorts: data.selectedPorts,
+                selectedVessels: data.selectedVessels
+              }));
+            }
+          } catch (error) {
+            console.error('Error parsing trial registration data:', error);
+            localStorage.removeItem('trialRegistration');
+          }
         }
       }
-    } else {
-      // Check if user is returning from trial payment method setup (fallback)
-      const trialRegistration = localStorage.getItem('trialRegistration');
-      if (trialRegistration) {
-        try {
-          const data = JSON.parse(trialRegistration);
-          if (data.userId && data.email) {
-            // User has completed payment method setup, show step 6 waiting for verification
-            setTrialPaymentCompleted(true);
-            setCurrentStep(6);
-            setFormData(prev => ({ ...prev, paymentMethod: 'trial', email: data.email }));
-            localStorage.removeItem('trialRegistration');
-          }
-        } catch (error) {
-          console.error('Error parsing trial registration data:', error);
-          localStorage.removeItem('trialRegistration');
+    }
+
+    // Check for cancelled or failed payment scenarios
+    const pendingRegistration = localStorage.getItem('pendingRegistration');
+    if (pendingRegistration) {
+      try {
+        const registrationData = JSON.parse(pendingRegistration);
+        // If user has pending registration data but is back on registration page,
+        // they likely cancelled payment or payment failed
+        if (registrationData.subscription_type === 'paid') {
+          toast({
+            title: "Payment Cancelled",
+            description: "Your payment was cancelled. You can try again or choose the free trial option.",
+            variant: "destructive"
+          });
+          
+          // Restore form data so user doesn't have to re-enter everything
+          setFormData(prev => ({
+            ...prev,
+            email: registrationData.email || '',
+            fullName: registrationData.fullName || '',
+            company: registrationData.company || '',
+            country: registrationData.country || '',
+            selectedRegions: registrationData.selectedRegions || [],
+            selectedPorts: registrationData.selectedPorts || [],
+            selectedVessels: registrationData.selectedVessels || [],
+            selectedPlan: registrationData.selectedPlan || '',
+            billingCycle: registrationData.billingCycle || 'monthly',
+            paymentMethod: 'subscription'
+          }));
+          
+          // Set to payment step so user can try again or choose trial
+          setCurrentStep(5);
+          
+          // Clean up the pending registration after a delay to allow user to see the message
+          setTimeout(() => {
+            localStorage.removeItem('pendingRegistration');
+          }, 5000);
         }
+      } catch (error) {
+        console.error('Error parsing pending registration data:', error);
+        localStorage.removeItem('pendingRegistration');
       }
     }
   }, []);
@@ -392,6 +532,10 @@ const MultiStepRegistration = () => {
         }
         return !!formData.paymentMethod;
       case 6:
+        // For trial users adding payment method with Stripe
+        if (formData.paymentMethod === 'trial') {
+          return paymentValid && stripePaymentMethod;
+        }
         // Step 6 is now for final confirmation and completion
         return true;
       default:
@@ -410,9 +554,9 @@ const MultiStepRegistration = () => {
         return;
       }
       
-      // For free trial users, after step 5, trigger the signup process
+      // For trial users, after step 5, setup payment method first
       if (currentStep === 5 && formData.paymentMethod === 'trial') {
-        handleSignUp();
+        handleTrialPaymentSetup();
         return;
       }
       
@@ -430,90 +574,120 @@ const MultiStepRegistration = () => {
     setCurrentStep(prev => Math.max(prev - 1, 1));
   };
 
-  const handleSignUp = async () => {
+  const handleTrialPaymentSetup = async () => {
     setLoading(true);
     try {
-      // For free trial users, first create account and add payment method
-      if (formData.paymentMethod === 'trial') {
-        // Create user account first
-        const { data, error } = await supabase.auth.signUp({
-          email: formData.email,
-          password: formData.password,
-          options: {
-            emailRedirectTo: `${window.location.origin}/auth?verified=true`,
-            data: {
-              full_name: formData.fullName,
-              company: formData.company,
-              country: formData.country,
-              selected_regions: formData.selectedRegions,
-              selected_ports: formData.selectedPorts,
-              selected_vessels: formData.selectedVessels,
-              subscription_type: 'trial'
-            }
+      // Create user account first for trial users
+      const { data, error } = await supabase.auth.signUp({
+        email: formData.email,
+        password: formData.password,
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth?verified=true`,
+          data: {
+            full_name: formData.fullName,
+            company: formData.company,
+            country: formData.country,
+            selected_regions: formData.selectedRegions,
+            selected_ports: formData.selectedPorts,
+            selected_vessels: formData.selectedVessels,
+            subscription_type: 'trial'
           }
+        }
+      });
+
+      if (error) {
+        console.error('Trial signup error:', error);
+        toast({
+          title: "Registration Failed",
+          description: error.message,
+          variant: "destructive"
         });
+        return;
+      }
 
-        if (error) {
-          console.error('Signup error:', error);
-          toast({
-            title: "Registration Failed",
-            description: error.message,
-            variant: "destructive"
-          });
-          return;
-        }
+      if (!data.user) {
+        throw new Error('User creation failed');
+      }
 
-        if (data.user) {
-          // For free trial, directly complete registration without payment setup
-          try {
-            // Add user to subscribers table with trial status
-            const { error: subscriberError } = await supabase
-              .from('subscribers')
-              .upsert({
-                user_id: data.user.id,
-                email: formData.email,
-                subscribed: false,
-                is_trial_active: true,
-                trial_start_date: new Date().toISOString(),
-                trial_end_date: new Date(Date.now() + 5 * 24 * 60 * 60 * 1000).toISOString(),
-                subscription_tier: 'trial',
-                vessel_limit: 10,
-                port_limit: 20
-              }, {
-                onConflict: 'email'
-              });
+      // Store user ID for payment setup
+      setUserId(data.user.id);
+      localStorage.setItem('trialUserId', data.user.id);
+      
+      // Go directly to step 6 for payment setup
+      setCurrentStep(6);
+      toast({
+        title: "Free Trial Setup",
+        description: "Please add your payment method to start your 5-day free trial.",
+        });
+    } catch (error) {
+      console.error('Failed to setup trial:', error);
+      toast({
+        title: "Trial Setup Failed",
+        description: `Error: ${error.message || 'Unable to setup trial. Please try again.'}`,
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
-            if (subscriberError) {
-              console.error('Error adding to subscribers:', subscriberError);
-              toast({
-                title: "Registration Failed",
-                description: "Unable to complete registration. Please try again.",
-                variant: "destructive"
-              });
-              return;
-            }
+  const handlePaymentSuccess = (paymentMethod: any) => {
+    setStripePaymentMethod(paymentMethod);
+    setPaymentValid(true);
+    toast({
+      title: "Payment Method Added",
+      description: "Your payment method has been successfully added.",
+    });
+  };
 
-            // Start the trial period
-            await startTrial();
+  const handlePaymentValidationChange = (isValid: boolean) => {
+    setPaymentValid(isValid);
+  };
 
-            toast({
-              title: "Registration Successful!",
-              description: "Please check your email to verify your account and start your 5-day free trial.",
-            });
-
-            // Show verification waiting screen
-            setShowVerificationWaiting(true);
-            return;
-          } catch (error) {
-            console.error('Failed to complete trial registration:', error);
-            toast({
-              title: "Registration Failed",
-              description: "Unable to complete registration. Please try again.",
-              variant: "destructive"
-            });
-            return;
+  const handleSignUp = async () => {
+    // Prevent duplicate registration attempts
+    if (loading) {
+      toast({
+        title: "Registration in Progress",
+        description: "Please wait while we process your registration.",
+        variant: "default"
+      });
+      return;
+    }
+    
+    setLoading(true);
+    try {
+      // For free trial users, redirect to payment method setup
+      if (formData.paymentMethod === 'trial') {
+        await handleTrialPaymentSetup();
+        return;
+      }
+      
+      // For subscription users, create account and proceed with payment
+      const { data, error } = await supabase.auth.signUp({
+        email: formData.email,
+        password: formData.password,
+        options: {
+          emailRedirectTo: `${window.location.origin}/auth?verified=true`,
+          data: {
+            full_name: formData.fullName,
+            company: formData.company,
+            country: formData.country,
+            selected_regions: formData.selectedRegions,
+            selected_ports: formData.selectedPorts,
+            selected_vessels: formData.selectedVessels,
+            subscription_type: 'paid'
           }
         }
+      });
+
+      if (error) {
+        console.error('Signup error:', error);
+        toast({
+          title: "Registration Failed",
+          description: error.message,
+          variant: "destructive"
+        });
         return;
       }
 
@@ -1079,7 +1253,11 @@ const MultiStepRegistration = () => {
                     </li>
                     <li className="flex items-center gap-2">
                       <Check className="h-4 w-4" />
-                      No upfront charges
+                      Payment method required
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <Check className="h-4 w-4" />
+                      No charges during trial
                     </li>
                   </ul>
                 </CardContent>
@@ -1335,10 +1513,10 @@ const MultiStepRegistration = () => {
             <div className="text-center mb-6">
               {formData.paymentMethod === 'trial' ? (
                 <>
-                  <div className="h-12 w-12 mx-auto mb-4 animate-spin rounded-full border-4 border-primary border-t-transparent" />
-                  <h2 className="text-2xl font-bold">Waiting for Verification</h2>
+                  <CreditCard className="h-12 w-12 mx-auto text-blue-600 mb-4" />
+                  <h2 className="text-2xl font-bold">Complete Your Free Trial Setup</h2>
                   <p className="text-muted-foreground mb-4">
-                    Please check your email to verify your account. Once verified, your free trial will begin with full access to all features.
+                    Add your payment method to start your 5-day free trial. You won't be charged until the trial ends.
                   </p>
                 </>
               ) : (
@@ -1351,6 +1529,47 @@ const MultiStepRegistration = () => {
                 </>
               )}
             </div>
+
+            {/* Payment form for trial users */}
+            {formData.paymentMethod === 'trial' && (
+              <div className="space-y-4">
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                  <div className="flex items-center space-x-2">
+                    <Shield className="h-5 w-5 text-blue-600" />
+                    <span className="text-sm font-medium text-blue-800">5-Day Free Trial</span>
+                  </div>
+                  <p className="text-sm text-blue-700 mt-1">
+                    No charges for 5 days. Cancel anytime during the trial period.
+                  </p>
+                </div>
+
+                <StripePaymentForm 
+                  onPaymentSuccess={handlePaymentSuccess}
+                  onValidationChange={handlePaymentValidationChange}
+                  loading={loading}
+                  customerEmail={formData.email}
+                  userId={userId || 'temp-' + Date.now()}
+                />
+
+                <div className="flex items-start space-x-2 pt-2">
+                  <Checkbox
+                    id="terms"
+                    checked={formData.termsAgreed}
+                    onCheckedChange={(checked) => handleInputChange('termsAgreed', checked as boolean)}
+                  />
+                  <Label htmlFor="terms" className="text-sm leading-5">
+                    I agree to{' '}
+                    <Link to="/policies" className="text-blue-400 hover:text-blue-300 underline">
+                      Terms of Service
+                    </Link>{' '}
+                    and{' '}
+                    <Link to="/privacy-policy" className="text-blue-400 hover:text-blue-300 underline">
+                      Privacy Policy
+                    </Link>
+                  </Label>
+                </div>
+              </div>
+            )}
 
             {/* Summary Card */}
             <Card className="bg-muted/30">
@@ -1403,7 +1622,8 @@ const MultiStepRegistration = () => {
               <ul className="space-y-1 text-sm text-muted-foreground">
                 {formData.paymentMethod === 'trial' ? (
                   <>
-                    <li>• Your account has been created with payment method on file</li>
+                    <li>• You'll setup a payment method (required for security)</li>
+                    <li>• Your account will be created after payment method setup</li>
                     <li>• Check your email and click the verification link</li>
                     <li>• Once verified, you'll get 5 days of full access to all features</li>
                     <li>• No charges during trial period</li>
@@ -1477,14 +1697,57 @@ const MultiStepRegistration = () => {
           <Separator className="my-6" />
 
           <div className="flex justify-between">
-            <Button
-              variant="outline"
-              onClick={handlePrevious}
-              disabled={currentStep === 1}
-            >
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Previous
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                onClick={handlePrevious}
+                disabled={currentStep === 1}
+              >
+                <ArrowLeft className="h-4 w-4 mr-2" />
+                Previous
+              </Button>
+              
+              {/* Add Start Over button for payment step */}
+              {currentStep === 5 && (
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    // Clear form data and start over
+                    setFormData({
+                      email: '',
+                      password: '',
+                      confirmPassword: '',
+                      termsAgreed: false,
+                      fullName: '',
+                      company: '',
+                      country: '',
+                      countryCode: '+1',
+                      phone: '',
+                      selectedPorts: [],
+                      selectedVessels: [],
+                      selectedRegions: [],
+                      paymentMethod: 'trial',
+                      selectedPlan: undefined,
+                      billingCycle: 'monthly',
+                      cardNumber: '',
+                      expiryDate: '',
+                      cvv: '',
+                      cardholderName: ''
+                    });
+                    setCurrentStep(1);
+                    // Clean up any pending registration data
+                    localStorage.removeItem('pendingRegistration');
+                    toast({
+                      title: "Form Reset",
+                      description: "Starting fresh with a clean form.",
+                    });
+                  }}
+                  className="text-destructive border-destructive hover:bg-destructive hover:text-destructive-foreground"
+                >
+                  Start Over
+                </Button>
+              )}
+            </div>
 
             {currentStep < totalSteps ? (
               <Button
@@ -1497,11 +1760,11 @@ const MultiStepRegistration = () => {
             ) : (
               <Button
                 onClick={handleSignUp}
-                disabled={loading || formData.paymentMethod === 'trial'}
+                disabled={loading || !validateStep(currentStep)}
                 className="bg-green-600 hover:bg-green-700"
               >
                 {loading ? 'Processing...' : 
-                 formData.paymentMethod === 'trial' ? 'Waiting for Email Verification' : 'Proceed to Payment'}
+                 formData.paymentMethod === 'trial' ? 'Start Free Trial' : 'Proceed to Payment'}
                 <ArrowRight className="h-4 w-4 ml-2" />
               </Button>
             )}

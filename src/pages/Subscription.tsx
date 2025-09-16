@@ -22,33 +22,49 @@ interface SubscriptionData {
 }
 
 const Subscription = () => {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [subscriptionData, setSubscriptionData] = useState<SubscriptionData | null>(null);
   const [loading, setLoading] = useState(true);
   const [checkingSubscription, setCheckingSubscription] = useState(false);
   const [processingCheckout, setProcessingCheckout] = useState(false);
 
   useEffect(() => {
-    checkSubscription();
-  }, [user]); // Check subscription whenever user changes
+    // Only check subscription when auth loading is complete
+    if (!authLoading) {
+      checkSubscription();
+    }
+  }, [user, authLoading]); // Check subscription whenever user changes or auth loading completes
+
+  useEffect(() => {
+    // Handle payment success/cancel from Stripe redirect
+    const urlParams = new URLSearchParams(window.location.search);
+    const paymentSuccess = urlParams.get('payment_success');
+    const paymentCanceled = urlParams.get('payment_canceled');
+
+    if (paymentSuccess === 'true') {
+      toast.success('Payment successful! Your professional plan is being activated.');
+      // Refresh subscription data
+      setTimeout(() => {
+        checkSubscription();
+      }, 2000);
+      // Clean up URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+    } else if (paymentCanceled === 'true') {
+      toast.info('Payment was canceled. You can try again anytime.');
+      // Clean up URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, []);
 
   const checkSubscription = async () => {
     if (!user?.email) {
-      console.log('No user or email, using default values');
-      setSubscriptionData({
-        subscribed: false,
-        subscription_tier: 'trial',
-        subscription_end: null,
-        vessel_limit: 10,
-        port_limit: 5,
-        regions_limit: 1,
-        refinery_limit: 5,
-        document_access: ['basic'],
-        support_level: 'email',
-        user_seats: 1,
-        api_access: false,
-        real_time_analytics: false
-      });
+      console.log('No user or email, preserving existing data or using defaults');
+      // CRITICAL FIX: Don't reset subscription data during auth loading
+      if (!authLoading) {
+        // User is actually logged out, clear subscription data
+        setSubscriptionData(null);
+      }
+      // If auth is still loading, preserve existing subscription data
       setLoading(false);
       return;
     }
@@ -59,10 +75,18 @@ const Subscription = () => {
       const { data, error } = await supabase.functions.invoke('check-subscription');
       
       if (error) {
-        console.warn('Subscription check failed, using defaults:', error);
+        console.warn('Subscription check failed:', error);
+        // CRITICAL FIX: Don't default to trial on API errors - preserve existing state
+        const existingData = subscriptionData;
+        if (existingData && existingData.subscription_tier) {
+          console.log('Preserving existing subscription data due to API error');
+          return; // Keep existing data
+        }
+        
+        // Only set minimal defaults for new sessions
         setSubscriptionData({
           subscribed: false,
-          subscription_tier: 'trial',
+          subscription_tier: null, // Don't assume trial on error
           subscription_end: null,
           vessel_limit: 10,
           port_limit: 5,

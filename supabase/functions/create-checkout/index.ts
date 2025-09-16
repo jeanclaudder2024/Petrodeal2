@@ -70,6 +70,7 @@ serve(async (req) => {
 
 
     const { tier, billing_cycle = 'monthly' } = requestBody;
+    logStep("Request parameters received", { tier, billing_cycle, requestBody });
     if (!tier) {
       throw new Error("Subscription tier is required");
     }
@@ -125,11 +126,15 @@ serve(async (req) => {
     let monthlyAmount = 2999; // Default fallback
     let productName = "PetroDealHub Subscription";
     
+    // Map frontend tier names to database tier names
+    const dbTier = tier === 'premium' ? 'professional' : tier;
+    logStep("Mapping tier for database query", { originalTier: tier, dbTier });
+    
     try {
       const { data: planData } = await supabaseService
         .from('subscription_plans')
         .select('*')
-        .eq('plan_tier', tier)
+        .eq('plan_tier', dbTier)
         .eq('is_active', true)
         .single();
         
@@ -138,7 +143,7 @@ serve(async (req) => {
         productName = planData.plan_name;
         logStep("Plan data found", { tier, monthlyAmount, productName, planData });
       } else {
-        logStep("No plan found in database, using fallback pricing", { tier });
+        logStep("No plan found in database, using fallback pricing", { tier, availablePlans: 'checking database' });
         // Fallback pricing if plan not found
         if (tier === 'basic') {
           monthlyAmount = 2999;
@@ -185,7 +190,16 @@ serve(async (req) => {
     logStep("Final pricing", { unitAmount, interval, discountPercentage });
 
     const origin = req.headers.get("origin") || "https://preview--aivessel-trade-flow.lovable.app";
-    logStep("Creating Stripe session", { origin });
+    logStep("Creating Stripe session", { 
+      finalAmount: unitAmount, 
+      productName, 
+      tier, 
+      billing_cycle,
+      discountPercentage,
+      userEmail,
+      monthlyAmount,
+      originalAmount: billing_cycle === 'annual' ? monthlyAmount * 12 : monthlyAmount
+    });
 
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
@@ -208,7 +222,7 @@ serve(async (req) => {
       success_url: `${origin}/payment-success?success=true`,
       cancel_url: `${origin}/auth?mode=signup&cancelled=true`,
       metadata: {
-        tier: tier,
+        tier: tier, // Keep original tier name from frontend
         billing_cycle: billing_cycle,
         discount_applied: discountPercentage.toString(),
         user_id: user?.id || 'registration_pending',

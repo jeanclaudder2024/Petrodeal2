@@ -21,19 +21,19 @@ interface SubscriptionContextType {
 const SubscriptionContext = createContext<SubscriptionContextType | undefined>(undefined);
 
 export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const [subscriptionData, setSubscriptionData] = useState<SubscriptionData | null>(null);
   const [loading, setLoading] = useState(true);
 
   const checkSubscription = async () => {
+    // CRITICAL FIX: Don't reset subscription data when user is null during auth loading
+    // Only reset when user is explicitly null AND auth is not loading (actual logout)
     if (!user) {
-      setSubscriptionData({
-        subscribed: false,
-        subscription_tier: 'trial',
-        subscription_end: null,
-        vessel_limit: 10,
-        port_limit: 20
-      });
+      if (!authLoading) {
+        // User is actually logged out, clear subscription data
+        setSubscriptionData(null);
+      }
+      // If auth is still loading, preserve existing subscription data
       setLoading(false);
       return;
     }
@@ -45,11 +45,19 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
       const { data, error } = await supabase.functions.invoke('check-subscription');
       
       if (error) {
-        console.warn('Subscription check failed, using defaults:', error);
-        // Set default trial limits for all users - ensure app keeps working
+        console.warn('Subscription check failed:', error);
+        // CRITICAL FIX: Don't default to trial on error - preserve existing state or use minimal defaults
+        // This prevents paid users from seeing trial messages due to temporary API issues
+        const existingData = subscriptionData;
+        if (existingData) {
+          console.log('Preserving existing subscription data due to API error');
+          return; // Keep existing data
+        }
+        
+        // Only set trial defaults for completely new sessions
         setSubscriptionData({
           subscribed: false,
-          subscription_tier: 'trial',
+          subscription_tier: null, // Don't assume trial on error
           subscription_end: null,
           vessel_limit: 10,
           port_limit: 20
@@ -62,28 +70,35 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
         console.log('Subscription data received:', data);
         setSubscriptionData({
           subscribed: data.subscribed || false,
-          subscription_tier: data.subscription_tier || 'trial',
+          subscription_tier: data.subscription_tier || null, // Don't default to trial
           subscription_end: data.subscription_end || null,
           vessel_limit: data.vessel_limit || 10,
           port_limit: data.port_limit || 20
         });
       } else {
-        // Fallback to default if no data
-        console.warn('No subscription data received, using defaults');
+        // Fallback to minimal defaults if no data (don't assume trial)
+        console.warn('No subscription data received, using minimal defaults');
         setSubscriptionData({
           subscribed: false,
-          subscription_tier: 'trial',
+          subscription_tier: null, // Don't assume trial
           subscription_end: null,
           vessel_limit: 10,
           port_limit: 20
         });
       }
     } catch (error) {
-      console.error('Error checking subscription, using defaults:', error);
-      // Always provide fallback data to prevent UI blocking
+      console.error('Error checking subscription:', error);
+      // CRITICAL FIX: Preserve existing data on network errors
+      const existingData = subscriptionData;
+      if (existingData) {
+        console.log('Preserving existing subscription data due to network error');
+        return; // Keep existing data
+      }
+      
+      // Only set minimal defaults for new sessions
       setSubscriptionData({
         subscribed: false,
-        subscription_tier: 'trial',
+        subscription_tier: null, // Don't assume trial on error
         subscription_end: null,
         vessel_limit: 10,
         port_limit: 20
@@ -94,8 +109,11 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
   };
 
   useEffect(() => {
-    checkSubscription();
-  }, [user]);
+    // Only check subscription when auth loading is complete
+    if (!authLoading) {
+      checkSubscription();
+    }
+  }, [user, authLoading]);
 
   const isWithinVesselLimit = (currentCount: number) => {
     if (!subscriptionData) return currentCount <= 10; // Default free limit

@@ -48,13 +48,14 @@ serve(async (req) => {
 
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
-      logStep("No authorization header provided, returning default trial");
-      // For unauthenticated users, return basic trial info
+      logStep("No authorization header provided, returning minimal defaults");
+      // CRITICAL FIX: Don't assume trial for unauthenticated requests
+      // This could be a paid user during auth loading
       return new Response(JSON.stringify({ 
         subscribed: false,
-        subscription_tier: 'trial',
-        trial_active: true,
-        trial_days_left: 5,
+        subscription_tier: null, // Don't assume trial
+        trial_active: false,
+        trial_days_left: 0,
         vessel_limit: 10,
         port_limit: 20
       }), {
@@ -77,12 +78,12 @@ serve(async (req) => {
     const { data: userData, error: userError } = await anonClient.auth.getUser(token);
     if (userError) {
       logStep("Authentication error, handling gracefully", { error: userError.message });
-      // Return trial status for authentication errors instead of failing
+      // CRITICAL FIX: Don't assume trial for auth errors - could be paid user with expired token
       return new Response(JSON.stringify({ 
         subscribed: false,
-        subscription_tier: 'trial',
-        trial_active: true,
-        trial_days_left: 5,
+        subscription_tier: null, // Don't assume trial
+        trial_active: false,
+        trial_days_left: 0,
         vessel_limit: 10,
         port_limit: 20,
         error: "Authentication failed"
@@ -121,6 +122,29 @@ serve(async (req) => {
     const stripe = new Stripe(stripeKey, { apiVersion: "2023-10-16" });
     const customers = await stripe.customers.list({ email: user.email, limit: 1 });
     
+    // CRITICAL FIX: Check for paid subscription FIRST before defaulting to trial
+    // If user has a Stripe customer ID, they might be a paid subscriber
+    if (customers.data.length > 0) {
+      const customerId = customers.data[0].id;
+      logStep("Found Stripe customer, checking for active subscriptions", { customerId });
+      
+      // Check for active subscriptions immediately
+      const subscriptions = await stripe.subscriptions.list({
+        customer: customerId,
+        status: "active",
+        limit: 1,
+      });
+      
+      // If they have active subscription, process it (skip trial logic)
+      if (subscriptions.data.length > 0) {
+        logStep("Active subscription found, processing paid subscriber");
+        // Continue to subscription processing logic below
+      } else {
+        logStep("Stripe customer exists but no active subscription");
+      }
+    }
+    
+    // Only start trial for completely new users (no Stripe customer AND no existing subscriber)
     if (customers.data.length === 0 && !existingSubscriber) {
       logStep("No customer found, starting trial for new user");
       
@@ -145,15 +169,16 @@ serve(async (req) => {
       });
     }
 
-    // Check if user has active trial (no Stripe customer needed)
-    if (existingSubscriber && existingSubscriber.is_trial_active) {
+    // CRITICAL FIX: Only show trial for users who don't have Stripe customers
+    // If user has Stripe customer, prioritize checking their subscription status
+    if (existingSubscriber && existingSubscriber.is_trial_active && customers.data.length === 0) {
       const trialEnd = new Date(existingSubscriber.trial_end_date);
       const now = new Date();
       const isTrialExpired = trialEnd < now;
       
       if (!isTrialExpired) {
         const trialDaysLeft = Math.ceil((trialEnd.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-        logStep("Active trial found", { 
+        logStep("Active trial found for non-Stripe user", { 
           trialEnd: existingSubscriber.trial_end_date,
           trialDaysLeft 
         });
@@ -192,7 +217,7 @@ serve(async (req) => {
 
     // Handle Stripe customers with subscriptions
     const customerId = customers.data[0].id;
-    logStep("Found Stripe customer for subscription check", { customerId });
+    logStep("Processing Stripe customer subscription status", { customerId });
 
     const subscriptions = await stripe.subscriptions.list({
       customer: customerId,
