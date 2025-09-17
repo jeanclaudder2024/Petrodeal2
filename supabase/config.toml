@@ -1,7 +1,6 @@
 project_id = "vycktqjiaomxvsbvgzly"
 
 [auth]
-enable_confirmations = true
 enable_signup = true
 enable_anonymous_sign_ins = false
 

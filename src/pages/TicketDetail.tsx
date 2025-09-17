@@ -67,7 +67,7 @@ const TicketDetail = () => {
       setLoading(true);
 
       // Load ticket
-      const { data: ticketData, error: ticketError } = await db
+      const { data: ticketData, error: ticketError } = await supabase
         .from('support_tickets')
         .select('*')
         .eq('id', id)
@@ -89,7 +89,7 @@ const TicketDetail = () => {
       setTicket(ticketData);
 
       // Load category
-      const { data: categoryData, error: categoryError } = await db
+      const { data: categoryData, error: categoryError } = await supabase
         .from('support_categories')
         .select('*')
         .eq('id', ticketData.category_id)
@@ -100,7 +100,7 @@ const TicketDetail = () => {
       }
 
       // Load messages
-      const { data: messagesData, error: messagesError } = await db
+      const { data: messagesData, error: messagesError } = await supabase
         .from('support_ticket_messages')
         .select('*')
         .eq('ticket_id', id)
@@ -129,20 +129,21 @@ const TicketDetail = () => {
       setSending(true);
 
       // Create message
-      const { error: messageError } = await db
+      const { error: messageError } = await supabase
         .from('support_ticket_messages')
         .insert({
           ticket_id: ticket.id,
           message: replyMessage,
           user_id: user?.id,
-          is_internal: false,
+          sender_type: 'user',
+          sender_email: user?.email || ticket.email,
         });
 
       if (messageError) throw messageError;
 
       // Update ticket status to open if it was closed
       if (ticket.status === 'closed') {
-        const { error: updateError } = await db
+        const { error: updateError } = await supabase
           .from('support_tickets')
           .update({ 
             status: 'open',

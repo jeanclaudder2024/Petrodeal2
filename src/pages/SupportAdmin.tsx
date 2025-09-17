@@ -67,7 +67,7 @@ const SupportAdmin = () => {
       setLoading(true);
 
       // Load tickets
-      const { data: ticketsData, error: ticketsError } = await db
+      const { data: ticketsData, error: ticketsError } = await supabase
         .from('support_tickets')
         .select('*')
         .order('created_at', { ascending: false });
@@ -75,11 +75,10 @@ const SupportAdmin = () => {
       if (ticketsError) throw ticketsError;
 
       // Load categories
-      const { data: categoriesData, error: categoriesError } = await db
+      const { data: categoriesData, error: categoriesError } = await supabase
         .from('support_categories')
         .select('*')
-        .eq('is_active', true)
-        .order('sort_order');
+        .order('name_en');
 
       if (categoriesError) throw categoriesError;
 
@@ -100,7 +99,7 @@ const SupportAdmin = () => {
 
   const updateTicketStatus = async (ticketId: string, status: string) => {
     try {
-      const { error } = await db
+      const { error } = await supabase
         .from('support_tickets')
         .update({ 
           status,
@@ -128,7 +127,7 @@ const SupportAdmin = () => {
 
   const updateTicketPriority = async (ticketId: string, priority: string) => {
     try {
-      const { error } = await db
+      const { error } = await supabase
         .from('support_tickets')
         .update({ 
           priority,

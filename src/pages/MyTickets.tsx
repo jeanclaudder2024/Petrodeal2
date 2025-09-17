@@ -9,6 +9,7 @@ import { useToast } from '@/hooks/use-toast';
 import LoadingFallback from '@/components/LoadingFallback';
 import { Search, Plus, Eye, Clock, User } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { supabase } from '@/integrations/supabase/client';
 
 interface Ticket {
   id: string;
@@ -39,18 +40,32 @@ const MyTickets = () => {
     try {
       setLoading(true);
 
-      // Load tickets from localStorage for demo purposes
-      const storedTickets = JSON.parse(localStorage.getItem('support_tickets') || '[]');
-      
-      // Filter tickets for current user
-      const userTickets = storedTickets.filter((ticket: any) => 
-        ticket.user_id === user?.id || ticket.email === user?.email
-      );
-      
-      // Sort by created_at descending
-      userTickets.sort((a: any, b: any) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+      if (!user) {
+        setTickets([]);
+        return;
+      }
 
-      setTickets(userTickets);
+      // Fetch tickets from database
+      const { data: tickets, error } = await supabase
+        .from('support_tickets')
+        .select(`
+          id,
+          ticket_number,
+          subject,
+          status,
+          priority,
+          created_at,
+          updated_at
+        `)
+        .or(`user_id.eq.${user.id},email.eq.${user.email}`)
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error loading tickets:', error);
+        throw error;
+      }
+
+      setTickets(tickets || []);
 
     } catch (error: any) {
       console.error('Error loading tickets:', error);

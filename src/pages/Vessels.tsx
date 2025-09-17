@@ -23,8 +23,7 @@ import {
   Navigation,
   Package,
   Flag,
-  Filter,
-  UserPlus
+  Filter
 } from 'lucide-react';
 import { db } from '@/lib/supabase-helper';
 import LoadingFallback from '@/components/LoadingFallback';
@@ -228,12 +227,6 @@ const Vessels = () => {
     navigate(`/vessels/${vesselId}`);
   };
 
-  const handleHireVessel = (vessel: Vessel) => {
-    // Add hire functionality here
-    alert(`Initiating hire process for vessel: ${vessel.name}`);
-    // This could open a modal or navigate to a hire form
-  };
-
   // Get unique vessel types and statuses for filter options
   const vesselTypes = [...new Set(vessels.map(v => v.vessel_type).filter(Boolean))];
   const vesselStatuses = [...new Set(vessels.map(v => v.status).filter(Boolean))];
@@ -434,15 +427,6 @@ const Vessels = () => {
                          >
                            <Eye className="h-4 w-4 mr-2" />
                            View
-                         </Button>
-                         <Button
-                           variant="outline"
-                           size="sm"
-                           onClick={() => handleHireVessel(vessel)}
-                           className="text-primary border-primary hover:bg-primary hover:text-primary-foreground"
-                         >
-                           <UserPlus className="h-4 w-4 mr-2" />
-                           Hire
                          </Button>
                        </div>
                      </TableCell>

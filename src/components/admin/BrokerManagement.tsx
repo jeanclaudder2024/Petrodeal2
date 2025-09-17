@@ -127,6 +127,7 @@ const BrokerManagement = () => {
   const [chatMessage, setChatMessage] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isStepDialogOpen, setIsStepDialogOpen] = useState(false);
+  const [showDealSteps, setShowDealSteps] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -636,6 +637,7 @@ const BrokerManagement = () => {
                                  variant="outline"
                                  onClick={() => {
                                    setSelectedDeal(deal);
+                                   setShowDealSteps(true);
                                    setActiveTab('steps');
                                  }}
                                >
@@ -748,115 +750,303 @@ const BrokerManagement = () => {
         </TabsContent>
 
         <TabsContent value="steps">
-          <Card className="trading-card">
-            <CardHeader>
-              <CardTitle>Deal Steps Approval</CardTitle>
-              <CardDescription>Approve or reject individual deal steps</CardDescription>
-            </CardHeader>
-            <CardContent>
-              {selectedDeal && (
-                <div className="mb-6 p-4 border rounded-lg bg-muted/50">
-                  <h3 className="font-semibold">Deal: {selectedDeal.deal_type}</h3>
-                  <p className="text-sm text-muted-foreground">
+          {showDealSteps && selectedDeal ? (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <div>
+                  <h2 className="text-2xl font-bold">Deal Steps - {selectedDeal.deal_type}</h2>
+                  <p className="text-muted-foreground">
                     Broker: {selectedDeal.broker_profiles?.full_name} | 
                     Progress: {selectedDeal.steps_completed}/{selectedDeal.total_steps}
                   </p>
                 </div>
-              )}
-
-              <div className="rounded-md border">
-                <Table>
-                  <TableHeader>
-                     <TableRow>
-                       <TableHead>Step #</TableHead>
-                       <TableHead>Step Name</TableHead>
-                       <TableHead>Description</TableHead>
-                       <TableHead>Status</TableHead>
-                       <TableHead>Document</TableHead>
-                       <TableHead>Notes</TableHead>
-                       <TableHead>Completed</TableHead>
-                       <TableHead>Actions</TableHead>
-                     </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {dealSteps
-                      .filter(step => !selectedDeal || step.deal_id === selectedDeal.id)
-                      .map((step) => (
-                         <TableRow key={step.id} className="hover:bg-muted/50">
-                           <TableCell>{step.step_number}</TableCell>
-                           <TableCell className="font-medium">{step.step_name}</TableCell>
-                           <TableCell className="max-w-xs truncate">{step.step_description || 'N/A'}</TableCell>
-                           <TableCell>{getStatusBadge(step.status)}</TableCell>
-                           <TableCell>
-                             {step.file_url ? (
-                               <Button
-                                 size="sm"
-                                 variant="outline"
-                                 onClick={() => window.open(step.file_url, '_blank')}
-                               >
-                                 View Document
-                               </Button>
-                             ) : (
-                               <span className="text-muted-foreground text-sm">No document</span>
-                             )}
-                           </TableCell>
-                           <TableCell className="max-w-xs">
-                             <div className="truncate text-sm">
-                               {step.notes || 'No notes'}
-                             </div>
-                           </TableCell>
-                           <TableCell>
-                             {step.completed_at ? 
-                               new Date(step.completed_at).toLocaleDateString() : 'N/A'
-                             }
-                           </TableCell>
-                           <TableCell>
-                             <div className="flex gap-2">
-                               <Button
-                                 size="sm"
-                                 variant="outline"
-                                 onClick={() => {
-                                   setSelectedStep(step);
-                                   setIsStepDialogOpen(true);
-                                 }}
-                               >
-                                 <Eye className="h-4 w-4" />
-                               </Button>
-                               {step.status === 'pending' && (
-                                 <>
-                                   <Button
-                                     size="sm"
-                                     variant="outline"
-                                     onClick={() => handleApproveStep(step.id)}
-                                     className="text-green-600 hover:text-green-700"
-                                   >
-                                     <CheckCircle className="h-4 w-4" />
-                                   </Button>
-                                   <Button
-                                     size="sm"
-                                     variant="outline"
-                                     onClick={() => handleRejectStep(step.id)}
-                                     className="text-red-600 hover:text-red-700"
-                                   >
-                                     <XCircle className="h-4 w-4" />
-                                   </Button>
-                                 </>
-                               )}
-                               {step.status === 'completed' && (
-                                 <Badge variant="default" className="text-xs">Approved</Badge>
-                               )}
-                               {step.status === 'rejected' && (
-                                 <Badge variant="destructive" className="text-xs">Rejected</Badge>
-                               )}
-                             </div>
-                           </TableCell>
-                        </TableRow>
-                      ))}
-                  </TableBody>
-                </Table>
+                <Button
+                  variant="outline"
+                  onClick={() => {
+                    setShowDealSteps(false);
+                    setSelectedDeal(null);
+                  }}
+                >
+                  Back to Steps Overview
+                </Button>
               </div>
-            </CardContent>
-          </Card>
+              
+              {/* Admin Deal Steps Table with Approve/Reject Controls */}
+              <Card className="trading-card">
+                <CardHeader>
+                  <CardTitle>Deal Steps Management</CardTitle>
+                  <CardDescription>Review and approve/reject individual deal steps</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="rounded-md border">
+                    <Table>
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>Step #</TableHead>
+                          <TableHead>Step Name</TableHead>
+                          <TableHead>Description</TableHead>
+                          <TableHead>Status</TableHead>
+                          <TableHead>Document</TableHead>
+                          <TableHead>Notes</TableHead>
+                          <TableHead>Completed</TableHead>
+                          <TableHead>Actions</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {dealSteps
+                          .filter(step => step.deal_id === selectedDeal.id)
+                          .map((step) => (
+                            <TableRow key={step.id} className="hover:bg-muted/50">
+                              <TableCell>{step.step_number}</TableCell>
+                              <TableCell className="font-medium">{step.step_name}</TableCell>
+                              <TableCell className="max-w-xs truncate">{step.step_description || 'N/A'}</TableCell>
+                              <TableCell>{getStatusBadge(step.status)}</TableCell>
+                              <TableCell>
+                                {step.file_url ? (
+                                  <div className="flex items-center gap-2">
+                                    <Badge variant="secondary" className="text-xs">
+                                      <FileText className="h-3 w-3 mr-1" />
+                                      Uploaded
+                                    </Badge>
+                                    <Button
+                                      variant="ghost"
+                                      size="sm"
+                                      onClick={() => window.open(step.file_url, '_blank')}
+                                      className="h-6 px-2 text-xs"
+                                    >
+                                      <Download className="h-3 w-3" />
+                                    </Button>
+                                  </div>
+                                ) : (
+                                  <Badge variant="outline" className="text-xs">No Document</Badge>
+                                )}
+                              </TableCell>
+                              <TableCell className="max-w-xs truncate">{step.notes || 'N/A'}</TableCell>
+                              <TableCell>
+                                {step.completed_at ? new Date(step.completed_at).toLocaleDateString() : 'N/A'}
+                              </TableCell>
+                              <TableCell>
+                                <div className="flex items-center gap-1">
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => {
+                                      setSelectedStep(step);
+                                      setIsStepDialogOpen(true);
+                                    }}
+                                    className="h-8 w-8 p-0"
+                                  >
+                                    <Eye className="h-4 w-4" />
+                                  </Button>
+                                  {step.status === 'pending' && (
+                                    <>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => handleApproveStep(step.id)}
+                                        className="h-8 w-8 p-0 text-green-600 hover:text-green-700 hover:bg-green-50"
+                                      >
+                                        <CheckCircle className="h-4 w-4" />
+                                      </Button>
+                                      <Button
+                                        variant="ghost"
+                                        size="sm"
+                                        onClick={() => handleRejectStep(step.id)}
+                                        className="h-8 w-8 p-0 text-red-600 hover:text-red-700 hover:bg-red-50"
+                                      >
+                                        <XCircle className="h-4 w-4" />
+                                      </Button>
+                                    </>
+                                  )}
+                                  {step.status === 'completed' && (
+                                    <Badge variant="default" className="text-xs">Approved</Badge>
+                                  )}
+                                  {step.status === 'rejected' && (
+                                    <Badge variant="destructive" className="text-xs">Rejected</Badge>
+                                  )}
+                                </div>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          ) : (
+            <Card className="trading-card">
+               <CardHeader>
+                 <div className="flex items-center justify-between">
+                   <div>
+                     <CardTitle>Deal Steps Approval</CardTitle>
+                     <CardDescription>Approve or reject individual deal steps</CardDescription>
+                   </div>
+                   {!selectedDeal && (
+                     <Button
+                       variant="outline"
+                       onClick={() => setActiveTab('deals')}
+                     >
+                       Back to Deals
+                     </Button>
+                   )}
+                 </div>
+               </CardHeader>
+               <CardContent>
+                 {selectedDeal && !showDealSteps && (
+                   <div className="mb-6 p-4 border rounded-lg bg-muted/50 flex items-center justify-between">
+                     <div>
+                       <h3 className="font-semibold">Deal: {selectedDeal.deal_type}</h3>
+                       <p className="text-sm text-muted-foreground">
+                         Broker: {selectedDeal.broker_profiles?.full_name} | 
+                         Progress: {selectedDeal.steps_completed}/{selectedDeal.total_steps}
+                       </p>
+                     </div>
+                     <div className="flex gap-2">
+                       <Button
+                         variant="outline"
+                         size="sm"
+                         onClick={() => {
+                           setShowDealSteps(true);
+                         }}
+                       >
+                         View Full Deal Steps
+                       </Button>
+                       <Button
+                         variant="outline"
+                         size="sm"
+                         onClick={() => {
+                           setSelectedDeal(null);
+                           setActiveTab('deals');
+                         }}
+                       >
+                         Back to Deals
+                       </Button>
+                     </div>
+                   </div>
+                 )}
+
+                 {!selectedDeal && (
+                   <div className="mb-6 p-8 border rounded-lg bg-muted/30 text-center">
+                     <h3 className="font-semibold text-lg mb-2">No Deal Selected</h3>
+                     <p className="text-muted-foreground mb-4">
+                       Please select a deal from the "Deals & Approvals" tab to view and manage its steps.
+                     </p>
+                     <Button
+                       onClick={() => setActiveTab('deals')}
+                       className="flex items-center gap-2"
+                     >
+                       <Eye className="h-4 w-4" />
+                       Go to Deals & Approvals
+                     </Button>
+                   </div>
+                 )}
+
+                <div className="rounded-md border">
+                  <Table>
+                    <TableHeader>
+                       <TableRow>
+                         <TableHead>Step #</TableHead>
+                         <TableHead>Step Name</TableHead>
+                         <TableHead>Description</TableHead>
+                         <TableHead>Status</TableHead>
+                         <TableHead>Document</TableHead>
+                         <TableHead>Notes</TableHead>
+                         <TableHead>Completed</TableHead>
+                         <TableHead>Actions</TableHead>
+                       </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {dealSteps
+                        .filter(step => !selectedDeal || step.deal_id === selectedDeal.id)
+                        .map((step) => (
+                           <TableRow key={step.id} className="hover:bg-muted/50">
+                             <TableCell>{step.step_number}</TableCell>
+                             <TableCell className="font-medium">{step.step_name}</TableCell>
+                             <TableCell className="max-w-xs truncate">{step.step_description || 'N/A'}</TableCell>
+                             <TableCell>{getStatusBadge(step.status)}</TableCell>
+                             <TableCell>
+                               {step.file_url ? (
+                                 <div className="flex items-center gap-2">
+                                   <div className="flex items-center gap-1 text-green-600">
+                                     <FileText className="h-4 w-4" />
+                                     <span className="text-xs font-medium">Uploaded</span>
+                                   </div>
+                                   <Button
+                                     size="sm"
+                                     variant="outline"
+                                     onClick={() => window.open(step.file_url, '_blank')}
+                                     className="h-7 px-2 text-xs"
+                                   >
+                                     <Eye className="h-3 w-3 mr-1" />
+                                     View
+                                   </Button>
+                                 </div>
+                               ) : (
+                                 <div className="flex items-center gap-1 text-muted-foreground">
+                                   <FileText className="h-4 w-4" />
+                                   <span className="text-xs">No document</span>
+                                 </div>
+                               )}
+                             </TableCell>
+                             <TableCell className="max-w-xs">
+                               <div className="truncate text-sm">
+                                 {step.notes || 'No notes'}
+                               </div>
+                             </TableCell>
+                             <TableCell>
+                               {step.completed_at ? 
+                                 new Date(step.completed_at).toLocaleDateString() : 'N/A'
+                               }
+                             </TableCell>
+                             <TableCell>
+                               <div className="flex gap-2">
+                                 <Button
+                                   size="sm"
+                                   variant="outline"
+                                   onClick={() => {
+                                     setSelectedStep(step);
+                                     setIsStepDialogOpen(true);
+                                   }}
+                                 >
+                                   <Eye className="h-4 w-4" />
+                                 </Button>
+                                 {step.status === 'pending' && (
+                                   <>
+                                     <Button
+                                       size="sm"
+                                       variant="outline"
+                                       onClick={() => handleApproveStep(step.id)}
+                                       className="text-green-600 hover:text-green-700"
+                                     >
+                                       <CheckCircle className="h-4 w-4" />
+                                     </Button>
+                                     <Button
+                                       size="sm"
+                                       variant="outline"
+                                       onClick={() => handleRejectStep(step.id)}
+                                       className="text-red-600 hover:text-red-700"
+                                     >
+                                       <XCircle className="h-4 w-4" />
+                                     </Button>
+                                   </>
+                                 )}
+                                 {step.status === 'completed' && (
+                                   <Badge variant="default" className="text-xs">Approved</Badge>
+                                 )}
+                                 {step.status === 'rejected' && (
+                                   <Badge variant="destructive" className="text-xs">Rejected</Badge>
+                                 )}
+                               </div>
+                             </TableCell>
+                          </TableRow>
+                        ))}
+                    </TableBody>
+                  </Table>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
       </Tabs>
 
@@ -1323,20 +1513,61 @@ const BrokerManagement = () => {
               {selectedStep.file_url ? (
                 <div>
                   <Label className="text-sm font-semibold">Uploaded Document</Label>
-                  <div className="mt-1 p-4 border rounded-md bg-blue-50">
-                    <div className="flex items-center gap-3">
-                      <FileText className="h-8 w-8 text-blue-600" />
-                      <div className="flex-1">
-                        <p className="text-sm font-medium">Document attached</p>
-                        <p className="text-xs text-muted-foreground">Click to view the uploaded file</p>
+                  <div className="mt-1 space-y-3">
+                    {/* Document Actions */}
+                    <div className="p-4 border rounded-md bg-blue-50">
+                      <div className="flex items-center gap-3">
+                        <FileText className="h-8 w-8 text-blue-600" />
+                        <div className="flex-1">
+                          <p className="text-sm font-medium">Document attached</p>
+                          <p className="text-xs text-muted-foreground">Review the uploaded document below or open in new tab</p>
+                        </div>
+                        <div className="flex gap-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              const iframe = document.getElementById(`doc-preview-${selectedStep.id}`) as HTMLIFrameElement;
+                              if (iframe) {
+                                iframe.style.display = iframe.style.display === 'none' ? 'block' : 'none';
+                              }
+                            }}
+                          >
+                            <Eye className="h-4 w-4 mr-1" />
+                            Preview
+                          </Button>
+                          <Button
+                            onClick={() => window.open(selectedStep.file_url, '_blank')}
+                            className="flex items-center gap-2"
+                          >
+                            <Download className="h-4 w-4" />
+                            Open in New Tab
+                          </Button>
+                        </div>
                       </div>
-                      <Button
-                        onClick={() => window.open(selectedStep.file_url, '_blank')}
-                        className="flex items-center gap-2"
+                    </div>
+                    
+                    {/* Document Preview */}
+                    <div className="border rounded-md overflow-hidden">
+                      <iframe
+                        id={`doc-preview-${selectedStep.id}`}
+                        src={selectedStep.file_url}
+                        className="w-full h-96 border-0"
+                        title="Document Preview"
+                        style={{ display: 'block' }}
+                        onError={(e) => {
+                          const target = e.target as HTMLIFrameElement;
+                          target.style.display = 'none';
+                          const errorDiv = target.nextElementSibling as HTMLElement;
+                          if (errorDiv) errorDiv.style.display = 'block';
+                        }}
+                      />
+                      <div 
+                        className="p-4 text-center text-muted-foreground bg-gray-50"
+                        style={{ display: 'none' }}
                       >
-                        <Download className="h-4 w-4" />
-                        View Document
-                      </Button>
+                        <p className="text-sm">Document preview not available. Please use "Open in New Tab" to view the document.</p>
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1344,7 +1575,13 @@ const BrokerManagement = () => {
                 <div>
                   <Label className="text-sm font-semibold">Uploaded Document</Label>
                   <div className="mt-1 p-4 border rounded-md bg-gray-50">
-                    <p className="text-sm text-muted-foreground italic">No document uploaded</p>
+                    <div className="flex items-center gap-3">
+                      <FileText className="h-8 w-8 text-gray-400" />
+                      <div>
+                        <p className="text-sm text-muted-foreground italic">No document uploaded</p>
+                        <p className="text-xs text-muted-foreground">This step may not require a document, or the broker hasn't uploaded one yet.</p>
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}

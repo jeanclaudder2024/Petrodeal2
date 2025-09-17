@@ -232,27 +232,95 @@ serve(async (req) => {
           messages: [
             {
               role: 'system',
-              content: `You are a professional maritime document generator. Follow the user's EXACT instructions and document template requirements.
+              content: `You are a senior maritime documentation specialist and vessel analyst with 20+ years of experience in vessel operations, shipping law, commercial maritime practices, and technical vessel analysis. Generate comprehensive, detailed, and professionally advanced vessel documentation that provides deep insights and analysis.
 
 CRITICAL INSTRUCTIONS:
-- Follow the EXACT document format and requirements specified in the user prompt
-- Use the provided vessel data to fill in ALL details throughout the document
-- Generate realistic professional values for any missing data based on vessel type
-- Maintain proper maritime terminology and official document formatting
-- Create a complete, detailed document as specified in the prompt`
+1. Use ONLY the vessel data provided - do not invent or assume information not given
+2. If data is missing, use the [MISSING] placeholders as realistic estimates based on vessel type and industry standards
+3. Create professional, highly detailed documentation that exceeds industry standards
+4. Include comprehensive technical analysis, operational insights, commercial evaluation, and risk assessment
+5. Format documents with proper structure, detailed sections, professional language, and analytical depth
+6. Ensure compliance with international maritime regulations and standards
+
+ADVANCED CONTENT REQUIREMENTS:
+- Provide detailed technical analysis of vessel specifications and performance capabilities
+- Include operational efficiency assessments and fuel consumption analysis
+- Analyze commercial viability and market positioning of the vessel
+- Assess compliance status with international maritime regulations (SOLAS, MARPOL, etc.)
+- Evaluate vessel condition and maintenance requirements based on age and specifications
+- Include risk assessment for operations, insurance, and commercial activities
+- Provide market insights and comparative analysis with similar vessels
+- Include detailed cargo handling capabilities and operational limitations
+- Analyze route optimization and operational efficiency factors
+- Provide comprehensive safety and environmental compliance assessment
+
+DOCUMENT STRUCTURE ENHANCEMENT:
+- Executive Summary with key vessel highlights and recommendations
+- Detailed Technical Specifications with performance analysis
+- Operational Capabilities Assessment with efficiency metrics
+- Commercial Analysis with market positioning and value assessment
+- Regulatory Compliance Status with certification requirements
+- Risk Assessment and Mitigation Strategies
+- Operational Recommendations and Best Practices
+- Market Intelligence and Competitive Analysis
+- Environmental Impact and Sustainability Assessment
+- Conclusion with overall vessel evaluation and recommendations`
             },
             {
               role: 'user',
-              content: `VESSEL DATA TO USE:
+              content: `DOCUMENT TITLE: ${document.title}
+DOCUMENT DESCRIPTION: ${document.description || 'Professional maritime document'}
+
+Generate a comprehensive and highly detailed ${document.title} document using the vessel data below. This document should provide advanced analysis, professional insights, and comprehensive coverage that goes beyond basic vessel information.
+
+VESSEL DATA TO USE:
 ${vesselDataString}
 
 DOCUMENT REQUIREMENTS (FOLLOW EXACTLY):
 ${processedPrompt}
 
-IMPORTANT: Use all the vessel data provided above to create the exact document format requested. Fill in every detail using the vessel information provided.`
+ADVANCED CONTENT REQUIREMENTS:
+1. Start your response with the document title and description as a header
+2. Include an Executive Summary highlighting key vessel characteristics and recommendations
+3. Provide detailed technical analysis of vessel specifications and performance capabilities
+4. Include operational efficiency assessment and fuel consumption analysis
+5. Analyze commercial viability and market positioning
+6. Assess regulatory compliance status (SOLAS, MARPOL, ISM, ISPS codes)
+7. Evaluate vessel condition and maintenance requirements based on age and specifications
+8. Include comprehensive risk assessment for operations and commercial activities
+9. Provide market intelligence and comparative analysis with similar vessels
+10. Analyze cargo handling capabilities and operational limitations
+11. Include route optimization and operational efficiency recommendations
+12. Assess environmental impact and sustainability factors
+13. Provide detailed safety and security compliance evaluation
+14. Include insurance and liability considerations
+15. Conclude with overall vessel evaluation and strategic recommendations
+
+DOCUMENT STRUCTURE:
+- Document Header (Title and Description)
+- Executive Summary
+- Vessel Identification and Registration Details
+- Technical Specifications and Performance Analysis
+- Operational Capabilities Assessment
+- Commercial Analysis and Market Positioning
+- Regulatory Compliance and Certification Status
+- Risk Assessment and Mitigation Strategies
+- Operational Recommendations and Best Practices
+- Market Intelligence and Competitive Analysis
+- Environmental and Sustainability Assessment
+- Safety and Security Compliance Evaluation
+- Insurance and Liability Considerations
+- Conclusion and Strategic Recommendations
+
+IMPORTANT: 
+- Create a comprehensive, professional document that provides deep insights and analysis
+- Use all vessel data provided to generate detailed assessments and recommendations
+- Include industry-standard terminology and professional maritime language
+- Ensure the document serves as a valuable analytical tool for decision-making
+- Structure the document with clear sections and professional formatting`
             }
           ],
-          max_tokens: 4000,
+          max_tokens: 8000,
           temperature: 0.3
         }),
       });
@@ -313,7 +381,8 @@ IMPORTANT: Use all the vessel data provided above to create the exact document f
         enhancedVesselData.name, 
         enhancedVesselData,
         document.template_file_url,
-        supabaseClient
+        supabaseClient,
+        document.description
       );
 
       // Convert base64 to bytes for storage
@@ -464,6 +533,35 @@ function formatVesselDataForAI(vesselData: any): string {
     }
     return `[MISSING - Generate realistic ${context || 'value'} for ${vesselData.vessel_type || 'oil tanker'} vessel]`;
   };
+
+  // Calculate vessel age for analysis
+  const currentYear = new Date().getFullYear();
+  const vesselAge = vesselData.built ? currentYear - parseInt(vesselData.built) : '[MISSING - Estimate vessel age]';
+  
+  // Determine vessel size category for analysis
+  const getVesselSizeCategory = (dwt: any) => {
+    const deadweight = parseInt(dwt) || 0;
+    if (deadweight < 10000) return 'Small Tanker';
+    if (deadweight < 60000) return 'Medium Range (MR) Tanker';
+    if (deadweight < 120000) return 'Large Range (LR) Tanker';
+    if (deadweight < 200000) return 'Very Large Crude Carrier (VLCC)';
+    return 'Ultra Large Crude Carrier (ULCC)';
+  };
+
+  // Calculate efficiency metrics
+  const calculateEfficiencyMetrics = () => {
+    const dwt = parseInt(vesselData.deadweight) || 0;
+    const power = parseInt(vesselData.engine_power) || 0;
+    const consumption = parseFloat(vesselData.fuel_consumption) || 0;
+    
+    return {
+      powerToWeightRatio: power && dwt ? (power / dwt).toFixed(3) : '[Calculate based on vessel specifications]',
+      fuelEfficiency: consumption && dwt ? (consumption / dwt * 1000).toFixed(3) : '[Calculate based on vessel specifications]',
+      cargoCapacityUtilization: '[Analyze based on current cargo vs maximum capacity]'
+    };
+  };
+
+  const efficiencyMetrics = calculateEfficiencyMetrics();
   
   const formattedData = `
 VESSEL IDENTIFICATION:
@@ -526,6 +624,44 @@ ADDITIONAL VESSEL INFORMATION:
 - Route Details: ${formatValue(vesselData.route_info, 'voyage routing information')}
 - Data Last Updated: ${formatValue(vesselData.last_updated, 'last update timestamp')}
 - Company Association: ${formatValue(vesselData.company_id, 'associated company ID')}
+
+VESSEL ANALYSIS AND INSIGHTS:
+- Vessel Age: ${vesselAge} years
+- Size Category: ${getVesselSizeCategory(vesselData.deadweight)}
+- Power-to-Weight Ratio: ${efficiencyMetrics.powerToWeightRatio} kW/DWT
+- Fuel Efficiency Index: ${efficiencyMetrics.fuelEfficiency} MT/1000DWT/day
+- Cargo Capacity Utilization: ${efficiencyMetrics.cargoCapacityUtilization}
+
+OPERATIONAL PERFORMANCE INDICATORS:
+- Vessel Condition Assessment: [Analyze based on age, maintenance records, and specifications]
+- Market Competitiveness: [Evaluate against similar vessels in current market]
+- Operational Efficiency Rating: [Assess fuel consumption, speed, and cargo handling capabilities]
+- Environmental Compliance Status: [Evaluate IMO 2020 sulfur regulations, ballast water management]
+- Commercial Viability Score: [Analyze charter rates, operational costs, and market demand]
+
+REGULATORY AND COMPLIANCE FRAMEWORK:
+- SOLAS Compliance: [Assess safety of life at sea requirements]
+- MARPOL Compliance: [Evaluate marine pollution prevention measures]
+- ISM Code Status: [International Safety Management certification status]
+- ISPS Code Compliance: [International Ship and Port Facility Security measures]
+- Flag State Regulations: [Specific requirements based on flag country]
+- Port State Control History: [Inspection records and detention history]
+
+RISK ASSESSMENT FACTORS:
+- Technical Risk Level: [Based on age, condition, and maintenance history]
+- Commercial Risk Exposure: [Market volatility, charter rate fluctuations]
+- Operational Risk Profile: [Route hazards, weather patterns, piracy zones]
+- Regulatory Risk Assessment: [Compliance gaps, upcoming regulation changes]
+- Insurance Risk Category: [P&I coverage, hull and machinery considerations]
+- Environmental Risk Factors: [Spill prevention, emission compliance]
+
+MARKET INTELLIGENCE AND BENCHMARKING:
+- Comparable Vessel Analysis: [Similar vessels in terms of size, age, and specifications]
+- Current Market Position: [Charter rate competitiveness and availability]
+- Asset Valuation Indicators: [Market value trends and depreciation factors]
+- Operational Cost Benchmarks: [Fuel, crew, maintenance, and insurance costs]
+- Revenue Generation Potential: [Charter income projections and utilization rates]
+- Investment Attractiveness: [ROI potential and market outlook]
 `;
 
   console.log('Generated vessel data string for AI:', formattedData);
@@ -538,7 +674,8 @@ async function generatePDF(
   vesselName: string, 
   vesselData?: any, 
   templateFileUrl?: string,
-  supabaseClient?: any
+  supabaseClient?: any,
+  description?: string
 ): Promise<string> {
   try {
     console.log('Generating PDF for:', title, 'vessel:', vesselName);
@@ -652,7 +789,41 @@ async function generatePDF(
       color: rgb(0.1, 0.1, 0.1),
     });
     
-    yPosition -= 30;
+    yPosition -= 25;
+    
+    // Add document description if provided
+    if (description) {
+      // Split description into lines if it's too long
+      const maxLineLength = 80;
+      const descriptionLines = [];
+      let currentLine = '';
+      const words = description.split(' ');
+      
+      for (const word of words) {
+        if ((currentLine + word).length <= maxLineLength) {
+          currentLine += (currentLine ? ' ' : '') + word;
+        } else {
+          if (currentLine) descriptionLines.push(currentLine);
+          currentLine = word;
+        }
+      }
+      if (currentLine) descriptionLines.push(currentLine);
+      
+      // Draw each line of description
+      for (const line of descriptionLines) {
+        page.drawText(line, {
+          x: leftMargin,
+          y: yPosition,
+          size: 11,
+          font: helvetica,
+          color: rgb(0.4, 0.4, 0.4),
+        });
+        yPosition -= 16;
+      }
+      yPosition -= 10;
+    } else {
+      yPosition -= 30;
+    }
     // Document info in top section
     page.drawText(`Certificate No: ${certificateNumber}`, {
       x: leftMargin,

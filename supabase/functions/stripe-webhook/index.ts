@@ -363,7 +363,7 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session, 
         email: customerEmail,
         stripe_customer_id: session.customer as string,
         stripe_subscription_id: subscription?.id,
-        subscribed: true,
+        subscribed: !isTrialSubscription, // Only set subscribed=true for direct paid subscriptions
         subscription_tier: tier,
         subscription_end: subscriptionEndDate,
         vessel_limit: planLimits.vessel_limit,
@@ -377,6 +377,7 @@ async function handleCheckoutSessionCompleted(session: Stripe.Checkout.Session, 
         real_time_analytics: planLimits.real_time_analytics,
         is_trial_active: isTrialActive,
         trial_end_date: trialEndDate,
+        trial_start_date: isTrialSubscription ? new Date().toISOString() : null, // Set trial start date for trial users
         stripe_session_id: session.id,
         updated_at: new Date().toISOString()
       }, { onConflict: 'email' });

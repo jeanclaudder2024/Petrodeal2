@@ -61,15 +61,24 @@ const NewTicket = () => {
     try {
       setLoading(true);
 
-      // Mock categories for now until database is set up
-      const mockCategories = [
-        { id: '1', name_en: 'Technical Support', description_en: 'Technical issues and bugs' },
-        { id: '2', name_en: 'Account Issues', description_en: 'Account access and billing' },
-        { id: '3', name_en: 'Feature Request', description_en: 'New feature suggestions' },
-        { id: '4', name_en: 'General Inquiry', description_en: 'General questions and support' }
-      ];
+      const { data: categories, error } = await supabase
+        .from('support_categories')
+        .select('id, name_en, description_en')
+        .order('name_en');
 
-      setCategories(mockCategories);
+      if (error) {
+        console.error('Error loading categories:', error);
+        // Fallback to mock categories if database query fails
+        const mockCategories = [
+          { id: '1', name_en: 'Technical Support', description_en: 'Technical issues and bugs' },
+          { id: '2', name_en: 'Account Issues', description_en: 'Account access and billing' },
+          { id: '3', name_en: 'Feature Request', description_en: 'New feature suggestions' },
+          { id: '4', name_en: 'General Inquiry', description_en: 'General questions and support' }
+        ];
+        setCategories(mockCategories);
+      } else {
+        setCategories(categories || []);
+      }
 
     } catch (error: any) {
       console.error('Error loading categories:', error);
@@ -170,9 +179,8 @@ const NewTicket = () => {
       // Generate ticket number
       const ticketNumber = `TKT-${Date.now()}`;
 
-      // Mock ticket creation (replace with actual database call when ready)
-      const mockTicketData = {
-        id: Date.now().toString(),
+      // Create ticket in database
+      const ticketData = {
         ticket_number: ticketNumber,
         category_id: formData.category_id,
         email: formData.email,
@@ -182,15 +190,35 @@ const NewTicket = () => {
         user_id: user?.id || null,
         status: 'open',
         priority: 'medium',
-        language: 'en',
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        language: 'en'
       };
 
-      // Store in localStorage for demo purposes
-      const existingTickets = JSON.parse(localStorage.getItem('support_tickets') || '[]');
-      existingTickets.push(mockTicketData);
-      localStorage.setItem('support_tickets', JSON.stringify(existingTickets));
+      const { data: ticket, error: ticketError } = await supabase
+        .from('support_tickets')
+        .insert([ticketData])
+        .select()
+        .single();
+
+      if (ticketError) {
+        console.error('Error creating ticket:', ticketError);
+        throw ticketError;
+      }
+
+      // Create initial message with the description
+      if (ticket) {
+        const { error: messageError } = await supabase
+          .from('support_ticket_messages')
+          .insert([{
+            ticket_id: ticket.id,
+            message: formData.description,
+            user_id: user?.id || null
+          }]);
+
+        if (messageError) {
+          console.error('Error creating initial message:', messageError);
+          // Don't throw here as the ticket was created successfully
+        }
+      }
 
       // TODO: Handle file uploads to storage if attachments exist
       // TODO: Send notification email when backend is ready

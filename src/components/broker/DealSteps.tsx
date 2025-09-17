@@ -216,9 +216,24 @@ const DealSteps: React.FC<DealStepsProps> = ({ dealId, onClose }) => {
     setUploadingStep(stepId);
     
     try {
+      // Validate file size (max 10MB)
+      if (file.size > 10 * 1024 * 1024) {
+        throw new Error('File size must be less than 10MB');
+      }
+      
+      // Validate file type
+      const allowedTypes = ['.pdf', '.doc', '.docx', '.jpg', '.jpeg', '.png'];
+      const fileExt = '.' + file.name.split('.').pop()?.toLowerCase();
+      if (!allowedTypes.includes(fileExt)) {
+        throw new Error('Invalid file type. Please upload PDF, DOC, DOCX, JPG, or PNG files only.');
+      }
+      
+      if (!user?.id) {
+        throw new Error('User not authenticated');
+      }
+      
       // Upload file to Supabase storage with user folder structure
-      const fileExt = file.name.split('.').pop();
-      const fileName = `${user?.id}/${dealId}/${stepId}_${Date.now()}.${fileExt}`;
+      const fileName = `${user.id}/${dealId}/${stepId}_${Date.now()}${fileExt}`;
       
       const { error: uploadError } = await supabase.storage
         .from('broker-documents')
@@ -226,7 +241,13 @@ const DealSteps: React.FC<DealStepsProps> = ({ dealId, onClose }) => {
 
       if (uploadError) {
         console.error('Upload error:', uploadError);
-        throw uploadError;
+        if (uploadError.message.includes('Bucket not found')) {
+          throw new Error('Storage bucket not configured. Please contact support.');
+        }
+        if (uploadError.message.includes('Policy')) {
+          throw new Error('You do not have permission to upload files. Please contact support.');
+        }
+        throw new Error(`Upload failed: ${uploadError.message}`);
       }
 
       // Create signed URL for private bucket (valid for 1 year)
@@ -236,10 +257,14 @@ const DealSteps: React.FC<DealStepsProps> = ({ dealId, onClose }) => {
 
       if (signedUrlError) {
         console.error('Signed URL error:', signedUrlError);
-        throw signedUrlError;
+        throw new Error(`Failed to create download link: ${signedUrlError.message}`);
       }
 
-      // Just update the step with file URL - don't change status yet
+      if (!signedUrlData?.signedUrl) {
+        throw new Error('Failed to generate file access URL');
+      }
+
+      // Update the step with file URL - don't change status yet
       const { error: updateError } = await supabase
         .from('deal_steps')
         .update({ 
@@ -249,20 +274,20 @@ const DealSteps: React.FC<DealStepsProps> = ({ dealId, onClose }) => {
 
       if (updateError) {
         console.error('Update error:', updateError);
-        throw updateError;
+        throw new Error(`Failed to save file reference: ${updateError.message}`);
       }
 
       toast({
         title: "Success",
-        description: "File uploaded successfully. Remember to save your step."
+        description: "File uploaded successfully! Now click 'Save & Submit' to complete this step."
       });
 
       fetchDealSteps();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error uploading file:', error);
       toast({
-        title: "Error",
-        description: `Failed to upload file: ${error.message || 'Unknown error'}`,
+        title: "Upload Failed",
+        description: error.message || 'Unknown error occurred during file upload',
         variant: "destructive"
       });
     } finally {
@@ -275,6 +300,32 @@ const DealSteps: React.FC<DealStepsProps> = ({ dealId, onClose }) => {
     
     try {
       const step = steps.find(s => s.id === stepId);
+      if (!step) throw new Error('Step not found');
+      
+      const template = DEAL_STEPS_TEMPLATE.find(t => t.step_number === step.step_number);
+      const requiresFile = template?.requires_file || false;
+      const stepNotes = notes[stepId] || '';
+      
+      // Validation: Check if required fields are provided
+      if (requiresFile && !step.file_url) {
+        toast({
+          title: "Error",
+          description: "Please upload a document before saving this step.",
+          variant: "destructive"
+        });
+        setSavingStep(null);
+        return;
+      }
+      
+      if (!requiresFile && stepNotes.trim() === '') {
+        toast({
+          title: "Error", 
+          description: "Please add notes/description before saving this step.",
+          variant: "destructive"
+        });
+        setSavingStep(null);
+        return;
+      }
       
       // Step 1 is automatically approved, others need admin approval
       const isFirstStep = step?.step_number === 1;
@@ -285,7 +336,7 @@ const DealSteps: React.FC<DealStepsProps> = ({ dealId, onClose }) => {
       const { error: updateError } = await supabase
         .from('deal_steps')
         .update({ 
-          notes: notes[stepId] || null,
+          notes: stepNotes || null,
           status: newStatus,
           completed_at: completedAt
         })
