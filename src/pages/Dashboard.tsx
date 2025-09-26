@@ -5,6 +5,7 @@ import LoadingFallback from '@/components/LoadingFallback';
 import AccessControlledDashboard from '@/components/dashboard/AccessControlledDashboard';
 import AccessGate from '@/components/AccessGate';
 import TrialCountdown from '@/components/TrialCountdown';
+import VesselTest from '@/components/VesselTest';
 import { useNavigate } from 'react-router-dom';
 
 const Dashboard = () => {
@@ -48,6 +49,8 @@ const Dashboard = () => {
       <div className="container mx-auto px-4 pt-4">
         <TrialCountdown />
       </div>
+      {/* Temporary vessel test */}
+      <VesselTest />
       <AccessControlledDashboard />
     </div>
   );

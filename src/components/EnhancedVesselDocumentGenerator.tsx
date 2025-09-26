@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { convertAndDownloadPdf, testConvertApiConnection } from '@/utils/convertApiToPdf';
 
 interface DocumentTemplate {
   id: string;
@@ -51,6 +52,7 @@ export default function EnhancedVesselDocumentGenerator({ vessel }: VesselDocume
   const [previewTemplate, setPreviewTemplate] = useState<string | null>(null);
   const [templateReview, setTemplateReview] = useState<any>(null);
   const [useOpenAI, setUseOpenAI] = useState(false);
+  const [testingApi, setTestingApi] = useState(false);
 
   useEffect(() => {
     fetchTemplates();
@@ -72,6 +74,27 @@ export default function EnhancedVesselDocumentGenerator({ vessel }: VesselDocume
       toast.error('Failed to fetch document templates');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const testApiConnection = async () => {
+    setTestingApi(true);
+    try {
+      console.log('Testing ConvertAPI connection...');
+      const result = await testConvertApiConnection();
+      
+      if (result.success) {
+        toast.success('ConvertAPI connection successful!');
+        console.log('ConvertAPI test passed');
+      } else {
+        toast.error(`ConvertAPI test failed: ${result.error}`);
+        console.error('ConvertAPI test failed:', result.error);
+      }
+    } catch (error) {
+      console.error('ConvertAPI test error:', error);
+      toast.error('ConvertAPI test failed with error');
+    } finally {
+      setTestingApi(false);
     }
   };
 
@@ -123,7 +146,7 @@ export default function EnhancedVesselDocumentGenerator({ vessel }: VesselDocume
          body: {
            templateId: template.id,
            vesselId: vessel.id,
-           format: format,
+           format: format === 'pdf' ? 'docx' : format, // Request DOCX for PDF conversion on frontend
            useOpenAI: useOpenAI
          }
        });
@@ -146,8 +169,35 @@ export default function EnhancedVesselDocumentGenerator({ vessel }: VesselDocume
           duration: 5000
         });
 
-        // Trigger download
-        if (data.pdf_url && (format === 'pdf' || format === 'both')) {
+        // Handle downloads based on format
+        if (format === 'pdf') {
+          // For PDF format, convert DOCX to PDF using ConvertAPI
+          updateProgress('converting', 85, 'Converting to PDF using ConvertAPI...');
+          
+          try {
+            const filename = `${template.title}_${vessel.name || 'vessel'}.pdf`;
+            const conversionResult = await convertAndDownloadPdf(data.docx_url, filename);
+            
+            if (conversionResult.success) {
+              updateProgress('complete', 100, 'PDF converted and downloaded successfully!');
+              toast.success('PDF converted and downloaded successfully!');
+            } else {
+              throw new Error(conversionResult.error || 'PDF conversion failed');
+            }
+          } catch (conversionError) {
+            console.error('ConvertAPI conversion error:', conversionError);
+            toast.error('PDF conversion failed. Downloading original DOCX instead.');
+            
+            // Fallback to DOCX download
+            const link = document.createElement('a');
+            link.href = data.docx_url;
+            link.download = `${template.title}_${vessel.name || 'vessel'}.docx`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+          }
+        } else if (data.pdf_url && format === 'both') {
+          // For 'both' format, download the server-generated PDF
           const link = document.createElement('a');
           link.href = data.pdf_url;
           link.download = `${template.title}_${vessel.name || 'vessel'}.pdf`;
@@ -233,36 +283,18 @@ export default function EnhancedVesselDocumentGenerator({ vessel }: VesselDocume
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-          <FileText className="h-5 w-5 text-primary" />
-          Download Documents for {vessel.name || 'Vessel'}
-        </CardTitle>
-          <p className="text-sm text-muted-foreground">
-          Download professional maritime documents with vessel data automatically filled in
-        </p>
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <FileText className="h-5 w-5 text-primary" />
+              Download Documents for {vessel.name || 'Vessel'}
+            </CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Download professional maritime documents with vessel data automatically filled in
+            </p>
+          </div>
         </CardHeader>
         
         <CardContent>
-           {/* OpenAI Integration Option */}
-           <div className="mb-6 p-4 border rounded-lg bg-muted/50">
-             <div className="flex items-center space-x-2">
-               <Checkbox 
-                 id="use-openai" 
-                 checked={useOpenAI} 
-                 onCheckedChange={(checked) => setUseOpenAI(checked as boolean)}
-               />
-               <label htmlFor="use-openai" className="flex items-center gap-2 text-sm font-medium cursor-pointer">
-                 <Brain className="h-4 w-4 text-blue-500" />
-                 Use AI-Enhanced Data Generation
-               </label>
-             </div>
-             <p className="text-xs text-muted-foreground mt-2 ml-6">
-               {useOpenAI 
-                 ? "AI will generate more realistic and contextually appropriate data for missing fields" 
-                 : "Missing fields will be filled with basic realistic data"}
-             </p>
-           </div>
-
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             {templates.map((template) => {
               const isGenerating = generating[template.id];

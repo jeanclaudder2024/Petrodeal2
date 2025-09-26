@@ -55,15 +55,16 @@ const MultiStepRegistration = () => {
   const { startTrial } = useAccess();
   const [currentStep, setCurrentStep] = useState(1);
   const [loading, setLoading] = useState(false);
+  const [dataLoading, setDataLoading] = useState(true);
+  const [dataError, setDataError] = useState<string | null>(null);
   const [showVerificationWaiting, setShowVerificationWaiting] = useState(false);
-  const [ports, setPorts] = useState<any[]>([]);
-  const [vessels, setVessels] = useState<any[]>([]);
-  const [filteredVessels, setFilteredVessels] = useState<any[]>([]);
+  const [trialPaymentCompleted, setTrialPaymentCompleted] = useState(false);
+  const [ports, setPorts] = useState<Port[]>([]);
+  const [vessels, setVessels] = useState<Vessel[]>([]);
   const [regions, setRegions] = useState<string[]>([]);
+  const [discounts, setDiscounts] = useState<Discount[]>([]);
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
-  const [dynamicPlans, setDynamicPlans] = useState<any[]>([]);
-  const [discounts, setDiscounts] = useState<any[]>([]);
   const [formData, setFormData] = useState<RegistrationForm>({
     email: '',
     password: '',
@@ -157,9 +158,7 @@ const MultiStepRegistration = () => {
     fetchDynamicPricing();
   }, []);
 
-  useEffect(() => {
-    filterVesselsBySelectedPorts();
-  }, [formData.selectedPorts, vessels]);
+
 
   const fetchDynamicPricing = async () => {
     try {
@@ -183,138 +182,97 @@ const MultiStepRegistration = () => {
 
   const fetchPreviewData = async () => {
     try {
-      // Fetch regions from filter management, ports and vessels for selection
-      const [regionsRes, portsRes, vesselsRes] = await Promise.all([
-        supabase.from('filter_options').select('label').eq('filter_type', 'region').eq('is_active', true).order('sort_order'),
-        supabase.from('ports').select('id, name, country, region').limit(50),
-        supabase.from('vessels').select('id, name, vessel_type, flag, current_region, currentport, destination_port, departure_port, port_id').limit(100)
-      ]);
+      setDataLoading(true);
+      setDataError(null);
 
-      if (regionsRes.data) {
-        setRegions(regionsRes.data.map(r => r.label));
+      // Fetch regions
+      const { data: regionsData, error: regionsError } = await supabase
+        .from('filter_options')
+        .select('label')
+        .eq('filter_type', 'region')
+        .eq('is_active', true)
+        .order('sort_order');
+
+      if (regionsError) {
+        console.error('Error fetching regions:', regionsError);
+        setDataError('Failed to load regions');
+      } else if (regionsData) {
+        setRegions(regionsData.map(r => r.label));
       }
-      
-      if (portsRes.data) setPorts(portsRes.data);
-      
-      if (vesselsRes.data) {
-        setVessels(vesselsRes.data);
-        setFilteredVessels([]); // Start with no vessels until ports are selected
+
+      // Fetch ports
+      const { data: portsData, error: portsError } = await supabase
+        .from('ports')
+        .select('id, name, country, region')
+        .limit(50);
+
+      if (portsError) {
+        console.error('Error fetching ports:', portsError);
+        setDataError('Failed to load ports');
+      } else if (portsData) {
+        setPorts(portsData);
       }
+
+      // Mock vessel data for now
+      const mockVessels = [
+        { id: 1, vessel_name: "Ocean Pioneer", imo: "9123456", vessel_type: "Tanker", flag: "Panama", current_region: "Mediterranean", currentport: "Rotterdam", destination_port: "Singapore", departure_port: "Houston", port_id: 1 },
+        { id: 2, vessel_name: "Atlantic Star", imo: "9234567", vessel_type: "Bulk Carrier", flag: "Liberia", current_region: "North Atlantic", currentport: "Hamburg", destination_port: "New York", departure_port: "Liverpool", port_id: 2 },
+        { id: 3, vessel_name: "Pacific Glory", imo: "9345678", vessel_type: "Container", flag: "Marshall Islands", current_region: "Pacific", currentport: "Los Angeles", destination_port: "Tokyo", departure_port: "Long Beach", port_id: 3 },
+        { id: 4, vessel_name: "Nordic Wind", imo: "9456789", vessel_type: "Tanker", flag: "Norway", current_region: "North Sea", currentport: "Bergen", destination_port: "Amsterdam", departure_port: "Stavanger", port_id: 4 },
+        { id: 5, vessel_name: "Mediterranean Pearl", imo: "9567890", vessel_type: "Bulk Carrier", flag: "Greece", current_region: "Mediterranean", currentport: "Piraeus", destination_port: "Barcelona", departure_port: "Naples", port_id: 5 },
+        { id: 6, vessel_name: "Arabian Falcon", imo: "9678901", vessel_type: "Tanker", flag: "UAE", current_region: "Persian Gulf", currentport: "Dubai", destination_port: "Mumbai", departure_port: "Kuwait", port_id: 6 },
+        { id: 7, vessel_name: "Baltic Explorer", imo: "9789012", vessel_type: "Container", flag: "Denmark", current_region: "Baltic Sea", currentport: "Copenhagen", destination_port: "Stockholm", departure_port: "Helsinki", port_id: 7 },
+        { id: 8, vessel_name: "Caribbean Dream", imo: "9890123", vessel_type: "Cruise", flag: "Bahamas", current_region: "Caribbean", currentport: "Miami", destination_port: "Barbados", departure_port: "Jamaica", port_id: 8 },
+        { id: 9, vessel_name: "Asian Tiger", imo: "9901234", vessel_type: "Bulk Carrier", flag: "Singapore", current_region: "South China Sea", currentport: "Singapore", destination_port: "Hong Kong", departure_port: "Manila", port_id: 9 },
+        { id: 10, vessel_name: "European Unity", imo: "9012345", vessel_type: "Tanker", flag: "Netherlands", current_region: "North Sea", currentport: "Rotterdam", destination_port: "Antwerp", departure_port: "Le Havre", port_id: 10 },
+        { id: 11, vessel_name: "Southern Cross", imo: "9123457", vessel_type: "Container", flag: "Australia", current_region: "Indian Ocean", currentport: "Melbourne", destination_port: "Perth", departure_port: "Sydney", port_id: 11 },
+        { id: 12, vessel_name: "Arctic Breaker", imo: "9234568", vessel_type: "Icebreaker", flag: "Russia", current_region: "Arctic", currentport: "Murmansk", destination_port: "Arkhangelsk", departure_port: "Severodvinsk", port_id: 12 },
+        { id: 13, vessel_name: "Golden Gate", imo: "9345679", vessel_type: "Tanker", flag: "USA", current_region: "Pacific", currentport: "San Francisco", destination_port: "Seattle", departure_port: "Los Angeles", port_id: 13 },
+        { id: 14, vessel_name: "Sahara Wind", imo: "9456780", vessel_type: "Bulk Carrier", flag: "Morocco", current_region: "Atlantic", currentport: "Casablanca", destination_port: "Dakar", departure_port: "Tangier", port_id: 14 },
+        { id: 15, vessel_name: "Himalaya Peak", imo: "9567891", vessel_type: "Container", flag: "India", current_region: "Indian Ocean", currentport: "Mumbai", destination_port: "Chennai", departure_port: "Kolkata", port_id: 15 }
+      ];
+
+      setVessels(mockVessels);
+
+      // Fetch discounts
+      const { data: discountsData, error: discountsError } = await supabase
+        .from('discounts')
+        .select('*');
+
+      if (discountsError) {
+        console.error('Error fetching discounts:', discountsError);
+      } else if (discountsData) {
+        setDiscounts(discountsData);
+      }
+
     } catch (error) {
-      console.error('Error fetching preview data:', error);
-      // Fallback to hardcoded regions if fetch fails
+      console.error('Error in fetchPreviewData:', error);
+      setDataError('Failed to load data');
+      // Set fallback data
       setRegions(['Europe', 'North America', 'Asia Pacific', 'Middle East', 'Africa', 'South America']);
+      setVessels([]);
+      setPorts([]);
+    } finally {
+      setDataLoading(false);
     }
   };
 
-  const filterVesselsBySelectedPorts = () => {
-    if (formData.selectedPorts.length === 0) {
-      setFilteredVessels([]);
-      return;
-    }
+  // Vessel search state
+  const [vesselSearchTerm, setVesselSearchTerm] = useState('');
 
-    try {
-      // Get selected port details for comprehensive matching
-      const selectedPorts = ports.filter(port => formData.selectedPorts.includes(port.id.toString()));
-      const selectedPortIds = formData.selectedPorts.map(id => parseInt(id));
-      
-      if (selectedPorts.length === 0) {
-        setFilteredVessels([]);
-        return;
-      }
-
-      // Method 1: Direct port_id matching (most accurate)
-      const directIdMatches = vessels.filter(vessel => 
-        vessel.port_id && selectedPortIds.includes(vessel.port_id)
-      );
-
-      if (directIdMatches.length > 0) {
-        setFilteredVessels(directIdMatches.slice(0, 12));
-        return;
-      }
-
-      // Method 2: Enhanced fuzzy matching for port names
-      const portNames = selectedPorts.map(port => port.name?.toLowerCase().trim()).filter(Boolean);
-      const portRegions = selectedPorts.map(port => port.region?.toLowerCase().trim()).filter(Boolean);
-
-      // Enhanced fuzzy matching function
-      const fuzzyMatch = (text1: string, text2: string): boolean => {
-        if (!text1 || !text2) return false;
-        
-        // Normalize texts
-        const normalize = (text: string) => text.toLowerCase().replace(/[^\w\s]/g, '').trim();
-        const norm1 = normalize(text1);
-        const norm2 = normalize(text2);
-        
-        // Direct matching
-        if (norm1.includes(norm2) || norm2.includes(norm1)) return true;
-        
-        // Split into words and check matches
-        const words1 = norm1.split(/\s+/).filter(w => w.length > 2);
-        const words2 = norm2.split(/\s+/).filter(w => w.length > 2);
-        
-        // At least 70% word overlap
-        const matches = words1.filter(w1 => 
-          words2.some(w2 => w1.includes(w2) || w2.includes(w1) || levenshteinDistance(w1, w2) <= 1)
-        );
-        
-        return matches.length >= Math.min(words1.length, words2.length) * 0.7;
-      };
-
-      // Simple Levenshtein distance for typo tolerance
-      const levenshteinDistance = (str1: string, str2: string): number => {
-        if (Math.abs(str1.length - str2.length) > 3) return 10;
-        
-        const matrix = Array.from({ length: str1.length + 1 }, (_, i) => [i]);
-        matrix[0] = Array.from({ length: str2.length + 1 }, (_, i) => i);
-        
-        for (let i = 1; i <= str1.length; i++) {
-          for (let j = 1; j <= str2.length; j++) {
-            matrix[i][j] = Math.min(
-              matrix[i - 1][j] + 1,
-              matrix[i][j - 1] + 1,
-              matrix[i - 1][j - 1] + (str1[i - 1] === str2[j - 1] ? 0 : 1)
-            );
-          }
-        }
-        return matrix[str1.length][str2.length];
-      };
-
-      // Method 3: Fuzzy name matching with scoring
-      const nameMatches = vessels.filter(vessel => {
-        const vesselPorts = [
-          vessel.currentport || '',
-          vessel.destination_port || '',
-          vessel.departure_port || ''
-        ].filter(Boolean);
-        
-        return portNames.some(portName => 
-          vesselPorts.some(vesselPort => fuzzyMatch(portName, vesselPort))
-        );
-      });
-
-      if (nameMatches.length > 0) {
-        setFilteredVessels(nameMatches.slice(0, 12));
-        return;
-      }
-
-      // Method 4: Region matching as fallback
-      const regionMatches = vessels.filter(vessel => {
-        const vesselRegion = (vessel.current_region || '').toLowerCase().trim();
-        return vesselRegion && portRegions.some(region => fuzzyMatch(region, vesselRegion));
-      });
-
-      if (regionMatches.length > 0) {
-        setFilteredVessels(regionMatches.slice(0, 12));
-      } else {
-        // Show a diverse sample of vessels if no matches
-        setFilteredVessels(vessels.slice(0, 12));
-      }
-    } catch (error) {
-      console.error('Error filtering vessels:', error);
-      setFilteredVessels(vessels.slice(0, 12));
-    }
-  };
+  // Filter vessels based on search term
+  const filteredVessels = vessels.filter(vessel => {
+    if (!vesselSearchTerm) return true;
+    
+    const searchLower = vesselSearchTerm.toLowerCase();
+    return (
+      vessel.vessel_name?.toLowerCase().includes(searchLower) ||
+      vessel.imo?.toString().includes(searchLower) ||
+      vessel.currentport?.toLowerCase().includes(searchLower) ||
+      vessel.destination_port?.toLowerCase().includes(searchLower) ||
+      vessel.departure_port?.toLowerCase().includes(searchLower)
+    );
+  });
 
   const handleInputChange = (field: keyof RegistrationForm, value: string | string[] | boolean) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -329,25 +287,7 @@ const MultiStepRegistration = () => {
     }));
   };
 
-  const handleSelectAll = (type: 'ports' | 'vessels') => {
-    if (type === 'ports') {
-      const allPortIds = ports.map(port => port.id.toString());
-      setFormData(prev => ({ ...prev, selectedPorts: allPortIds }));
-    } else {
-      const allVesselIds = filteredVessels.map(vessel => vessel.id.toString());
-      setFormData(prev => ({ ...prev, selectedVessels: allVesselIds }));
-    }
-  };
 
-  const handleSelectBest8 = (type: 'ports' | 'vessels') => {
-    if (type === 'ports') {
-      const best8PortIds = ports.slice(0, 8).map(port => port.id.toString());
-      setFormData(prev => ({ ...prev, selectedPorts: best8PortIds }));
-    } else {
-      const best8VesselIds = filteredVessels.slice(0, 8).map(vessel => vessel.id.toString());
-      setFormData(prev => ({ ...prev, selectedVessels: best8VesselIds }));
-    }
-  };
 
   const validateStep = (step: number): boolean => {
     switch (step) {
@@ -899,34 +839,23 @@ const MultiStepRegistration = () => {
               <div>
                 <div className="flex justify-between items-center mb-3">
                   <Label className="text-base font-medium">Vessels to Track</Label>
-                  <div className="flex gap-2">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleSelectAll('vessels')}
-                    >
-                      SELECT ALL
-                    </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleSelectBest8('vessels')}
-                    >
-                      CHOOSE 8 BEST
-                    </Button>
-                  </div>
+                </div>
+                
+                {/* Vessel Search Input */}
+                <div className="mb-3">
+                  <Input
+                    type="text"
+                    placeholder="Search vessels by name, IMO, or port..."
+                    value={vesselSearchTerm}
+                    onChange={(e) => setVesselSearchTerm(e.target.value)}
+                    className="w-full"
+                  />
                 </div>
                  <div className="grid grid-cols-1 gap-2 max-h-32 overflow-y-auto border rounded p-3">
                    {vessels.length === 0 ? (
                      <div className="text-center py-4 text-sm text-muted-foreground">
                        <p>No vessels available in the system yet.</p>
                        <p className="text-xs mt-1">You can add vessels after registration from your dashboard.</p>
-                     </div>
-                   ) : formData.selectedPorts.length === 0 ? (
-                     <div className="text-center py-4 text-sm text-muted-foreground">
-                       Please select ports above to see connected vessels
                      </div>
                    ) : filteredVessels.length > 0 ? (
                      filteredVessels.map((vessel) => (
@@ -943,17 +872,27 @@ const MultiStepRegistration = () => {
                            }}
                          />
                          <Label htmlFor={`vessel-${vessel.id}`} className="text-sm flex-1">
-                           <span className="font-medium">{vessel.name}</span>
+                           <span className="font-medium">{vessel.vessel_name || vessel.name}</span>
                            <span className="text-muted-foreground ml-2">
                              {vessel.vessel_type} • {vessel.flag}
                            </span>
+                           {vessel.imo && (
+                             <span className="text-muted-foreground ml-2">
+                               IMO: {vessel.imo}
+                             </span>
+                           )}
                          </Label>
                        </div>
                      ))
+                   ) : vesselSearchTerm ? (
+                     <div className="text-center py-4 text-sm text-muted-foreground">
+                       <p>No vessels found matching "{vesselSearchTerm}"</p>
+                       <p className="text-xs mt-1">Try a different search term or clear the search to see all vessels.</p>
+                     </div>
                    ) : (
                      <div className="text-center py-4 text-sm text-muted-foreground">
-                       <p>No vessels found connected to selected ports.</p>
-                       <p className="text-xs mt-1">You can still proceed and add vessels later from your dashboard.</p>
+                       <p>All vessels are displayed above.</p>
+                       <p className="text-xs mt-1">Use the search box to find specific vessels.</p>
                      </div>
                    )}
                  </div>
