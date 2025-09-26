@@ -12,8 +12,7 @@ import {
   Crown,
   Map,
   HelpCircle,
-  BookOpen,
-  Newspaper
+  BookOpen
 } from 'lucide-react';
 import {
   Sidebar,
@@ -56,13 +55,6 @@ const accountItems = [
 const brokerItems = [
   { title: 'Broker Membership', url: '/broker-membership', icon: Shield },
   { title: 'Broker Dashboard', url: '/broker-dashboard', icon: LayoutDashboard },
-];
-
-const newsItems = [
-  { title: 'Vessel News', url: '/vessel-news', icon: Ship },
-  { title: 'Port News', url: '/port-news', icon: Anchor },
-  { title: 'Refinery News', url: '/refinery-news', icon: Factory },
-  { title: 'Support News', url: '/support-news', icon: HelpCircle },
 ];
 
 export function AppSidebar() {
@@ -154,40 +146,6 @@ export function AppSidebar() {
                         }
                       `}
                       style={{ animationDelay: `${(index + 7) * 0.1}s` }}
-                    >
-                      <item.icon className={`transition-all duration-300 ${collapsed ? 'h-5 w-5' : 'h-4 w-4'} ${isActive(item.url) ? 'animate-glow-pulse' : ''}`} />
-                      {!collapsed && (
-                        <span className="font-medium animate-fade-in">{item.title}</span>
-                      )}
-                    </NavLink>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-
-        {/* News Section */}
-        <SidebarGroup className="px-2 py-2">
-          <SidebarGroupLabel className={`${collapsed ? 'sr-only' : 'px-2 text-xs uppercase tracking-wider text-muted-foreground/80 font-semibold'}`}>
-            News & Updates
-          </SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu className="space-y-1">
-              {newsItems.map((item, index) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton asChild>
-                    <NavLink 
-                      to={item.url} 
-                      className={({ isActive }) => `
-                        flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-300 ease-out
-                        transform hover:scale-[1.02] hover:shadow-elegant
-                        ${isActive 
-                          ? 'bg-gradient-to-r from-accent/20 to-accent/10 text-accent border-l-4 border-accent shadow-glow' 
-                          : 'hover:bg-gradient-to-r hover:from-muted/50 hover:to-muted/30 text-muted-foreground hover:text-foreground'
-                        }
-                      `}
-                      style={{ animationDelay: `${(index + 8) * 0.1}s` }}
                     >
                       <item.icon className={`transition-all duration-300 ${collapsed ? 'h-5 w-5' : 'h-4 w-4'} ${isActive(item.url) ? 'animate-glow-pulse' : ''}`} />
                       {!collapsed && (

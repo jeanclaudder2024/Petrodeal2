@@ -49,87 +49,66 @@ serve(async (req) => {
     // Collect all data sources
     const dataCollection: Record<string, any> = {};
 
-    // 🧪 MOCK DATA FOR TESTING - Replace database queries with mock data
-    console.log('🧪 Using MOCK DATA for testing placeholder replacement');
-    
-    // Mock vessel data with all database field names (matching actual schema)
+    // Fetch real vessel data from the database
     if (vesselId) {
-      const mockVessel = {
-        id: vesselId,
-        name: "Atlantic Pioneer",
-        mmsi: "235123456",
-        imo: "9876543",
-        vessel_type: "Oil Tanker",
-        flag: "Panama",
-        built: "2018",
-        deadweight: "115000",
-        cargo_capacity: "110000",
-        speed: "14.5",
-        owner_name: "Global Maritime Corp",
-        operator_name: "Ocean Transport Ltd",
-        callsign: "3EXY7",
-        draught: "16.8", // Note: using 'draught' (DB field) not 'draft'
-        length: "274.5",
-        width: "48.2", // Note: using 'width' (DB field) not 'beam'
-        gross_tonnage: "58000",
-        // Additional fields for comprehensive testing
-        engine_power: "18500",
-        crew_size: "24",
-        fuel_consumption: "85",
-        registry_port: "Panama City",
-        class_society: "Lloyd's Register",
-        cargo_tanks: "12",
-        pumping_capacity: "3500",
-        engine_type: "MAN B&W",
-        ism_manager: "Maritime Safety Services"
-      };
-      
-      dataCollection.vessel = mockVessel;
-      console.log('🚢 Mock vessel data loaded with fields:', Object.keys(mockVessel));
+      const { data: vessel, error: vesselError } = await supabase
+        .from('vessels')
+        .select('*')
+        .eq('id', vesselId)
+        .single();
+      if (vesselError) {
+        console.error('Error fetching vessel:', vesselError);
+        throw new Error('Failed to fetch vessel data');
+      }
+      if (vessel) {
+        dataCollection.vessel = vessel;
+        console.log('✅ Real vessel data loaded:', Object.keys(vessel));
+      }
     }
 
-    // Mock port data if provided
+    // Fetch real port data if provided
     if (portId) {
-      const mockPort = {
-        id: portId,
-        name: "Port of Rotterdam",
-        country: "Netherlands",
-        latitude: "51.9244",
-        longitude: "4.4777",
-        port_type: "Commercial",
-        facilities: "Oil Terminal, Container Terminal"
-      };
-      dataCollection.port = mockPort;
-      console.log('🏗️ Mock port data loaded:', Object.keys(mockPort));
+      const { data: port, error: portError } = await supabase
+        .from('ports')
+        .select('*')
+        .eq('id', portId)
+        .single();
+      if (portError) {
+        console.error('Error fetching port:', portError);
+      } else if (port) {
+        dataCollection.port = port;
+        console.log('✅ Real port data loaded:', Object.keys(port));
+      }
     }
 
-    // Mock company data if provided
+    // Fetch real company data if provided
     if (companyId) {
-      const mockCompany = {
-        id: companyId,
-        name: "PetroTrade International",
-        country: "United Kingdom",
-        headquarters: "London",
-        company_type: "Trading",
-        established: "1995"
-      };
-      dataCollection.company = mockCompany;
-      console.log('🏢 Mock company data loaded:', Object.keys(mockCompany));
+      const { data: company, error: companyError } = await supabase
+        .from('companies')
+        .select('*')
+        .eq('id', companyId)
+        .single();
+      if (companyError) {
+        console.error('Error fetching company:', companyError);
+      } else if (company) {
+        dataCollection.company = company;
+        console.log('✅ Real company data loaded:', Object.keys(company));
+      }
     }
 
-    // Mock refinery data if provided
+    // Fetch real refinery data if provided
     if (refineryId) {
-      const mockRefinery = {
-        id: refineryId,
-        name: "North Sea Refinery",
-        location: "Aberdeen, Scotland",
-        capacity: "250000",
-        products: "Gasoline, Diesel, Jet Fuel",
-        operator: "Energy Solutions Ltd"
-      };
-      dataCollection.refinery = mockRefinery;
-      console.log('🏭 Mock refinery data loaded:', Object.keys(mockRefinery));
-    }
+      const { data: refinery, error: refineryError } = await supabase
+        .from('refineries')
+        .select('*')
+        .eq('id', refineryId)
+        .single();
+      if (refineryError) {
+        console.error('Error fetching refinery:', refineryError);
+      } else if (refinery) {
+        dataCollection.refinery = refinery;
+        console.log('✅ Real refinery data loaded:', Object.keys(refinery));
+      }
     }
 
     // Add current date/time data
