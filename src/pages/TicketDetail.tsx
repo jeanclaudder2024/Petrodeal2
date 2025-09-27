@@ -46,7 +46,7 @@ const TicketDetail = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { isAdmin } = useUserRole();
+  const { isAdmin, loading: roleLoading } = useUserRole();
   const { toast } = useToast();
 
   const [ticket, setTicket] = useState<Ticket | null>(null);
@@ -56,12 +56,17 @@ const TicketDetail = () => {
   const [replyMessage, setReplyMessage] = useState('');
   const [attachments, setAttachments] = useState<FileList | null>(null);
   const [sending, setSending] = useState(false);
+  const [roleChecked, setRoleChecked] = useState(false);
 
   useEffect(() => {
-    if (id) {
+    if (!roleLoading) setRoleChecked(true);
+  }, [roleLoading]);
+
+  useEffect(() => {
+    if (id && roleChecked) {
       loadTicketData();
     }
-  }, [id]);
+  }, [id, roleChecked]);
 
   const loadTicketData = async () => {
     try {
@@ -208,7 +213,7 @@ const TicketDetail = () => {
     }
   };
 
-  if (loading) {
+  if (loading || roleLoading || !roleChecked) {
     return <LoadingFallback />;
   }
 
@@ -308,7 +313,58 @@ const TicketDetail = () => {
                       {new Date(message.created_at).toLocaleString()}
                     </span>
                   </div>
-                  <div className="whitespace-pre-wrap">{message.message}</div>
+                  <div className="whitespace-pre-wrap mb-2">{message.message}</div>
+                  {/* Attachments section */}
+                  {Array.isArray(message.attachments) && message.attachments.length > 0 && (
+                    <div className="flex flex-wrap gap-2 mt-2">
+                      {message.attachments.map((fileUrl, idx) => (
+                        <Button
+                          key={fileUrl + idx}
+                          variant="outline"
+                          size="sm"
+                          onClick={async () => {
+                            try {
+                              // If the file is in a private bucket, generate a signed URL
+                              let downloadUrl = fileUrl;
+                              if (fileUrl.includes('/storage/v1/object/public/') === false) {
+                                // Try to extract bucket and path
+                                const match = fileUrl.match(/\/storage\/v1\/object\/sign\/([^/]+)\/(.+)\?/);
+                                let bucket = '', path = '';
+                                if (match) {
+                                  bucket = match[1];
+                                  path = match[2];
+                                } else {
+                                  // fallback: try to parse broker-documents bucket
+                                  const parts = fileUrl.split('/broker-documents/');
+                                  if (parts.length === 2) {
+                                    bucket = 'broker-documents';
+                                    path = parts[1];
+                                  }
+                                }
+                                if (bucket && path) {
+                                  const { data, error } = await supabase.storage.from(bucket).createSignedUrl(path, 60 * 60);
+                                  if (!error && data?.signedUrl) {
+                                    downloadUrl = data.signedUrl;
+                                  }
+                                }
+                              }
+                              window.open(downloadUrl, '_blank');
+                            } catch (err) {
+                              toast({
+                                title: 'Download Error',
+                                description: 'Could not download attachment.',
+                                variant: 'destructive',
+                              });
+                            }
+                          }}
+                          className="flex items-center gap-2"
+                        >
+                          <Paperclip className="h-4 w-4" />
+                          Attachment {idx + 1}
+                        </Button>
+                      ))}
+                    </div>
+                  )}
                 </div>
               ))}
             </CardContent>

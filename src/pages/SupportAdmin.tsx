@@ -208,7 +208,7 @@ const SupportAdmin = () => {
         </p>
       </div>
 
-      <Card className="mb-6">
+      <Card className="mb-6 shadow-lg border border-border/40 rounded-xl">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Filter className="h-5 w-5" />
@@ -275,7 +275,7 @@ const SupportAdmin = () => {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card className="shadow-lg border border-border/40 rounded-xl">
         <CardHeader>
           <CardTitle>Support Tickets ({filteredTickets.length})</CardTitle>
         </CardHeader>
@@ -283,15 +283,15 @@ const SupportAdmin = () => {
           <div className="overflow-x-auto">
             <Table>
               <TableHeader>
-                <TableRow>
-                  <TableHead>Ticket</TableHead>
-                  <TableHead>Subject</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Category</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Priority</TableHead>
-                  <TableHead>Created</TableHead>
-                  <TableHead>Actions</TableHead>
+                <TableRow className="bg-muted/60">
+                  <TableHead className="font-bold text-base">Ticket #</TableHead>
+                  <TableHead className="font-bold text-base">Subject</TableHead>
+                  <TableHead className="font-bold text-base">Email</TableHead>
+                  <TableHead className="font-bold text-base">Category</TableHead>
+                  <TableHead className="font-bold text-base">Status</TableHead>
+                  <TableHead className="font-bold text-base">Priority</TableHead>
+                  <TableHead className="font-bold text-base">Created</TableHead>
+                  <TableHead className="font-bold text-base">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -355,11 +355,14 @@ const SupportAdmin = () => {
                     </TableCell>
                     <TableCell>
                       <Button
-                        variant="ghost"
+                        variant="outline"
                         size="sm"
+                        className="flex items-center gap-2 px-3 py-1 text-sm font-medium"
                         onClick={() => navigate(`/ticket/${ticket.id}`)}
+                        title="View Ticket Details"
                       >
                         <Eye className="h-4 w-4" />
+                        View
                       </Button>
                     </TableCell>
                   </TableRow>
