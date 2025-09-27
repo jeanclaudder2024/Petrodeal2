@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -27,8 +27,6 @@ import { useAccess } from '@/contexts/AccessContext';
 import { useNavigate } from 'react-router-dom';
 import { toast } from '@/hooks/use-toast';
 import EmailVerificationWaiting from './EmailVerificationWaiting';
-import zxcvbn from 'zxcvbn';
-import { parsePhoneNumberFromString } from 'libphonenumber-js';
 
 interface RegistrationForm {
   email: string;
@@ -87,8 +85,6 @@ const MultiStepRegistration = () => {
     cvv: '',
     cardholderName: ''
   });
-  const [emailExists, setEmailExists] = useState<boolean | null>(null);
-  const emailCheckTimeout = useRef<NodeJS.Timeout | null>(null);
 
   const countries = [
     'United States', 'United Kingdom', 'Canada', 'Australia', 'Germany', 'France', 
@@ -103,200 +99,54 @@ const MultiStepRegistration = () => {
     'Cambodia', 'Laos', 'New Zealand', 'Papua New Guinea', 'Fiji'
   ];
 
-  // Replace the countryCodes array with a comprehensive list
   const countryCodes = [
-    { code: '+1', country: 'United States/Canada' },
-    { code: '+44', country: 'United Kingdom' },
+    { code: '+1', country: 'US/CA' },
+    { code: '+44', country: 'UK' },
     { code: '+91', country: 'India' },
-    { code: '+61', country: 'Australia' },
+    { code: '+86', country: 'China' },
     { code: '+81', country: 'Japan' },
     { code: '+49', country: 'Germany' },
     { code: '+33', country: 'France' },
     { code: '+39', country: 'Italy' },
     { code: '+34', country: 'Spain' },
-    { code: '+86', country: 'China' },
-    { code: '+7', country: 'Russia' },
-    { code: '+82', country: 'South Korea' },
-    { code: '+966', country: 'Saudi Arabia' },
-    { code: '+971', country: 'United Arab Emirates' },
-    { code: '+20', country: 'Egypt' },
-    { code: '+90', country: 'Turkey' },
-    { code: '+62', country: 'Indonesia' },
-    { code: '+234', country: 'Nigeria' },
-    { code: '+27', country: 'South Africa' },
-    { code: '+55', country: 'Brazil' },
-    { code: '+52', country: 'Mexico' },
-    { code: '+63', country: 'Philippines' },
-    { code: '+60', country: 'Malaysia' },
-    { code: '+65', country: 'Singapore' },
-    { code: '+64', country: 'New Zealand' },
-    { code: '+30', country: 'Greece' },
     { code: '+31', country: 'Netherlands' },
     { code: '+32', country: 'Belgium' },
+    { code: '+41', country: 'Switzerland' },
+    { code: '+43', country: 'Austria' },
     { code: '+46', country: 'Sweden' },
     { code: '+47', country: 'Norway' },
-    { code: '+48', country: 'Poland' },
-    { code: '+351', country: 'Portugal' },
-    { code: '+353', country: 'Ireland' },
+    { code: '+45', country: 'Denmark' },
     { code: '+358', country: 'Finland' },
-    { code: '+420', country: 'Czech Republic' },
-    { code: '+421', country: 'Slovakia' },
-    { code: '+36', country: 'Hungary' },
-    { code: '+380', country: 'Ukraine' },
-    { code: '+386', country: 'Slovenia' },
-    { code: '+386', country: 'Slovenia' },
-    { code: '+40', country: 'Romania' },
-    { code: '+48', country: 'Poland' },
-    { code: '+43', country: 'Austria' },
-    { code: '+41', country: 'Switzerland' },
-    { code: '+420', country: 'Czech Republic' },
-    { code: '+421', country: 'Slovakia' },
-    { code: '+386', country: 'Slovenia' },
-    { code: '+385', country: 'Croatia' },
-    { code: '+381', country: 'Serbia' },
-    { code: '+382', country: 'Montenegro' },
-    { code: '+389', country: 'North Macedonia' },
-    { code: '+387', country: 'Bosnia and Herzegovina' },
-    { code: '+995', country: 'Georgia' },
-    { code: '+994', country: 'Azerbaijan' },
-    { code: '+993', country: 'Turkmenistan' },
-    { code: '+992', country: 'Tajikistan' },
-    { code: '+998', country: 'Uzbekistan' },
-    { code: '+996', country: 'Kyrgyzstan' },
-    { code: '+972', country: 'Israel' },
-    { code: '+964', country: 'Iraq' },
-    { code: '+968', country: 'Oman' },
-    { code: '+974', country: 'Qatar' },
-    { code: '+973', country: 'Bahrain' },
-    { code: '+965', country: 'Kuwait' },
-    { code: '+961', country: 'Lebanon' },
-    { code: '+962', country: 'Jordan' },
-    { code: '+963', country: 'Syria' },
-    { code: '+966', country: 'Saudi Arabia' },
-    { code: '+971', country: 'United Arab Emirates' },
-    { code: '+92', country: 'Pakistan' },
-    { code: '+880', country: 'Bangladesh' },
-    { code: '+94', country: 'Sri Lanka' },
-    { code: '+66', country: 'Thailand' },
-    { code: '+84', country: 'Vietnam' },
-    { code: '+855', country: 'Cambodia' },
-    { code: '+856', country: 'Laos' },
-    { code: '+95', country: 'Myanmar' },
+    { code: '+82', country: 'S.Korea' },
     { code: '+65', country: 'Singapore' },
+    { code: '+60', country: 'Malaysia' },
+    { code: '+66', country: 'Thailand' },
     { code: '+62', country: 'Indonesia' },
     { code: '+63', country: 'Philippines' },
-    { code: '+60', country: 'Malaysia' },
-    { code: '+673', country: 'Brunei' },
-    { code: '+61', country: 'Australia' },
-    { code: '+64', country: 'New Zealand' },
-    { code: '+679', country: 'Fiji' },
-    { code: '+682', country: 'Cook Islands' },
-    { code: '+685', country: 'Samoa' },
-    { code: '+686', country: 'Kiribati' },
-    { code: '+687', country: 'New Caledonia' },
-    { code: '+688', country: 'Tuvalu' },
-    { code: '+689', country: 'French Polynesia' },
-    { code: '+690', country: 'Tokelau' },
-    { code: '+691', country: 'Micronesia' },
-    { code: '+692', country: 'Marshall Islands' },
-    // ... (add more as needed)
-  ].sort((a, b) => a.country.localeCompare(b.country));
-
-  // Map country code to ISO country for libphonenumber-js
-  const codeToCountry: Record<string, string> = {
-    '+1': 'US',
-    '+44': 'GB',
-    '+91': 'IN',
-    '+61': 'AU',
-    '+81': 'JP',
-    '+49': 'DE',
-    '+33': 'FR',
-    '+39': 'IT',
-    '+34': 'ES',
-    '+86': 'CN',
-    '+7': 'RU',
-    '+82': 'KR',
-    '+966': 'SA',
-    '+971': 'AE',
-    '+20': 'EG',
-    '+90': 'TR',
-    '+62': 'ID',
-    '+234': 'NG',
-    '+27': 'ZA',
-    '+55': 'BR',
-    '+52': 'MX',
-    '+63': 'PH',
-    '+60': 'MY',
-    '+65': 'SG',
-    '+64': 'NZ',
-    '+30': 'GR',
-    '+31': 'NL',
-    '+32': 'BE',
-    '+46': 'SE',
-    '+47': 'NO',
-    '+48': 'PL',
-    '+351': 'PT',
-    '+353': 'IE',
-    '+358': 'FI',
-    '+420': 'CZ',
-    '+421': 'SK',
-    '+36': 'HU',
-    '+380': 'UA',
-    '+386': 'SI',
-    '+40': 'RO',
-    '+43': 'AT',
-    '+41': 'CH',
-    '+385': 'HR',
-    '+381': 'RS',
-    '+382': 'ME',
-    '+389': 'MK',
-    '+387': 'BA',
-    '+995': 'GE',
-    '+994': 'AZ',
-    '+993': 'TM',
-    '+992': 'TJ',
-    '+998': 'UZ',
-    '+996': 'KG',
-    '+972': 'IL',
-    '+964': 'IQ',
-    '+968': 'OM',
-    '+974': 'QA',
-    '+973': 'BH',
-    '+965': 'KW',
-    '+961': 'LB',
-    '+962': 'JO',
-    '+963': 'SY',
-    '+92': 'PK',
-    '+880': 'BD',
-    '+94': 'LK',
-    '+66': 'TH',
-    '+84': 'VN',
-    '+855': 'KH',
-    '+856': 'LA',
-    '+95': 'MM',
-    '+673': 'BN',
-    '+679': 'FJ',
-    '+682': 'CK',
-    '+685': 'WS',
-    '+686': 'KI',
-    '+687': 'NC',
-    '+688': 'TV',
-    '+689': 'PF',
-    '+690': 'TK',
-    '+691': 'FM',
-    '+692': 'MH',
-    // ...add more as needed
-  };
-
-  function validatePhoneNumber(phone: string, countryCode: string) {
-    if (!phone) return false;
-    const country = codeToCountry[countryCode];
-    if (!country) return false;
-    const phoneNumber = parsePhoneNumberFromString(phone, country);
-    return phoneNumber ? phoneNumber.isValid() : false;
-  }
-
-  const isPhoneValid = validatePhoneNumber(formData.phone, formData.countryCode);
+    { code: '+971', country: 'UAE' },
+    { code: '+966', country: 'Saudi' },
+    { code: '+974', country: 'Qatar' },
+    { code: '+965', country: 'Kuwait' },
+    { code: '+973', country: 'Bahrain' },
+    { code: '+968', country: 'Oman' },
+    { code: '+20', country: 'Egypt' },
+    { code: '+234', country: 'Nigeria' },
+    { code: '+27', country: 'S.Africa' },
+    { code: '+55', country: 'Brazil' },
+    { code: '+54', country: 'Argentina' },
+    { code: '+56', country: 'Chile' },
+    { code: '+52', country: 'Mexico' },
+    { code: '+57', country: 'Colombia' },
+    { code: '+51', country: 'Peru' },
+    { code: '+58', country: 'Venezuela' },
+    { code: '+7', country: 'Russia' },
+    { code: '+48', country: 'Poland' },
+    { code: '+420', country: 'Czech' },
+    { code: '+36', country: 'Hungary' },
+    { code: '+40', country: 'Romania' },
+    { code: '+30', country: 'Greece' },
+    { code: '+90', country: 'Turkey' }
+  ];
 
   // Regions will be loaded dynamically from filter management
 
@@ -310,31 +160,6 @@ const MultiStepRegistration = () => {
   useEffect(() => {
     filterVesselsBySelectedPorts();
   }, [formData.selectedPorts, vessels]);
-
-  useEffect(() => {
-    console.log('Loaded ports:', ports.length, ports);
-    console.log('Loaded vessels:', vessels.length, vessels);
-  }, [ports, vessels]);
-
-  // Real-time email existence check
-  useEffect(() => {
-    if (!formData.email) {
-      setEmailExists(null);
-      return;
-    }
-    if (emailCheckTimeout.current) clearTimeout(emailCheckTimeout.current);
-    emailCheckTimeout.current = setTimeout(async () => {
-      // Query the auth.users table via the public get_users_with_roles function
-      const { data, error } = await supabase.rpc('get_users_with_roles');
-      if (error) {
-        setEmailExists(null);
-        return;
-      }
-      const exists = data?.some((user: any) => user.email?.toLowerCase() === formData.email.toLowerCase());
-      setEmailExists(!!exists);
-    }, 500);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [formData.email]);
 
   const fetchDynamicPricing = async () => {
     try {
@@ -361,8 +186,8 @@ const MultiStepRegistration = () => {
       // Fetch regions from filter management, ports and vessels for selection
       const [regionsRes, portsRes, vesselsRes] = await Promise.all([
         supabase.from('filter_options').select('label').eq('filter_type', 'region').eq('is_active', true).order('sort_order'),
-        supabase.from('ports').select('*'),
-        supabase.from('vessels').select('*')
+        supabase.from('ports').select('id, name, country, region').limit(50),
+        supabase.from('vessels').select('id, name, vessel_type, flag, current_region, currentport, destination_port, departure_port, port_id').limit(100)
       ]);
 
       if (regionsRes.data) {
@@ -460,8 +285,7 @@ const MultiStepRegistration = () => {
         const vesselPorts = [
           vessel.currentport || '',
           vessel.destination_port || '',
-          vessel.departure_port || '',
-          vessel.destination || '' // <-- added for destination name matching
+          vessel.departure_port || ''
         ].filter(Boolean);
         
         return portNames.some(portName => 
@@ -525,13 +349,12 @@ const MultiStepRegistration = () => {
     }
   };
 
-  // Prevent next step if email exists
   const validateStep = (step: number): boolean => {
     switch (step) {
       case 1:
-        return !!(formData.email && formData.password && formData.confirmPassword && formData.termsAgreed) && emailExists !== true;
+        return !!(formData.email && formData.password && formData.confirmPassword && formData.termsAgreed);
       case 2:
-        return !!(formData.fullName && formData.phone && formData.country) && isPhoneValid;
+        return !!(formData.fullName && formData.phone && formData.country);
       case 3:
         return formData.selectedRegions.length > 0;
       case 4:
@@ -701,6 +524,7 @@ const MultiStepRegistration = () => {
 
           if (emailError) {
             console.error('Custom email error:', emailError);
+            // Don't fail the registration if custom email fails
             toast({
               title: "Registration Successful!",
               description: "Account created successfully. You may need to check your email for confirmation.",
@@ -717,27 +541,6 @@ const MultiStepRegistration = () => {
             title: "Registration Successful!",
             description: "Account created successfully. You may need to check your email for confirmation.",
           });
-        }
-
-        // Insert user into subscribers table directly (frontend fallback)
-        try {
-          const now = new Date();
-          const trialEnd = new Date(now.getTime() + 5 * 24 * 60 * 60 * 1000);
-          await supabase.from('subscribers').insert({
-            user_id: data.user.id,
-            email: data.user.email,
-            trial_start_date: now.toISOString(),
-            trial_end_date: trialEnd.toISOString(),
-            unified_trial_end_date: trialEnd.toISOString(),
-            is_trial_active: true,
-            subscribed: false,
-            subscription_tier: 'trial',
-            trial_with_subscription: true,
-            created_at: now.toISOString(),
-            updated_at: now.toISOString()
-          });
-        } catch (insertError) {
-          console.error('Error inserting user into subscribers:', insertError);
         }
 
         // Check if email confirmation is required
@@ -805,16 +608,6 @@ const MultiStepRegistration = () => {
                   onChange={(e) => handleInputChange('email', e.target.value)}
                   className="mt-1"
                 />
-                {emailExists === true && (
-                  <div className="text-xs text-red-600 mt-1 animate-pulse">
-                    This email is already registered. Please use another email or sign in.
-                  </div>
-                )}
-                {emailExists === false && formData.email && (
-                  <div className="text-xs text-green-600 mt-1 animate-pulse">
-                    This email is available.
-                  </div>
-                )}
               </div>
 
               <div>
@@ -842,20 +635,6 @@ const MultiStepRegistration = () => {
                     )}
                   </Button>
                 </div>
-                {/* Password strength meter */}
-                {formData.password && (
-                  <div className="mt-2">
-                    <div className="w-full h-2 rounded bg-gray-200 overflow-hidden">
-                      <div
-                        className={`h-2 transition-all duration-300 ${passwordStrength.color}`}
-                        style={{ width: `${(passwordStrength.score + 1) * 20}%` }}
-                      ></div>
-                    </div>
-                    <div className="text-xs mt-1 font-medium" style={{ color: passwordStrength.color.replace('bg-', '') }}>
-                      {passwordStrength.label} password
-                    </div>
-                  </div>
-                )}
               </div>
 
               <div>
@@ -892,24 +671,7 @@ const MultiStepRegistration = () => {
                   onCheckedChange={(checked) => handleInputChange('termsAgreed', checked as boolean)}
                 />
                 <Label htmlFor="terms" className="text-sm leading-5">
-                  I agree to
-                  <a
-                    href="/policies"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-primary underline mx-1"
-                  >
-                    Terms & Conditions
-                  </a>
-                  and
-                  <a
-                    href="/privacy-policy"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="text-primary underline mx-1"
-                  >
-                    Privacy Policy
-                  </a>
+                  I agree to Terms & Privacy Policy
                 </Label>
               </div>
 
@@ -958,8 +720,8 @@ const MultiStepRegistration = () => {
                     value={formData.countryCode}
                     onValueChange={(value) => handleInputChange('countryCode', value)}
                   >
-                    <SelectTrigger className="w-40 bg-background border-input">
-                      <SelectValue placeholder="Country code" />
+                    <SelectTrigger className="w-32 bg-background border-input">
+                      <SelectValue />
                     </SelectTrigger>
                     <SelectContent className="bg-background border-border z-50 max-h-60 overflow-y-auto">
                       {countryCodes.map((item) => (
@@ -978,11 +740,6 @@ const MultiStepRegistration = () => {
                     className="flex-1"
                   />
                 </div>
-                {formData.phone && !isPhoneValid && (
-                  <div className="text-xs text-red-600 mt-1 animate-pulse">
-                    Please enter a valid phone number for the selected country.
-                  </div>
-                )}
               </div>
 
               <div>
@@ -1111,7 +868,7 @@ const MultiStepRegistration = () => {
                   </div>
                 </div>
                 <div className="grid grid-cols-1 gap-2 max-h-32 overflow-y-auto border rounded p-3">
-                  {ports.map((port) => (
+                  {ports.slice(0, 8).map((port) => (
                     <div key={port.id} className="flex items-center space-x-2">
                       <Checkbox
                         id={`port-${port.id}`}
@@ -1161,29 +918,45 @@ const MultiStepRegistration = () => {
                     </Button>
                   </div>
                 </div>
-                <div className="grid grid-cols-1 gap-2 max-h-32 overflow-y-auto border rounded p-3">
-                  {vessels.map((vessel) => (
-                    <div key={vessel.id} className="flex items-center space-x-2">
-                      <Checkbox
-                        id={`vessel-${vessel.id}`}
-                        checked={formData.selectedVessels.includes(vessel.id.toString())}
-                        onCheckedChange={(checked) => {
-                          if (checked) {
-                            handleArrayToggle('selectedVessels', vessel.id.toString());
-                          } else {
-                            handleArrayToggle('selectedVessels', vessel.id.toString());
-                          }
-                        }}
-                      />
-                      <Label htmlFor={`vessel-${vessel.id}`} className="text-sm flex-1">
-                        <span className="font-medium">{vessel.name}</span>
-                        <span className="text-muted-foreground ml-2">
-                          {vessel.vessel_type} • {vessel.flag}
-                        </span>
-                      </Label>
-                    </div>
-                  ))}
-                </div>
+                 <div className="grid grid-cols-1 gap-2 max-h-32 overflow-y-auto border rounded p-3">
+                   {vessels.length === 0 ? (
+                     <div className="text-center py-4 text-sm text-muted-foreground">
+                       <p>No vessels available in the system yet.</p>
+                       <p className="text-xs mt-1">You can add vessels after registration from your dashboard.</p>
+                     </div>
+                   ) : formData.selectedPorts.length === 0 ? (
+                     <div className="text-center py-4 text-sm text-muted-foreground">
+                       Please select ports above to see connected vessels
+                     </div>
+                   ) : filteredVessels.length > 0 ? (
+                     filteredVessels.map((vessel) => (
+                       <div key={vessel.id} className="flex items-center space-x-2">
+                         <Checkbox
+                           id={`vessel-${vessel.id}`}
+                           checked={formData.selectedVessels.includes(vessel.id.toString())}
+                           onCheckedChange={(checked) => {
+                             if (checked) {
+                               handleArrayToggle('selectedVessels', vessel.id.toString());
+                             } else {
+                               handleArrayToggle('selectedVessels', vessel.id.toString());
+                             }
+                           }}
+                         />
+                         <Label htmlFor={`vessel-${vessel.id}`} className="text-sm flex-1">
+                           <span className="font-medium">{vessel.name}</span>
+                           <span className="text-muted-foreground ml-2">
+                             {vessel.vessel_type} • {vessel.flag}
+                           </span>
+                         </Label>
+                       </div>
+                     ))
+                   ) : (
+                     <div className="text-center py-4 text-sm text-muted-foreground">
+                       <p>No vessels found connected to selected ports.</p>
+                       <p className="text-xs mt-1">You can still proceed and add vessels later from your dashboard.</p>
+                     </div>
+                   )}
+                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
                   Selected: {formData.selectedVessels.length} vessels
                 </p>
@@ -1478,39 +1251,6 @@ const MultiStepRegistration = () => {
         return null;
     }
   };
-
-  // Password strength logic
-  const getPasswordStrength = (password: string) => {
-    if (!password) return { score: 0, label: '', color: '' };
-    const result = zxcvbn(password);
-    const score = result.score;
-    let label = '';
-    let color = '';
-    switch (score) {
-      case 0:
-      case 1:
-        label = 'Weak';
-        color = 'bg-red-500';
-        break;
-      case 2:
-        label = 'Fair';
-        color = 'bg-yellow-500';
-        break;
-      case 3:
-        label = 'Good';
-        color = 'bg-blue-500';
-        break;
-      case 4:
-        label = 'Strong';
-        color = 'bg-green-600';
-        break;
-      default:
-        label = '';
-        color = '';
-    }
-    return { score, label, color };
-  };
-  const passwordStrength = getPasswordStrength(formData.password);
 
   // Show verification waiting page if needed
   if (showVerificationWaiting) {

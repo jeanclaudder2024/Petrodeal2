@@ -8,8 +8,7 @@ interface AccessInfo {
   accessType: 'subscription' | 'trial' | 'expired' | 'preview';
   trialDaysLeft: number;
   isSubscribed: boolean;
-  loading: boolean;
-}
+  loading: boolean;}
 
 interface AccessContextType extends AccessInfo {
   checkAccess: () => Promise<void>;
@@ -41,14 +40,10 @@ export const AccessProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
 
     try {
-      // استخدام الدالة الجديدة المحسنة
-      const { data, error } = await supabase.rpc('check_user_access_unified', {
-        user_email: user.email
-      });
-
+      setAccessInfo(prev => ({ ...prev, loading: true }));
+      // Use the new check-subscription function
+      const { data, error } = await supabase.functions.invoke('check-subscription');
       if (error) {
-        console.error('Error checking access:', error);
-        // Default to preview access if error
         setAccessInfo({
           hasAccess: false,
           accessType: 'preview',
@@ -58,18 +53,15 @@ export const AccessProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         });
         return;
       }
-
-      if (data && data.length > 0) {
-        const accessData = data[0];
+      if (data) {
         setAccessInfo({
-          hasAccess: accessData.has_access,
-          accessType: accessData.access_type as 'subscription' | 'trial' | 'expired',
-          trialDaysLeft: accessData.trial_days_left,
-          isSubscribed: accessData.is_subscribed,
+          hasAccess: data.subscribed || data.trial_active,
+          accessType: data.access_type || 'preview',
+          trialDaysLeft: data.trial_days_left || 0,
+          isSubscribed: data.subscribed || false,
           loading: false,
         });
       } else {
-        // No record found, user needs to start trial
         setAccessInfo({
           hasAccess: false,
           accessType: 'expired',
@@ -79,7 +71,6 @@ export const AccessProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         });
       }
     } catch (error) {
-      console.error('Error in checkAccess:', error);
       setAccessInfo({
         hasAccess: false,
         accessType: 'preview',
@@ -99,18 +90,15 @@ export const AccessProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       });
       return;
     }
-
     try {
-      // استخدام الدالة الجديدة لبدء فترة تجربة مع اشتراك
-      const { data, error } = await supabase.rpc('start_subscription_with_trial', {
+      // Use the new start_trial_with_plan function
+      const { data, error } = await supabase.rpc('start_trial_with_plan', {
         user_email: user.email,
         user_id_param: user.id,
         plan_tier_param: 'basic',
         trial_days: 5
       });
-
       if (error) {
-        console.error('Error starting trial:', error);
         toast({
           title: "Error",
           description: "Failed to start trial period",
@@ -118,11 +106,8 @@ export const AccessProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         });
         return;
       }
-
-      // Handle JSON response from function
       const result = data as { success?: boolean; error?: string };
       if (result && !result.success) {
-        console.error('Trial start failed:', result.error);
         toast({
           title: "Error",
           description: result.error || "Failed to start trial period",
@@ -130,16 +115,12 @@ export const AccessProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         });
         return;
       }
-
       toast({
         title: "Trial Started!",
         description: "Your 5-day free trial has begun with Basic plan features. Enjoy exploring the platform!",
       });
-
-      // Refresh access info
       await checkAccess();
     } catch (error) {
-      console.error('Error in startTrial:', error);
       toast({
         title: "Error",
         description: "Failed to start trial period",
