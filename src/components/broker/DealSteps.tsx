@@ -144,37 +144,30 @@ const DealSteps: React.FC<DealStepsProps> = ({ dealId, onClose }) => {
 
   const handleFileUpload = async (stepId: string, file: File) => {
     setUploadingStep(stepId);
-    
     try {
       // Validate file size (max 10MB)
       if (file.size > 10 * 1024 * 1024) {
         throw new Error('File size must be less than 10MB');
       }
-      
-      // Validate file type
-      const allowedTypes = ['.pdf', '.doc', '.docx', '.jpg', '.jpeg', '.png'];
+      // Only allow PDF files
+      const allowedTypes = ['.pdf'];
       const fileExt = `.${file.name.split('.').pop()?.toLowerCase()}`;
       if (!allowedTypes.includes(fileExt)) {
-        throw new Error('Please upload only PDF, Word documents, or image files');
+        throw new Error('Please upload only PDF files');
       }
-      
       // Upload file to Supabase storage
       const fileName = `${dealId}/${stepId}_${Date.now()}${fileExt}`;
-      
       const { error: uploadError } = await supabase.storage
         .from('broker-documents')
         .upload(fileName, file);
-
       if (uploadError) {
         console.error('Storage upload error:', uploadError);
         throw new Error('Failed to upload file. Please check your permissions and try again.');
       }
-
       // Get public URL
       const { data: { publicUrl } } = supabase.storage
         .from('broker-documents')
         .getPublicUrl(fileName);
-
       // Update step with file URL
       const { error: updateError } = await supabase
         .from('deal_steps')
@@ -182,17 +175,14 @@ const DealSteps: React.FC<DealStepsProps> = ({ dealId, onClose }) => {
           file_url: publicUrl
         })
         .eq('id', stepId);
-
       if (updateError) {
         console.error('Database update error:', updateError);
         throw new Error('File uploaded but failed to update step. Please contact support.');
       }
-
       toast({
         title: "Success",
         description: "File uploaded successfully. Remember to save your step to submit it for approval."
       });
-
       await fetchDealSteps();
     } catch (error) {
       console.error('Error uploading file:', error);
@@ -208,22 +198,25 @@ const DealSteps: React.FC<DealStepsProps> = ({ dealId, onClose }) => {
 
   const handleDownloadDocument = async (fileUrl: string, stepName: string) => {
     try {
+      // Extract the file path from the URL (after the bucket name)
+      const urlParts = fileUrl.split('/broker-documents/');
+      const filePath = urlParts[1];
+      if (!filePath) throw new Error('Invalid file URL');
+      // Get a signed URL from Supabase
+      const { data, error } = await supabase.storage
+        .from('broker-documents')
+        .createSignedUrl(filePath, 60 * 60); // 1 hour
+      if (error || !data?.signedUrl) throw error || new Error('Could not generate signed URL');
       // Create a temporary anchor element to trigger download
       const link = document.createElement('a');
-      link.href = fileUrl;
-      
-      // Extract filename from URL or use step name
-      const urlParts = fileUrl.split('/');
-      const fileName = urlParts[urlParts.length - 1] || `${stepName.replace(/\s+/g, '_')}_document`;
-      
+      link.href = data.signedUrl;
+      const urlParts2 = filePath.split('/');
+      const fileName = urlParts2[urlParts2.length - 1] || `${stepName.replace(/\s+/g, '_')}_document`;
       link.download = fileName;
       link.target = '_blank';
-      
-      // Append to body, click, and remove
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      
       toast({
         title: "Download Started",
         description: "Document download has been initiated."
@@ -238,22 +231,22 @@ const DealSteps: React.FC<DealStepsProps> = ({ dealId, onClose }) => {
     }
   };
 
-  const handleViewDocument = (fileUrl: string) => {
+  const handleViewDocument = async (fileUrl: string) => {
     try {
-      // Try to open in new tab first
-      const newWindow = window.open(fileUrl, '_blank');
-      
-      // If popup was blocked or failed, try alternative method
-      if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
-        // Create a temporary link and click it
-        const link = document.createElement('a');
-        link.href = fileUrl;
-        link.target = '_blank';
-        link.rel = 'noopener noreferrer';
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
-      }
+      // Extract the file path from the URL (after the bucket name)
+      const urlParts = fileUrl.split('/broker-documents/');
+      const filePath = urlParts[1];
+      if (!filePath) throw new Error('Invalid file URL');
+
+      // Get a signed URL from Supabase
+      const { data, error } = await supabase.storage
+        .from('broker-documents')
+        .createSignedUrl(filePath, 60 * 60); // 1 hour
+
+      if (error || !data?.signedUrl) throw error || new Error('Could not generate signed URL');
+
+      // Open the signed URL in a new tab
+      window.open(data.signedUrl, '_blank');
     } catch (error) {
       console.error('Error viewing document:', error);
       toast({
@@ -266,18 +259,15 @@ const DealSteps: React.FC<DealStepsProps> = ({ dealId, onClose }) => {
 
   const handleSaveStep = async (stepId: string) => {
     setSavingStep(stepId);
-    
     try {
       const step = steps.find(s => s.id === stepId);
       if (!step) {
         throw new Error('Step not found');
       }
-      
       // Validate required fields
       const template = DEAL_STEPS_TEMPLATE.find(t => t.step_number === step.step_number);
       const requiresFile = template?.requires_file || false;
       const hasNotes = notes[stepId]?.trim();
-      
       if (requiresFile && !step.file_url && !hasNotes) {
         toast({
           title: "Validation Error",
@@ -286,7 +276,6 @@ const DealSteps: React.FC<DealStepsProps> = ({ dealId, onClose }) => {
         });
         return;
       }
-      
       if (!requiresFile && !hasNotes) {
         toast({
           title: "Validation Error", 
@@ -295,12 +284,9 @@ const DealSteps: React.FC<DealStepsProps> = ({ dealId, onClose }) => {
         });
         return;
       }
-      
-      // Step 1 is automatically approved, others need admin approval
-      const isFirstStep = step?.step_number === 1;
-      const newStatus = isFirstStep ? 'completed' : 'pending';
-      const completedAt = isFirstStep ? new Date().toISOString() : null;
-
+      // All steps, including step 1, require admin approval (status 'pending')
+      const newStatus = 'pending';
+      const completedAt = null;
       // Update step with notes and appropriate status
       const { error: updateError } = await supabase
         .from('deal_steps')
@@ -310,19 +296,14 @@ const DealSteps: React.FC<DealStepsProps> = ({ dealId, onClose }) => {
           completed_at: completedAt
         })
         .eq('id', stepId);
-
       if (updateError) {
         console.error('Database error:', updateError);
         throw new Error('Failed to save step to database. Please check your permissions.');
       }
-
       toast({
         title: "Success",
-        description: isFirstStep 
-          ? "Step 1 completed! You can now proceed to step 2."
-          : "Step saved and submitted for admin approval!"
+        description: "Step saved and submitted for admin approval!"
       });
-
       // Clear the notes for this step
       setNotes(prev => ({ ...prev, [stepId]: '' }));
       await fetchDealSteps();
@@ -589,7 +570,7 @@ const DealSteps: React.FC<DealStepsProps> = ({ dealId, onClose }) => {
                           <Input
                             id={`file-${step.id}`}
                             type="file"
-                            accept=".pdf,.doc,.docx,.jpg,.jpeg,.png"
+                            accept=".pdf"
                             onChange={(e) => {
                               const file = e.target.files?.[0];
                               if (file) {
@@ -603,7 +584,7 @@ const DealSteps: React.FC<DealStepsProps> = ({ dealId, onClose }) => {
                           )}
                         </div>
                         <p className="text-xs text-muted-foreground mt-1">
-                          Accepted formats: PDF, DOC, DOCX, JPG, PNG (Max 10MB)
+                          Accepted formats: PDF (Max 10MB)
                         </p>
                       </div>
                     )}

@@ -822,8 +822,33 @@ const BrokerManagement = () => {
                                <Button
                                  size="sm"
                                  variant="outline"
-                                 onClick={() => window.open(step.file_url, '_blank')}
+                                 onClick={async () => {
+                                   try {
+                                     if (step.file_url) {
+                                       // Extract the file path from the URL (after the bucket name)
+                                       const urlParts = step.file_url.split('/broker-documents/');
+                                       const filePath = urlParts[1];
+                                       if (!filePath) throw new Error('Invalid file URL');
+                                       // Get a signed URL from Supabase
+                                       const { data, error } = await supabase.storage
+                                         .from('broker-documents')
+                                         .createSignedUrl(filePath, 60 * 60); // 1 hour
+                                       if (error || !data?.signedUrl) throw error || new Error('Could not generate signed URL');
+                                       // Open the signed URL in a new tab
+                                       window.open(data.signedUrl, '_blank');
+                                     }
+                                   } catch (error) {
+                                     console.error('Error viewing document:', error);
+                                     toast({
+                                       title: "View Error",
+                                       description: "Failed to open document. Please try downloading it instead.",
+                                       variant: "destructive"
+                                     });
+                                   }
+                                 }}
+                                 className="flex items-center gap-2"
                                >
+                                 <Download className="h-4 w-4" />
                                  View Document
                                </Button>
                              ) : (
@@ -1373,7 +1398,30 @@ const BrokerManagement = () => {
                         <p className="text-xs text-muted-foreground">Click to view the uploaded file</p>
                       </div>
                       <Button
-                        onClick={() => window.open(selectedStep.file_url, '_blank')}
+                        onClick={async () => {
+                          try {
+                            if (selectedStep.file_url) {
+                              // Extract the file path from the URL (after the bucket name)
+                              const urlParts = selectedStep.file_url.split('/broker-documents/');
+                              const filePath = urlParts[1];
+                              if (!filePath) throw new Error('Invalid file URL');
+                              // Get a signed URL from Supabase
+                              const { data, error } = await supabase.storage
+                                .from('broker-documents')
+                                .createSignedUrl(filePath, 60 * 60); // 1 hour
+                              if (error || !data?.signedUrl) throw error || new Error('Could not generate signed URL');
+                              // Open the signed URL in a new tab
+                              window.open(data.signedUrl, '_blank');
+                            }
+                          } catch (error) {
+                            console.error('Error viewing document:', error);
+                            toast({
+                              title: "View Error",
+                              description: "Failed to open document. Please try downloading it instead.",
+                              variant: "destructive"
+                            });
+                          }
+                        }}
                         className="flex items-center gap-2"
                       >
                         <Download className="h-4 w-4" />
