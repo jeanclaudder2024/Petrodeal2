@@ -212,14 +212,11 @@ const NewTicket = () => {
           const file = attachments[i];
           const ext = file.name.split('.').pop()?.toLowerCase();
           const fileName = `ticket_${ticketData.id}_${Date.now()}_${i}.${ext}`;
-          const { data: uploadData, error: uploadError } = await supabase.storage
+          const { error: uploadError } = await supabase.storage
             .from('support-attachments')
             .upload(fileName, file);
-          if (!uploadError && uploadData) {
-            const { data: { publicUrl } } = supabase.storage
-              .from('support-attachments')
-              .getPublicUrl(fileName);
-            attachmentUrls.push(publicUrl);
+          if (!uploadError) {
+            attachmentUrls.push(fileName); // Save the file path, not the public URL
           }
         }
       }

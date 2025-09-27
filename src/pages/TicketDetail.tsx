@@ -25,6 +25,7 @@ interface Ticket {
   email: string;
   created_at: string;
   updated_at: string;
+  attachments: string[]; // Added for ticket-level attachments
 }
 
 interface TicketMessage {
@@ -287,6 +288,56 @@ const TicketDetail = () => {
           </CardContent>
         </Card>
 
+        {ticket.attachments && Array.isArray(ticket.attachments) && ticket.attachments.length > 0 && (
+          <Card className="mb-4">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Paperclip className="h-5 w-5" />
+                Ticket Attachments
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="flex flex-wrap gap-2">
+                {ticket.attachments.map((fileRef: string, idx: number) => (
+                  <Button
+                    key={fileRef + idx}
+                    variant="outline"
+                    size="sm"
+                    onClick={async () => {
+                      try {
+                        let filePath = fileRef;
+                        if (fileRef.startsWith('http')) {
+                          const match = fileRef.match(/support-attachments\/(.+)$/);
+                          if (match) filePath = match[1];
+                          else throw new Error('Invalid attachment URL');
+                        }
+                        const { data, error } = await supabase.storage
+                          .from('support-attachments')
+                          .createSignedUrl(filePath, 60 * 60);
+                        if (!error && data?.signedUrl) {
+                          window.open(data.signedUrl, '_blank');
+                        } else {
+                          throw error || new Error('Could not generate signed URL');
+                        }
+                      } catch (err) {
+                        toast({
+                          title: 'Download Error',
+                          description: 'Could not download attachment.',
+                          variant: 'destructive',
+                        });
+                      }
+                    }}
+                    className="flex items-center gap-2"
+                  >
+                    <Paperclip className="h-4 w-4" />
+                    Attachment {idx + 1}
+                  </Button>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
         {messages.length > 0 && (
           <Card>
             <CardHeader>
@@ -317,32 +368,29 @@ const TicketDetail = () => {
                   {/* Attachments section */}
                   {Array.isArray(message.attachments) && message.attachments.length > 0 && (
                     <div className="flex flex-wrap gap-2 mt-2">
-                      {message.attachments.map((fileUrl, idx) => (
+                      {message.attachments.map((fileRef, idx) => (
                         <Button
-                          key={fileUrl + idx}
+                          key={fileRef + idx}
                           variant="outline"
                           size="sm"
                           onClick={async () => {
                             try {
+                              let filePath = fileRef;
+                              // If fileRef is a full URL, extract the path after 'support-attachments/'
+                              if (fileRef.startsWith('http')) {
+                                const match = fileRef.match(/support-attachments\/(.+)$/);
+                                if (match) filePath = match[1];
+                                else throw new Error('Invalid attachment URL');
+                              }
                               // Always generate a signed URL for private bucket
-                              let downloadUrl = fileUrl;
-                              // Extract the file path after the bucket name
-                              let filePath = null;
-                              const match = fileUrl.match(/support-attachments\/(.+)$/);
-                              if (match) {
-                                filePath = match[1];
+                              const { data, error } = await supabase.storage
+                                .from('support-attachments')
+                                .createSignedUrl(filePath, 60 * 60);
+                              if (!error && data?.signedUrl) {
+                                window.open(data.signedUrl, '_blank');
+                              } else {
+                                throw error || new Error('Could not generate signed URL');
                               }
-                              if (filePath) {
-                                const { data, error } = await supabase.storage
-                                  .from('support-attachments')
-                                  .createSignedUrl(filePath, 60 * 60);
-                                if (!error && data?.signedUrl) {
-                                  downloadUrl = data.signedUrl;
-                                } else {
-                                  throw error || new Error('Could not generate signed URL');
-                                }
-                              }
-                              window.open(downloadUrl, '_blank');
                             } catch (err) {
                               toast({
                                 title: 'Download Error',
