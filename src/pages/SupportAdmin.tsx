@@ -30,6 +30,7 @@ interface Ticket {
 interface Category {
   id: string;
   name_en: string;
+  description_en: string;
 }
 
 const SupportAdmin = () => {

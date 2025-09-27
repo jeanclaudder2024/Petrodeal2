@@ -13,7 +13,8 @@ import {
   Upload, 
   FileText, 
   Download,
-  RefreshCw
+  RefreshCw,
+  Eye
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -202,6 +203,64 @@ const DealSteps: React.FC<DealStepsProps> = ({ dealId, onClose }) => {
       });
     } finally {
       setUploadingStep(null);
+    }
+  };
+
+  const handleDownloadDocument = async (fileUrl: string, stepName: string) => {
+    try {
+      // Create a temporary anchor element to trigger download
+      const link = document.createElement('a');
+      link.href = fileUrl;
+      
+      // Extract filename from URL or use step name
+      const urlParts = fileUrl.split('/');
+      const fileName = urlParts[urlParts.length - 1] || `${stepName.replace(/\s+/g, '_')}_document`;
+      
+      link.download = fileName;
+      link.target = '_blank';
+      
+      // Append to body, click, and remove
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      toast({
+        title: "Download Started",
+        description: "Document download has been initiated."
+      });
+    } catch (error) {
+      console.error('Error downloading document:', error);
+      toast({
+        title: "Download Error",
+        description: "Failed to download document. Please try again or contact support.",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleViewDocument = (fileUrl: string) => {
+    try {
+      // Try to open in new tab first
+      const newWindow = window.open(fileUrl, '_blank');
+      
+      // If popup was blocked or failed, try alternative method
+      if (!newWindow || newWindow.closed || typeof newWindow.closed === 'undefined') {
+        // Create a temporary link and click it
+        const link = document.createElement('a');
+        link.href = fileUrl;
+        link.target = '_blank';
+        link.rel = 'noopener noreferrer';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+      }
+    } catch (error) {
+      console.error('Error viewing document:', error);
+      toast({
+        title: "View Error",
+        description: "Failed to open document. Please try downloading it instead.",
+        variant: "destructive"
+      });
     }
   };
 
@@ -404,14 +463,24 @@ const DealSteps: React.FC<DealStepsProps> = ({ dealId, onClose }) => {
                 <div className="flex items-center gap-2 p-2 bg-muted rounded mb-2">
                   <FileText className="h-4 w-4" />
                   <span className="text-sm">Document uploaded</span>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    onClick={() => window.open(step.file_url, '_blank')}
-                  >
-                    <Download className="h-4 w-4 mr-1" />
-                    View
-                  </Button>
+                  <div className="flex gap-1">
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => handleViewDocument(step.file_url)}
+                    >
+                      <Eye className="h-4 w-4 mr-1" />
+                      View
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => handleDownloadDocument(step.file_url, step.step_name)}
+                    >
+                      <Download className="h-4 w-4 mr-1" />
+                      Download
+                    </Button>
+                  </div>
                 </div>
               )}
 
@@ -495,14 +564,24 @@ const DealSteps: React.FC<DealStepsProps> = ({ dealId, onClose }) => {
                           <div className="flex items-center gap-2 p-2 bg-muted rounded mt-1 mb-2">
                             <FileText className="h-4 w-4" />
                             <span className="text-sm">Current document</span>
-                            <Button 
-                              variant="outline" 
-                              size="sm"
-                              onClick={() => window.open(step.file_url, '_blank')}
-                            >
-                              <Download className="h-4 w-4 mr-1" />
-                              View
-                            </Button>
+                            <div className="flex gap-1">
+                              <Button 
+                                variant="outline" 
+                                size="sm"
+                                onClick={() => handleViewDocument(step.file_url)}
+                              >
+                                <Eye className="h-4 w-4 mr-1" />
+                                View
+                              </Button>
+                              <Button 
+                                variant="outline" 
+                                size="sm"
+                                onClick={() => handleDownloadDocument(step.file_url, step.step_name)}
+                              >
+                                <Download className="h-4 w-4 mr-1" />
+                                Download
+                              </Button>
+                            </div>
                           </div>
                         )}
                         

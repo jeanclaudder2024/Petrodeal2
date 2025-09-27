@@ -16,8 +16,8 @@ import { supabase } from '@/integrations/supabase/client';
 
 interface Category {
   id: string;
-  name_en: string;
-  description_en: string | null;
+  name: string;
+  description: string;
 }
 
 interface FormData {
@@ -61,26 +61,22 @@ const NewTicket = () => {
     try {
       setLoading(true);
 
-      // Load categories from database
-      const { data: categoriesData, error: categoriesError } = await db
+      const { data, error } = await supabase
         .from('support_categories')
-        .select('*')
+        .select('id, name_en, description_en')
         .eq('is_active', true)
         .order('sort_order');
 
-      if (categoriesError) {
-        console.error('Error loading categories:', categoriesError);
-        // Fallback to mock categories if database fails
-        const mockCategories = [
-          { id: '1', name_en: 'Technical Support', description_en: 'Technical issues and bugs' },
-          { id: '2', name_en: 'Account Issues', description_en: 'Account access and billing' },
-          { id: '3', name_en: 'Feature Request', description_en: 'New feature suggestions' },
-          { id: '4', name_en: 'General Inquiry', description_en: 'General questions and support' }
-        ];
-        setCategories(mockCategories);
-      } else {
-        setCategories(categoriesData || []);
-      }
+      if (error) throw error;
+
+      // Map to expected format
+      const mappedCategories = (data || []).map(cat => ({
+        id: cat.id,
+        name: cat.name_en,
+        description: cat.description_en
+      }));
+
+      setCategories(mappedCategories);
 
     } catch (error: any) {
       console.error('Error loading categories:', error);
@@ -181,32 +177,36 @@ const NewTicket = () => {
       // Generate ticket number
       const ticketNumber = `TKT-${Date.now()}`;
 
-      // Create ticket in database
-      const ticketData = {
-        ticket_number: ticketNumber,
-        category_id: formData.category_id,
-        email: formData.email,
-        subject: formData.subject,
-        description: formData.description,
-        service_domain: formData.service_domain || null,
-        user_id: user?.id || null,
-        status: 'open',
-        priority: 'medium',
-        language: 'en'
-      };
-
-      const { data: createdTicket, error: ticketError } = await db
+      // Create ticket
+      const { data: ticketData, error: ticketError } = await db
         .from('support_tickets')
-        .insert([ticketData])
+        .insert({
+          ticket_number: ticketNumber,
+          category_id: formData.category_id,
+          email: formData.email,
+          subject: formData.subject,
+          description: formData.description,
+          service_domain: formData.service_domain || null,
+          user_id: user?.id || null,
+          status: 'open',
+          priority: 'medium',
+          language: 'en',
+        })
         .select()
         .single();
 
-      if (ticketError) {
-        throw new Error(`Failed to create ticket: ${ticketError.message}`);
-      }
+      if (ticketError) throw ticketError;
 
       // TODO: Handle file uploads to storage if attachments exist
-      // TODO: Send notification email when backend is ready
+
+      // Send notification email
+      await supabase.functions.invoke('send-support-notification', {
+        body: {
+          type: 'new_ticket',
+          ticket: ticketData,
+          attachments: attachments ? Array.from(attachments).map(f => f.name) : [],
+        },
+      });
 
       toast({
         title: "Ticket Created Successfully!",
@@ -269,7 +269,7 @@ const NewTicket = () => {
                   <SelectContent>
                     {categories.map((category) => (
                       <SelectItem key={category.id} value={category.id}>
-                        {category.name_en}
+                        {category.name}
                       </SelectItem>
                     ))}
                   </SelectContent>

@@ -939,18 +939,18 @@ const VesselDetail = () => {
                       Create Broker Deal
                     </Button>
                   </DialogTrigger>
-                  <DialogContent className="max-w-2xl">
+                  <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto w-[95vw] sm:w-full">
                     <DialogHeader>
-                      <DialogTitle>Create Broker Deal for {vessel.name}</DialogTitle>
-                      <DialogDescription>
+                      <DialogTitle className="text-lg">Create Broker Deal for {vessel.name}</DialogTitle>
+                      <DialogDescription className="text-sm">
                         Set up a new brokerage deal for this vessel. You'll be able to track the deal progress through your dashboard.
                       </DialogDescription>
                     </DialogHeader>
-                    <div className="space-y-6">
+                    <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-2">
                       {/* Deal Type */}
-                      <div>
-                        <Label className="text-base font-semibold">Deal Type *</Label>
-                        <div className="mt-3 space-y-3">
+                      <div className="bg-muted/30 p-4 rounded-lg">
+                        <Label className="text-sm font-semibold">Deal Type *</Label>
+                        <div className="mt-2 space-y-2">
                           <div className="flex items-center space-x-2">
                             <Checkbox
                               id="direct_buyer"
@@ -959,7 +959,7 @@ const VesselDetail = () => {
                                 setDealForm({...dealForm, deal_type: checked ? 'direct_buyer' : ''})
                               }
                             />
-                            <Label htmlFor="direct_buyer" className="font-normal">DIRECT BUYER</Label>
+                            <Label htmlFor="direct_buyer" className="font-normal text-sm">DIRECT BUYER</Label>
                           </div>
                           <div className="flex items-center space-x-2">
                             <Checkbox
@@ -969,15 +969,15 @@ const VesselDetail = () => {
                                 setDealForm({...dealForm, deal_type: checked ? 'brokerage' : ''})
                               }
                             />
-                            <Label htmlFor="brokerage" className="font-normal">BROKERAGE (Intermediary)</Label>
+                            <Label htmlFor="brokerage" className="font-normal text-sm">BROKERAGE (Intermediary)</Label>
                           </div>
                         </div>
                       </div>
 
                       {/* Expected Destination */}
-                      <div>
-                        <Label htmlFor="expected_destination" className="text-base font-semibold">Expected Destination</Label>
-                        <p className="text-sm text-muted-foreground mb-2">(Enter port or country of delivery)</p>
+                      <div className="bg-muted/30 p-4 rounded-lg">
+                        <Label htmlFor="expected_destination" className="text-sm font-semibold">Expected Destination</Label>
+                        <p className="text-xs text-muted-foreground mb-2">(Enter port or country of delivery)</p>
                         <Input
                           id="expected_destination"
                           value={dealForm.expected_destination}
@@ -988,15 +988,15 @@ const VesselDetail = () => {
                       </div>
 
                       {/* Special Notes */}
-                      <div>
-                        <Label htmlFor="special_notes" className="text-base font-semibold">Special Notes / Buyer Requirements</Label>
-                        <p className="text-sm text-muted-foreground mb-2">(Optional free text field)</p>
+                      <div className="bg-muted/30 p-4 rounded-lg">
+                        <Label htmlFor="special_notes" className="text-sm font-semibold">Special Notes / Buyer Requirements</Label>
+                        <p className="text-xs text-muted-foreground mb-2">(Optional free text field)</p>
                         <Textarea
                           id="special_notes"
                           value={dealForm.special_notes}
                           onChange={(e) => setDealForm({...dealForm, special_notes: e.target.value})}
                           placeholder="Enter any special notes or buyer requirements..."
-                          rows={3}
+                          rows={2}
                           className="mt-1"
                         />
                       </div>
@@ -1005,13 +1005,13 @@ const VesselDetail = () => {
                       <Separator />
 
                       {/* Terms & Conditions */}
-                      <div>
-                        <div className="flex items-center gap-2 mb-4">
+                      <div className="bg-muted/30 p-4 rounded-lg">
+                        <div className="flex items-center gap-2 mb-3">
                           <div className="w-2 h-2 rounded-full bg-primary"></div>
-                          <Label className="text-base font-semibold">Terms & Conditions (please confirm):</Label>
+                          <Label className="text-sm font-semibold">Terms & Conditions (please confirm):</Label>
                         </div>
                         
-                        <div className="space-y-3 ml-4">
+                        <div className="space-y-2 ml-4">
                           <div className="flex items-start space-x-2">
                             <Checkbox
                               id="terms_trade_laws"
@@ -1020,7 +1020,7 @@ const VesselDetail = () => {
                                 setDealForm({...dealForm, terms_trade_laws: checked as boolean})
                               }
                             />
-                            <Label htmlFor="terms_trade_laws" className="font-normal leading-relaxed">
+                            <Label htmlFor="terms_trade_laws" className="font-normal text-xs leading-relaxed">
                               I agree to comply with all international trade laws and government regulations.
                             </Label>
                           </div>
@@ -1033,7 +1033,7 @@ const VesselDetail = () => {
                                 setDealForm({...dealForm, terms_legal_framework: checked as boolean})
                               }
                             />
-                            <Label htmlFor="terms_legal_framework" className="font-normal leading-relaxed">
+                            <Label htmlFor="terms_legal_framework" className="font-normal text-xs leading-relaxed">
                               I confirm that all transactions follow the legal framework of PetroDealHub.
                             </Label>
                           </div>
@@ -1046,7 +1046,7 @@ const VesselDetail = () => {
                                 setDealForm({...dealForm, terms_commission: checked as boolean})
                               }
                             />
-                            <Label htmlFor="terms_commission" className="font-normal leading-relaxed">
+                            <Label htmlFor="terms_commission" className="font-normal text-xs leading-relaxed">
                               Commission structure will be honored by all parties
                             </Label>
                           </div>
@@ -1059,7 +1059,7 @@ const VesselDetail = () => {
                                 setDealForm({...dealForm, terms_platform_role: checked as boolean})
                               }
                             />
-                            <Label htmlFor="terms_platform_role" className="font-normal leading-relaxed">
+                            <Label htmlFor="terms_platform_role" className="font-normal text-xs leading-relaxed">
                               I accept PetroDealHub's role as a neutral platform without liability in external disputes.
                             </Label>
                           </div>
@@ -1070,23 +1070,25 @@ const VesselDetail = () => {
                       <Separator />
 
                       {/* Actions */}
-                      <div>
-                        <div className="flex items-center gap-2 mb-4">
+                      <div className="bg-muted/30 p-4 rounded-lg">
+                        <div className="flex items-center gap-2 mb-3">
                           <div className="w-2 h-2 rounded-full bg-primary"></div>
-                          <Label className="text-base font-semibold">Actions</Label>
+                          <Label className="text-sm font-semibold">Actions</Label>
                         </div>
                         
-                        <div className="flex gap-3">
+                        <div className="flex gap-2">
                           <Button 
                             variant="outline" 
                             onClick={() => setDealDialogOpen(false)}
-                            className="flex-1"
+                            className="flex-1 h-9"
+                            size="sm"
                           >
                             Cancel
                           </Button>
                           <Button 
                             onClick={handleCreateDeal}
-                            className="flex-1"
+                            className="flex-1 h-9"
+                            size="sm"
                             disabled={!dealForm.deal_type || 
                                      !dealForm.terms_trade_laws || 
                                      !dealForm.terms_legal_framework || 

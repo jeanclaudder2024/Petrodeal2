@@ -38,7 +38,8 @@ interface TicketMessage {
 
 interface Category {
   id: string;
-  name_en: string;
+  name: string;
+  description: string;
 }
 
 const TicketDetail = () => {
@@ -89,14 +90,18 @@ const TicketDetail = () => {
       setTicket(ticketData);
 
       // Load category
-      const { data: categoryData, error: categoryError } = await db
+      const { data: categoryData, error: categoryError } = await supabase
         .from('support_categories')
-        .select('*')
+        .select('id, name_en, description_en')
         .eq('id', ticketData.category_id)
         .single();
 
-      if (!categoryError) {
-        setCategory(categoryData);
+      if (!categoryError && categoryData) {
+        setCategory({
+          id: categoryData.id,
+          name: categoryData.name_en,
+          description: categoryData.description_en || ''
+        });
       }
 
       // Load messages
@@ -269,7 +274,7 @@ const TicketDetail = () => {
               Original Message
             </CardTitle>
             <div className="text-sm text-muted-foreground">
-              Category: {category?.name_en || 'Unknown'}
+              Category: {category?.name || 'Unknown'}
             </div>
           </CardHeader>
           <CardContent>

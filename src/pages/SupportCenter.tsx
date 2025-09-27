@@ -7,21 +7,10 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
-  MessageCircle, 
   Send, 
-  Phone, 
-  Video, 
-  MoreVertical,
-  ArrowLeft,
-  Paperclip,
-  Smile,
   Plus,
-  Eye,
-  Clock,
   Ticket,
-  Users,
   MessageSquare
 } from 'lucide-react';
 import { db } from '@/lib/supabase-helper';
@@ -31,24 +20,6 @@ import { useUserRole } from '@/hooks/useUserRole';
 import { useToast } from '@/hooks/use-toast';
 import LoadingFallback from '@/components/LoadingFallback';
 
-interface ChatMessage {
-  id: string;
-  message: string;
-  sender_id: string;
-  sender_type: 'broker' | 'admin';
-  created_at: string;
-  is_read: boolean;
-  broker_id: string;
-  deal_id: string | null;
-  file_url: string | null;
-}
-
-interface BrokerInfo {
-  id: string;
-  full_name: string;
-  company_name: string;
-  user_id: string;
-}
 
 interface Ticket {
   id: string;
@@ -68,11 +39,12 @@ interface Ticket {
 interface TicketMessage {
   id: string;
   ticket_id: string;
-  sender_id: string;
-  sender_type: 'user' | 'admin';
+  user_id: string | null;
   message: string;
   is_internal: boolean;
   created_at: string;
+  updated_at: string;
+  attachments: string[] | null;
 }
 
 interface Category {
@@ -85,18 +57,8 @@ const SupportCenter = () => {
   const { user } = useAuth();
   const { role, isAdmin } = useUserRole();
   const { toast } = useToast();
-  const messagesEndRef = useRef<HTMLDivElement>(null);
   
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState(isAdmin ? 'tickets' : 'chat');
-  
-  // Chat states
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [brokers, setBrokers] = useState<BrokerInfo[]>([]);
-  const [selectedBroker, setSelectedBroker] = useState<BrokerInfo | null>(null);
-  const [currentBrokerProfile, setCurrentBrokerProfile] = useState<BrokerInfo | null>(null);
-  const [newMessage, setNewMessage] = useState('');
-  const [sending, setSending] = useState(false);
   
   // Ticket states
   const [tickets, setTickets] = useState<Ticket[]>([]);
@@ -118,48 +80,16 @@ const SupportCenter = () => {
     }
   }, [user, role]);
 
-  useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
-
-  // Set up realtime subscription for messages
-  useEffect(() => {
-    if (!selectedBroker) return;
-
-    const channel = supabase
-      .channel('broker_chat_messages')
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'broker_chat_messages',
-          filter: `broker_id=eq.${selectedBroker.id}`
-        },
-        (payload) => {
-          const newMessage = payload.new as ChatMessage;
-          setMessages(prev => [...prev, newMessage]);
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [selectedBroker]);
-
   const initializeSupport = async () => {
     try {
       // Load categories first
       await loadCategories();
       
       if (isAdmin) {
-        // Admin: Load all brokers and tickets
-        await loadBrokers();
+        // Admin: Load all tickets
         await loadAllTickets();
       } else {
-        // User: Load own profile, messages, and tickets
-        await loadBrokerProfile();
+        // User: Load own tickets
         await loadUserTickets();
       }
     } catch (error) {
@@ -175,14 +105,22 @@ const SupportCenter = () => {
   };
 
   const loadCategories = async () => {
-    const { data, error } = await db
-      .from('support_ticket_categories')
-      .select('*')
+    const { data, error } = await supabase
+      .from('support_categories')
+      .select('id, name_en, description_en')
       .eq('is_active', true)
       .order('sort_order');
     
     if (error) throw error;
-    setCategories(data || []);
+    
+    // Map to expected format
+    const mappedCategories = (data || []).map(cat => ({
+      id: cat.id,
+      name: cat.name_en,
+      description: cat.description_en
+    }));
+    
+    setCategories(mappedCategories);
   };
 
   const loadAllTickets = async () => {
@@ -199,55 +137,13 @@ const SupportCenter = () => {
     const { data, error } = await db
       .from('support_tickets')
       .select('*')
-      .or(`user_id.eq.${user!.id},email.eq.${user!.email}`)
+      .eq('user_id', user!.id)
       .order('created_at', { ascending: false });
     
     if (error) throw error;
     setTickets(data || []);
   };
 
-  const loadBrokers = async () => {
-    const { data, error } = await supabase
-      .from('broker_profiles')
-      .select('id, full_name, company_name, user_id')
-      .order('full_name');
-
-    if (error) throw error;
-    setBrokers(data || []);
-  };
-
-  const loadBrokerProfile = async () => {
-    const { data, error } = await supabase
-      .from('broker_profiles')
-      .select('id, full_name, company_name, user_id')
-      .eq('user_id', user!.id)
-      .single();
-
-    if (error) throw error;
-    setCurrentBrokerProfile(data);
-    setSelectedBroker(data);
-    await loadMessages(data.id);
-  };
-
-  const loadMessages = async (brokerId: string) => {
-    const { data, error } = await supabase
-      .from('broker_chat_messages')
-      .select('*')
-      .eq('broker_id', brokerId)
-      .order('created_at', { ascending: true });
-
-    if (error) throw error;
-    setMessages((data || []) as ChatMessage[]);
-
-    // Mark messages as read
-    if (!isAdmin) {
-      await supabase
-        .from('broker_chat_messages')
-        .update({ is_read: true })
-        .eq('broker_id', brokerId)
-        .eq('sender_type', 'admin');
-    }
-  };
 
   const createTicket = async () => {
     if (!newTicketForm.subject.trim() || !newTicketForm.description.trim() || !newTicketForm.category_id) {
@@ -306,21 +202,40 @@ const SupportCenter = () => {
   const sendTicketMessage = async () => {
     if (!newTicketMessage.trim() || !selectedTicket) return;
 
+    // Check if user can send messages to this ticket
+    if (!isAdmin && selectedTicket.user_id !== user!.id) {
+      toast({
+        title: "Error",
+        description: "You can only send messages to your own tickets.",
+        variant: "destructive"
+      });
+      return;
+    }
+
     try {
+      console.log('Sending message:', {
+        ticket_id: selectedTicket.id,
+        user_id: user!.id,
+        message: newTicketMessage.trim()
+      });
+
       const { data, error } = await db
         .from('support_ticket_messages')
         .insert({
           ticket_id: selectedTicket.id,
-          sender_id: user!.id,
-          sender_type: isAdmin ? 'admin' : 'user',
+          user_id: user!.id,
           message: newTicketMessage.trim(),
           is_internal: false
         })
         .select()
         .single();
 
-      if (error) throw error;
+      if (error) {
+        console.error('Database error:', error);
+        throw error;
+      }
 
+      console.log('Message sent successfully:', data);
       setTicketMessages(prev => [...prev, data]);
       setNewTicketMessage('');
 
@@ -340,70 +255,50 @@ const SupportCenter = () => {
       console.error('Error sending message:', error);
       toast({
         title: "Error",
-        description: "Failed to send message. Please try again.",
+        description: `Failed to send message: ${error.message || 'Please try again.'}`,
         variant: "destructive"
       });
     }
   };
 
   const loadTicketMessages = async (ticketId: string) => {
-    const { data, error } = await db
-      .from('support_ticket_messages')
-      .select('*')
-      .eq('ticket_id', ticketId)
-      .order('created_at', { ascending: true });
-
-    if (error) throw error;
-    setTicketMessages(data || []);
-  };
-
-  const sendMessage = async () => {
-    if (!newMessage.trim() || !selectedBroker || sending) return;
-
-    setSending(true);
     try {
-      const messageData = {
-        broker_id: selectedBroker.id,
-        sender_id: user!.id,
-        sender_type: isAdmin ? 'admin' : 'broker',
-        message: newMessage.trim(),
-        is_read: false,
-        deal_id: null,
-        message_type: 'text'
-      };
+      console.log('Loading messages for ticket:', ticketId);
+      const { data, error } = await db
+        .from('support_ticket_messages')
+        .select('*')
+        .eq('ticket_id', ticketId)
+        .order('created_at', { ascending: true });
 
-      const { data, error } = await supabase
-        .from('broker_chat_messages')
-        .insert(messageData)
-        .select()
-        .single();
+      if (error) {
+        console.error('Error loading messages:', error);
+        throw error;
+      }
 
-      if (error) throw error;
-
-      setNewMessage('');
-
-      toast({
-        title: "Message sent",
-        description: "Your message has been delivered."
-      });
+      console.log('Loaded messages:', data);
+      setTicketMessages(data || []);
     } catch (error) {
-      console.error('Error sending message:', error);
+      console.error('Error in loadTicketMessages:', error);
       toast({
         title: "Error",
-        description: "Failed to send message. Please try again.",
+        description: "Failed to load ticket messages.",
         variant: "destructive"
       });
-    } finally {
-      setSending(false);
     }
   };
 
-  const handleBrokerSelect = async (broker: BrokerInfo) => {
-    setSelectedBroker(broker);
-    await loadMessages(broker.id);
-  };
 
   const handleTicketSelect = async (ticket: Ticket) => {
+    // Check if user can view this ticket
+    if (!isAdmin && ticket.user_id !== user!.id) {
+      toast({
+        title: "Error",
+        description: "You can only view your own tickets.",
+        variant: "destructive"
+      });
+      return;
+    }
+
     setSelectedTicket(ticket);
     await loadTicketMessages(ticket.id);
   };
@@ -436,12 +331,6 @@ const SupportCenter = () => {
     });
   };
 
-  const getMessageSenderName = (message: ChatMessage) => {
-    if (message.sender_type === 'admin') {
-      return 'Support Team';
-    }
-    return selectedBroker?.full_name || 'Broker';
-  };
 
   if (loading) {
     return <LoadingFallback />;
@@ -452,27 +341,21 @@ const SupportCenter = () => {
       <div className="mb-6">
         <h1 className="text-3xl font-bold mb-2">Support Center</h1>
         <p className="text-muted-foreground">
-          {isAdmin ? 'Manage support tickets and chat with brokers' : 'Get help with your account and trading activities'}
+          {isAdmin ? 'Manage support tickets and help users' : 'Get help with your account and trading activities'}
         </p>
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-2">
-          <TabsTrigger value="tickets" className="flex items-center gap-2">
-            <Ticket className="h-4 w-4" />
-            Support Tickets
-          </TabsTrigger>
-          <TabsTrigger value="chat" className="flex items-center gap-2">
-            <MessageCircle className="h-4 w-4" />
-            Live Chat
-          </TabsTrigger>
-        </TabsList>
+      <div className="space-y-6">
+        <div className="flex items-center gap-2">
+          <Ticket className="h-5 w-5" />
+          <h2 className="text-xl font-semibold">Support Tickets</h2>
+        </div>
 
-        <TabsContent value="tickets" className="space-y-6">
+        <div className="space-y-6">
           <div className="flex flex-col lg:flex-row gap-6 h-[calc(100vh-12rem)]">
             
             {/* Tickets Sidebar */}
-            <div className="w-full lg:w-80">
+            <div className="w-full lg:w-96 min-w-0">
               <Card className="h-full">
                 <CardHeader>
                   <div className="flex items-center justify-between">
@@ -549,39 +432,63 @@ const SupportCenter = () => {
                     </div>
                   )}
                   
-                  <div className="space-y-2 p-4 max-h-[600px] overflow-y-auto">
-                    {tickets.map((ticket) => (
-                      <div
-                        key={ticket.id}
-                        onClick={() => handleTicketSelect(ticket)}
-                        className={`p-3 rounded-lg cursor-pointer transition-colors hover:bg-accent/50 ${
-                          selectedTicket?.id === ticket.id ? 'bg-accent' : ''
-                        }`}
-                      >
-                        <div className="space-y-2">
-                          <div className="flex items-center justify-between">
-                            <Badge className={getStatusColor(ticket.status)}>
-                              {ticket.status.replace('_', ' ')}
-                            </Badge>
-                            <Badge className={getPriorityColor(ticket.priority)}>
-                              {ticket.priority}
-                            </Badge>
-                          </div>
-                          <p className="font-medium text-sm truncate">{ticket.subject}</p>
-                          <p className="text-xs text-muted-foreground">
-                            #{ticket.ticket_number}
-                          </p>
-                          <p className="text-xs text-muted-foreground">
-                            {new Date(ticket.created_at).toLocaleDateString()}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
-                    {tickets.length === 0 && (
+                  <div className="max-h-[600px] overflow-y-auto">
+                    {tickets.length === 0 ? (
                       <div className="text-center py-8 text-muted-foreground">
                         <Ticket className="h-12 w-12 mx-auto mb-4 opacity-50" />
                         <p>No tickets yet</p>
                       </div>
+                    ) : (
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead className="w-[100px]">Status</TableHead>
+                            <TableHead className="w-[80px]">Priority</TableHead>
+                            <TableHead className="min-w-[200px]">Subject</TableHead>
+                            <TableHead className="w-[120px]">Ticket #</TableHead>
+                            <TableHead className="w-[100px]">Date</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {tickets.map((ticket) => (
+                            <TableRow
+                              key={ticket.id}
+                              onClick={() => handleTicketSelect(ticket)}
+                              className={`cursor-pointer hover:bg-accent/50 ${
+                                selectedTicket?.id === ticket.id ? 'bg-accent' : ''
+                              }`}
+                            >
+                              <TableCell className="p-2">
+                                <Badge className={`${getStatusColor(ticket.status)} text-xs px-2 py-1 w-full justify-center`}>
+                                  {ticket.status.replace('_', ' ')}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="p-2">
+                                <Badge className={`${getPriorityColor(ticket.priority)} text-xs px-2 py-1 w-full justify-center`}>
+                                  {ticket.priority}
+                                </Badge>
+                              </TableCell>
+                              <TableCell className="p-2">
+                                <div className="max-w-[200px]">
+                                  <p className="font-medium text-sm truncate" title={ticket.subject}>
+                                    {ticket.subject}
+                                  </p>
+                                </div>
+                              </TableCell>
+                              <TableCell className="p-2">
+                                <p className="text-xs text-muted-foreground font-mono truncate" title={ticket.ticket_number}>
+                                  {ticket.ticket_number}
+                                </p>
+                              </TableCell>
+                              <TableCell className="p-2">
+                                <p className="text-xs text-muted-foreground">
+                                  {new Date(ticket.created_at).toLocaleDateString()}
+                                </p>
+                              </TableCell>
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
                     )}
                   </div>
                 </CardContent>
@@ -589,19 +496,21 @@ const SupportCenter = () => {
             </div>
 
             {/* Ticket Detail Area */}
-            <div className="flex-1">
+            <div className="flex-1 min-w-0">
               <Card className="h-full flex flex-col">
                 {selectedTicket ? (
                   <>
                     {/* Ticket Header */}
                     <CardHeader>
                       <div className="flex items-center justify-between">
-                        <div>
+                        <div className="min-w-0 flex-1">
                           <CardTitle className="flex items-center gap-2">
-                            <Ticket className="h-5 w-5" />
-                            {selectedTicket.subject}
+                            <Ticket className="h-5 w-5 flex-shrink-0" />
+                            <span className="truncate" title={selectedTicket.subject}>
+                              {selectedTicket.subject}
+                            </span>
                           </CardTitle>
-                          <p className="text-sm text-muted-foreground mt-1">
+                          <p className="text-sm text-muted-foreground mt-1 truncate">
                             #{selectedTicket.ticket_number} • Created {new Date(selectedTicket.created_at).toLocaleDateString()}
                           </p>
                         </div>
@@ -615,7 +524,7 @@ const SupportCenter = () => {
                         </div>
                       </div>
                       <div className="p-3 bg-muted rounded-lg">
-                        <p className="text-sm">{selectedTicket.description}</p>
+                        <p className="text-sm break-words whitespace-pre-wrap">{selectedTicket.description}</p>
                       </div>
                     </CardHeader>
 
@@ -629,7 +538,7 @@ const SupportCenter = () => {
                           </div>
                         ) : (
                           ticketMessages.map((message) => {
-                            const isOwnMessage = message.sender_id === user!.id;
+                            const isOwnMessage = message.user_id === user!.id;
                             return (
                               <div
                                 key={message.id}
@@ -648,7 +557,7 @@ const SupportCenter = () => {
                                   <p className={`text-xs text-muted-foreground mt-1 ${
                                     isOwnMessage ? 'text-right' : 'text-left'
                                   }`}>
-                                    {message.sender_type === 'admin' ? 'Support Team' : 'You'} • {formatMessageTime(message.created_at)}
+                                    {isOwnMessage ? 'You' : 'Support Team'} • {formatMessageTime(message.created_at)}
                                   </p>
                                 </div>
                               </div>
@@ -688,183 +597,8 @@ const SupportCenter = () => {
               </Card>
             </div>
           </div>
-        </TabsContent>
-
-        <TabsContent value="chat" className="space-y-6">
-          <div className="flex flex-col lg:flex-row gap-6 h-[calc(100vh-12rem)]">
-            
-            {/* Chat Sidebar */}
-            <div className="w-full lg:w-80">
-              <Card className="h-full">
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <MessageCircle className="h-5 w-5" />
-                    {isAdmin ? 'Active Brokers' : 'Support Chat'}
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="p-0">
-                  {isAdmin ? (
-                    <div className="space-y-2 p-4">
-                      {brokers.map((broker) => (
-                        <div
-                          key={broker.id}
-                          onClick={() => handleBrokerSelect(broker)}
-                          className={`p-3 rounded-lg cursor-pointer transition-colors hover:bg-accent/50 ${
-                            selectedBroker?.id === broker.id ? 'bg-accent' : ''
-                          }`}
-                        >
-                          <div className="flex items-center gap-3">
-                            <Avatar>
-                              <AvatarFallback>
-                                {broker.full_name?.split(' ').map(n => n[0]).join('').toUpperCase()}
-                              </AvatarFallback>
-                            </Avatar>
-                            <div className="flex-1 min-w-0">
-                              <p className="font-medium truncate">{broker.full_name}</p>
-                              <p className="text-sm text-muted-foreground truncate">
-                                {broker.company_name}
-                              </p>
-                            </div>
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="p-4">
-                      <div className="text-center space-y-4">
-                        <div className="mx-auto w-16 h-16 bg-primary/10 rounded-full flex items-center justify-center">
-                          <MessageCircle className="h-8 w-8 text-primary" />
-                        </div>
-                        <div>
-                          <h3 className="font-semibold">Need Help?</h3>
-                          <p className="text-sm text-muted-foreground mt-1">
-                            Our support team is here to help you with any questions about your deals, verification, or platform usage.
-                          </p>
-                        </div>
-                        <div className="space-y-2 text-left">
-                          <div className="text-sm">
-                            <strong>Response Time:</strong> Within 2 hours
-                          </div>
-                          <div className="text-sm">
-                            <strong>Available:</strong> Mon-Fri, 9 AM - 6 PM UTC
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Chat Area */}
-            <div className="flex-1">
-              <Card className="h-full flex flex-col">
-                {selectedBroker ? (
-                  <>
-                    {/* Chat Header */}
-                    <CardHeader className="flex-row items-center justify-between space-y-0 pb-3">
-                      <div className="flex items-center gap-3">
-                        <Avatar>
-                          <AvatarFallback>
-                            {selectedBroker.full_name?.split(' ').map(n => n[0]).join('').toUpperCase()}
-                          </AvatarFallback>
-                        </Avatar>
-                        <div>
-                          <h3 className="font-semibold">
-                            {isAdmin ? selectedBroker.full_name : 'Support Team'}
-                          </h3>
-                          <p className="text-sm text-muted-foreground">
-                            {isAdmin ? selectedBroker.company_name : 'We\'re here to help'}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Badge variant="outline">Online</Badge>
-                      </div>
-                    </CardHeader>
-
-                    {/* Messages */}
-                    <CardContent className="flex-1 overflow-y-auto p-4">
-                      <div className="space-y-4">
-                        {messages.length === 0 ? (
-                          <div className="text-center text-muted-foreground py-8">
-                            <MessageCircle className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                            <p>No messages yet. Start the conversation!</p>
-                          </div>
-                        ) : (
-                          messages.map((message) => {
-                            const isOwnMessage = message.sender_id === user!.id;
-                            return (
-                              <div
-                                key={message.id}
-                                className={`flex ${isOwnMessage ? 'justify-end' : 'justify-start'}`}
-                              >
-                                <div className={`max-w-[70%] ${isOwnMessage ? 'order-2' : 'order-1'}`}>
-                                  <div
-                                    className={`rounded-2xl px-4 py-2 ${
-                                      isOwnMessage
-                                        ? 'bg-primary text-primary-foreground'
-                                        : 'bg-muted'
-                                    }`}
-                                  >
-                                    <p className="text-sm">{message.message}</p>
-                                  </div>
-                                  <p className={`text-xs text-muted-foreground mt-1 ${
-                                    isOwnMessage ? 'text-right' : 'text-left'
-                                  }`}>
-                                    {formatMessageTime(message.created_at)}
-                                  </p>
-                                </div>
-                              </div>
-                            );
-                          })
-                        )}
-                        <div ref={messagesEndRef} />
-                      </div>
-                    </CardContent>
-
-                    {/* Message Input */}
-                    <div className="p-4 border-t">
-                      <div className="flex items-center gap-2">
-                        <div className="flex-1 relative">
-                          <Input
-                            value={newMessage}
-                            onChange={(e) => setNewMessage(e.target.value)}
-                            placeholder="Type your message..."
-                            onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
-                            className="pr-12"
-                          />
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8 p-0"
-                          >
-                            <Paperclip className="h-4 w-4" />
-                          </Button>
-                        </div>
-                        <Button 
-                          onClick={sendMessage}
-                          disabled={!newMessage.trim() || sending}
-                          size="sm"
-                        >
-                          <Send className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  </>
-                ) : (
-                  <div className="flex-1 flex items-center justify-center">
-                    <div className="text-center text-muted-foreground">
-                      <MessageCircle className="h-12 w-12 mx-auto mb-4 opacity-50" />
-                      <p>{isAdmin ? 'Select a broker to start chatting' : 'Loading chat...'}</p>
-                    </div>
-                  </div>
-                )}
-              </Card>
-            </div>
-          </div>
-        </TabsContent>
-      </Tabs>
+        </div>
+      </div>
     </div>
   );
 };
