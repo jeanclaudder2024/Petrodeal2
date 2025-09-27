@@ -152,6 +152,15 @@ const NewTicket = () => {
     // Check file sizes
     if (attachments) {
       for (let i = 0; i < attachments.length; i++) {
+        const ext = attachments[i].name.split('.').pop()?.toLowerCase();
+        if (!['pdf', 'jpg', 'jpeg', 'png'].includes(ext || '')) {
+          toast({
+            title: "Validation Error",
+            description: `File type not allowed: ${attachments[i].name}`,
+            variant: "destructive",
+          });
+          return false;
+        }
         if (attachments[i].size > 10 * 1024 * 1024) { // 10MB
           toast({
             title: "Validation Error",
@@ -197,7 +206,33 @@ const NewTicket = () => {
 
       if (ticketError) throw ticketError;
 
-      // TODO: Handle file uploads to storage if attachments exist
+      let attachmentUrls: string[] = [];
+      if (attachments && attachments.length > 0) {
+        for (let i = 0; i < attachments.length; i++) {
+          const file = attachments[i];
+          const ext = file.name.split('.').pop()?.toLowerCase();
+          const fileName = `ticket_${ticketData.id}_${Date.now()}_${i}.${ext}`;
+          const { data: uploadData, error: uploadError } = await supabase.storage
+            .from('support-attachments')
+            .upload(fileName, file);
+          if (!uploadError && uploadData) {
+            const { data: { publicUrl } } = supabase.storage
+              .from('support-attachments')
+              .getPublicUrl(fileName);
+            attachmentUrls.push(publicUrl);
+          }
+        }
+      }
+      // Save attachment URLs to the first message (or ticket record if you prefer)
+      if (attachmentUrls.length > 0) {
+        await db.from('support_ticket_messages').insert({
+          ticket_id: ticketData.id,
+          message: '[User uploaded attachments]',
+          user_id: user?.id || null,
+          is_internal: false,
+          attachments: attachmentUrls,
+        });
+      }
 
       // Send notification email
       await supabase.functions.invoke('send-support-notification', {
@@ -336,12 +371,12 @@ const NewTicket = () => {
                 id="attachments"
                 type="file"
                 multiple
-                accept=".pdf,.jpg,.jpeg,.png,.docx"
+                accept=".pdf,.jpg,.jpeg,.png"
                 onChange={(e) => setAttachments(e.target.files)}
                 className="file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:text-sm file:font-medium file:bg-primary file:text-primary-foreground hover:file:bg-primary/90"
               />
               <p className="text-sm text-muted-foreground mt-1">
-                Max 5 files, 10MB each. Supported: PDF, JPG, PNG, DOCX
+                Max 5 files, 10MB each. Supported: PDF, JPG, PNG
               </p>
             </div>
 

@@ -324,28 +324,22 @@ const TicketDetail = () => {
                           size="sm"
                           onClick={async () => {
                             try {
-                              // If the file is in a private bucket, generate a signed URL
+                              // Always generate a signed URL for private bucket
                               let downloadUrl = fileUrl;
-                              if (fileUrl.includes('/storage/v1/object/public/') === false) {
-                                // Try to extract bucket and path
-                                const match = fileUrl.match(/\/storage\/v1\/object\/sign\/([^/]+)\/(.+)\?/);
-                                let bucket = '', path = '';
-                                if (match) {
-                                  bucket = match[1];
-                                  path = match[2];
+                              // Extract the file path after the bucket name
+                              let filePath = null;
+                              const match = fileUrl.match(/support-attachments\/(.+)$/);
+                              if (match) {
+                                filePath = match[1];
+                              }
+                              if (filePath) {
+                                const { data, error } = await supabase.storage
+                                  .from('support-attachments')
+                                  .createSignedUrl(filePath, 60 * 60);
+                                if (!error && data?.signedUrl) {
+                                  downloadUrl = data.signedUrl;
                                 } else {
-                                  // fallback: try to parse broker-documents bucket
-                                  const parts = fileUrl.split('/broker-documents/');
-                                  if (parts.length === 2) {
-                                    bucket = 'broker-documents';
-                                    path = parts[1];
-                                  }
-                                }
-                                if (bucket && path) {
-                                  const { data, error } = await supabase.storage.from(bucket).createSignedUrl(path, 60 * 60);
-                                  if (!error && data?.signedUrl) {
-                                    downloadUrl = data.signedUrl;
-                                  }
+                                  throw error || new Error('Could not generate signed URL');
                                 }
                               }
                               window.open(downloadUrl, '_blank');
