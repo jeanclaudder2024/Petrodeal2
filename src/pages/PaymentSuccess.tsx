@@ -71,9 +71,14 @@ const PaymentSuccess = () => {
       }
 
       // Complete the registration process (user will set password on first login via email)
+      if (!registrationData.password) {
+        setError('Registration failed: Password not found. Please restart registration and enter your password.');
+        setLoading(false);
+        return;
+      }
       const { data, error: signUpError } = await supabase.auth.signUp({
         email: registrationData.email,
-        password: crypto.randomUUID(), // Random password, user will reset via email
+        password: registrationData.password, // Use the real password
         options: {
           emailRedirectTo: `${window.location.origin}/dashboard`,
           data: {

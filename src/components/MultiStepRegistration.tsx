@@ -598,7 +598,8 @@ const MultiStepRegistration = () => {
           selectedVessels: formData.selectedVessels,
           selectedPlan: formData.selectedPlan,
           billingCycle: formData.billingCycle,
-          paymentMethod: formData.paymentMethod
+          paymentMethod: formData.paymentMethod,
+          password: formData.password // Ensure password is included
         };
         
         sessionStorage.setItem('pendingRegistration', JSON.stringify(registrationData));
@@ -698,7 +699,6 @@ const MultiStepRegistration = () => {
               }
             }
           });
-
           if (emailError) {
             console.error('Custom email error:', emailError);
             toast({
@@ -718,26 +718,39 @@ const MultiStepRegistration = () => {
             description: "Account created successfully. You may need to check your email for confirmation.",
           });
         }
-
         // Insert user into subscribers table directly (frontend fallback)
         try {
           const now = new Date();
           const trialEnd = new Date(now.getTime() + 5 * 24 * 60 * 60 * 1000);
-          await supabase.from('subscribers').insert({
-            user_id: data.user.id,
-            email: data.user.email,
-            trial_start_date: now.toISOString(),
-            trial_end_date: trialEnd.toISOString(),
-            unified_trial_end_date: trialEnd.toISOString(),
-            is_trial_active: true,
-            subscribed: false,
-            subscription_tier: 'trial',
-            trial_with_subscription: true,
-            created_at: now.toISOString(),
-            updated_at: now.toISOString()
-          });
+          // Check if already in subscribers
+          const { data: subData, error: subCheckError } = await supabase
+            .from('subscribers')
+            .select('id')
+            .eq('email', data.user.email)
+            .single();
+          if (!subData) {
+            const { error: insertError } = await supabase.from('subscribers').insert({
+              user_id: data.user.id,
+              email: data.user.email,
+              trial_start_date: now.toISOString(),
+              trial_end_date: trialEnd.toISOString(),
+              unified_trial_end_date: trialEnd.toISOString(),
+              is_trial_active: true,
+              subscribed: false,
+              subscription_tier: 'trial',
+              trial_with_subscription: true,
+              created_at: now.toISOString(),
+              updated_at: now.toISOString()
+            });
+            if (insertError) {
+              console.error('Error inserting user into subscribers:', insertError);
+            }
+          }
+          if (subCheckError) {
+            console.error('Error checking subscribers table:', subCheckError);
+          }
         } catch (insertError) {
-          console.error('Error inserting user into subscribers:', insertError);
+          console.error('Error inserting/checking user in subscribers:', insertError);
         }
 
         // Check if email confirmation is required

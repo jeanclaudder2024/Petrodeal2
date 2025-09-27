@@ -10,6 +10,7 @@ import { Mail, Lock, Eye, EyeOff } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from '@/hooks/use-toast';
 import MultiStepRegistration from '@/components/MultiStepRegistration';
+import { supabase } from '@/integrations/supabase/client';
 const Auth = () => {
   const {
     user,
@@ -57,13 +58,69 @@ const Auth = () => {
         description: error.message,
         variant: "destructive"
       });
-    } else {
-      toast({
-        title: "Welcome back!",
-        description: "You have successfully signed in."
-      });
-      navigate('/dashboard');
+      setIsLoading(false);
+      return;
     }
+    // After successful login, check if user is in subscribers table
+    try {
+      const { data, error: subError } = await supabase
+        .from('subscribers')
+        .select('id')
+        .eq('email', signInData.email)
+        .single();
+      if (subError || !data) {
+        // Try to insert the user into subscribers table automatically
+        const user = supabase.auth.getUser ? (await supabase.auth.getUser()).data.user : null;
+        if (user) {
+          const now = new Date();
+          const trialEnd = new Date(now.getTime() + 5 * 24 * 60 * 60 * 1000);
+          const { error: insertError } = await supabase.from('subscribers').insert({
+            user_id: user.id,
+            email: user.email,
+            trial_start_date: now.toISOString(),
+            trial_end_date: trialEnd.toISOString(),
+            unified_trial_end_date: trialEnd.toISOString(),
+            is_trial_active: true,
+            subscribed: false,
+            subscription_tier: 'trial',
+            trial_with_subscription: true,
+            created_at: now.toISOString(),
+            updated_at: now.toISOString()
+          });
+          if (insertError) {
+            toast({
+              title: "Account Issue",
+              description: "Your account is missing a subscription record and could not be fixed automatically. Please contact support.",
+              variant: "destructive"
+            });
+            setIsLoading(false);
+            return;
+          }
+        } else {
+          toast({
+            title: "Account Issue",
+            description: "Your account is missing a subscription record. Please contact support.",
+            variant: "destructive"
+          });
+          setIsLoading(false);
+          return;
+        }
+      }
+    } catch (err) {
+      console.error('Error checking/inserting subscribers table:', err);
+      toast({
+        title: "Login Error",
+        description: "Unexpected error. Please try again.",
+        variant: "destructive"
+      });
+      setIsLoading(false);
+      return;
+    }
+    toast({
+      title: "Welcome back!",
+      description: "You have successfully signed in."
+    });
+    navigate('/dashboard');
     setIsLoading(false);
   };
   const handleResetPassword = async (e: React.FormEvent) => {
