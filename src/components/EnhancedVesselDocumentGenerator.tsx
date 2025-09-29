@@ -19,7 +19,6 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { convertAndDownloadPdf, testConvertApiConnection } from '@/utils/convertApiToPdf';
 
 interface DocumentTemplate {
   id: string;
@@ -77,26 +76,7 @@ export default function EnhancedVesselDocumentGenerator({ vessel }: VesselDocume
     }
   };
 
-  const testApiConnection = async () => {
-    setTestingApi(true);
-    try {
-      console.log('Testing ConvertAPI connection...');
-      const result = await testConvertApiConnection();
-      
-      if (result.success) {
-        toast.success('ConvertAPI connection successful!');
-        console.log('ConvertAPI test passed');
-      } else {
-        toast.error(`ConvertAPI test failed: ${result.error}`);
-        console.error('ConvertAPI test failed:', result.error);
-      }
-    } catch (error) {
-      console.error('ConvertAPI test error:', error);
-      toast.error('ConvertAPI test failed with error');
-    } finally {
-      setTestingApi(false);
-    }
-  };
+  // PDF conversion functionality removed
 
   const previewTemplateData = async (template: DocumentTemplate) => {
     setPreviewTemplate(template.id);
@@ -145,74 +125,45 @@ export default function EnhancedVesselDocumentGenerator({ vessel }: VesselDocume
       const { data, error } = await supabase.functions.invoke('enhanced-document-processor', {
          body: {
            templateId: template.id,
-           vesselId: vessel.id,
-           format: format === 'pdf' ? 'docx' : format, // Request DOCX for PDF conversion on frontend
-           useOpenAI: useOpenAI
+           vesselId: vessel.id
          }
        });
 
       if (error) throw error;
 
       if (data.success) {
-        updateProgress('converting', 75, 'Converting to final format...');
+        updateProgress('converting', 75, 'Converting to PDF...');
         
-        await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate conversion time
-        
-        updateProgress('complete', 100, 'Document ready!');
-
-        // Show success message with stats
-        const stats = data.processing_stats;
-        const dataQuality = Math.round((stats.filled_from_data / (stats.total_placeholders || 1)) * 100);
-        
-        toast.success(`Document generated successfully!`, {
-          description: `${stats.filled_from_data}/${stats.total_placeholders} fields filled from vessel data (${dataQuality}% data quality). Original formatting preserved.`,
-          duration: 5000
-        });
-
-        // Handle downloads based on format
-        if (format === 'pdf') {
-          // For PDF format, convert DOCX to PDF using ConvertAPI
-          updateProgress('converting', 85, 'Converting to PDF using ConvertAPI...');
-          
-          try {
-            const filename = `${template.title}_${vessel.name || 'vessel'}.pdf`;
-            const conversionResult = await convertAndDownloadPdf(data.docx_url, filename);
-            
-            if (conversionResult.success) {
-              updateProgress('complete', 100, 'PDF converted and downloaded successfully!');
-              toast.success('PDF converted and downloaded successfully!');
-            } else {
-              throw new Error(conversionResult.error || 'PDF conversion failed');
-            }
-          } catch (conversionError) {
-            console.error('ConvertAPI conversion error:', conversionError);
-            toast.error('PDF conversion failed. Downloading original DOCX instead.');
-            
-            // Fallback to DOCX download
-            const link = document.createElement('a');
-            link.href = data.docx_url;
-            link.download = `${template.title}_${vessel.name || 'vessel'}.docx`;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
+        // Handle Word document from server
+        if (data.docx_base64) {
+          // Convert base64 to blob
+          const binaryString = atob(data.docx_base64);
+          const bytes = new Uint8Array(binaryString.length);
+          for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
           }
-        } else if (data.pdf_url && format === 'both') {
-          // For 'both' format, download the server-generated PDF
+          const docxBlob = new Blob([bytes], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+          
+          // Download the Word document
+          const url = URL.createObjectURL(docxBlob);
           const link = document.createElement('a');
-          link.href = data.pdf_url;
-          link.download = `${template.title}_${vessel.name || 'vessel'}.pdf`;
-          document.body.appendChild(link);
-          link.click();
-          document.body.removeChild(link);
-        }
-
-        if (data.docx_url && (format === 'docx' || format === 'both')) {
-          const link = document.createElement('a');
-          link.href = data.docx_url;
+          link.href = url;
           link.download = `${template.title}_${vessel.name || 'vessel'}.docx`;
           document.body.appendChild(link);
           link.click();
           document.body.removeChild(link);
+          URL.revokeObjectURL(url);
+          
+          updateProgress('complete', 100, 'Document ready!');
+          
+          // Show success message
+          const filledCount = Object.keys(data.filled_placeholders || {}).length;
+          toast.success(`Document generated successfully!`, {
+            description: `${filledCount} placeholders filled. Word document downloaded with all fields populated.`,
+            duration: 5000
+          });
+        } else {
+          throw new Error('Document generation failed - no document data returned');
         }
 
         // Clear progress after delay
@@ -376,7 +327,7 @@ export default function EnhancedVesselDocumentGenerator({ vessel }: VesselDocume
                           ) : (
                             <>
                               <Download className="h-4 w-4 mr-2" />
-                              Download PDF
+                              Download Word
                             </>
                           )}
                         </Button>

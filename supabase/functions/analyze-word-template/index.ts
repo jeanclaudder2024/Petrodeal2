@@ -22,9 +22,9 @@ serve(async (req) => {
     )
 
     const requestBody = await req.json()
-    const { file_url, file_name, title, description, subscription_level } = requestBody
+    const { file_url, file_name, title, description, subscription_level, skip_ai } = requestBody
 
-    console.log('Request data:', { file_url, file_name, title, description, subscription_level })
+    console.log('Request data:', { file_url, file_name, title, description, subscription_level, skip_ai })
 
     if (!file_url || !file_name || !title) {
       throw new Error('Missing required fields: file_url, file_name, or title')
@@ -51,85 +51,79 @@ serve(async (req) => {
     // Extract text from .docx file using proper JSZip parsing
     let textContent = ''
     let extractionMethod = 'unknown'
-    
     try {
       console.log('Attempting to extract text from DOCX file using JSZip...')
-      
       // Import JSZip for proper DOCX parsing
       const JSZip = (await import("https://esm.sh/jszip@3.10.1")).default;
-      
       // Load the DOCX file as a zip
       const zip = await JSZip.loadAsync(fileBuffer)
-      
-      // Get the main document content
-      const documentXml = await zip.file("word/document.xml")?.async("string")
-      
-      if (documentXml) {
-        console.log('Successfully extracted document.xml from DOCX')
-        
-        // Extract text from Word XML, preserving placeholders
-        // Word stores text in <w:t> elements
-        const textMatches = []
-        const wordTextPattern = /<w:t[^>]*>([^<]*)<\/w:t>/g
-        let match
-        
-        while ((match = wordTextPattern.exec(documentXml)) !== null) {
-          const text = match[1]
+      // List of XML files to extract text from
+      const xmlFiles = [
+        'word/document.xml',
+        'word/header1.xml', 'word/header2.xml', 'word/header3.xml',
+        'word/footer1.xml', 'word/footer2.xml', 'word/footer3.xml'
+      ];
+      let allTextSegments: string[] = [];
+      let foundAny = false;
+      for (const xmlFile of xmlFiles) {
+        const xmlContent = await zip.file(xmlFile)?.async("string");
+        if (!xmlContent) continue;
+        foundAny = true;
+        // Extract text from <w:t> elements
+        const wordTextPattern = /<w:t[^>]*>([^<]*)<\/w:t>/g;
+        let match;
+        while ((match = wordTextPattern.exec(xmlContent)) !== null) {
+          const text = match[1];
           if (text && text.trim().length > 0) {
-            textMatches.push(text)
+            allTextSegments.push(text);
           }
         }
-        
-        if (textMatches.length > 0) {
-          textContent = textMatches.join(' ')
-          extractionMethod = 'jszip_word_xml'
-          console.log('Extracted text from Word XML tags:', textMatches.length, 'segments')
-        } else {
-          // Fallback: extract all text between XML tags
-          const generalTextPattern = />([^<]+)</g
-          const generalMatches = []
-          
-          while ((match = generalTextPattern.exec(documentXml)) !== null) {
-            const text = match[1]?.trim()
+      }
+      if (allTextSegments.length > 0) {
+        textContent = allTextSegments.join(' ');
+        extractionMethod = 'jszip_word_xml_multi';
+        console.log('Extracted text from multiple Word XML files:', allTextSegments.length, 'segments');
+      } else if (foundAny) {
+        // Fallback: extract all text between XML tags from all files
+        for (const xmlFile of xmlFiles) {
+          const xmlContent = await zip.file(xmlFile)?.async("string");
+          if (!xmlContent) continue;
+          const generalTextPattern = />([^<]+)</g;
+          let match;
+          while ((match = generalTextPattern.exec(xmlContent)) !== null) {
+            const text = match[1]?.trim();
             if (text && text.length > 0 && /[a-zA-Z0-9{}[\]()_-]/.test(text)) {
-              generalMatches.push(text)
+              allTextSegments.push(text);
             }
           }
-          
-          if (generalMatches.length > 0) {
-            textContent = generalMatches.join(' ')
-            extractionMethod = 'jszip_general_xml'
-            console.log('Extracted text from general XML tags:', generalMatches.length, 'segments')
-          }
+        }
+        if (allTextSegments.length > 0) {
+          textContent = allTextSegments.join(' ');
+          extractionMethod = 'jszip_general_xml_multi';
+          console.log('Extracted text from general XML tags in multiple files:', allTextSegments.length, 'segments');
         }
       } else {
-        console.log('Could not find document.xml in DOCX file')
-        extractionMethod = 'no_document_xml'
+        console.log('Could not find any relevant XML files in DOCX');
+        extractionMethod = 'no_relevant_xml';
       }
-      
       // Clean up the extracted text while preserving placeholder characters
       textContent = textContent
         .replace(/\s+/g, ' ')
-        .trim()
-      
-      console.log(`Final extracted text (method: ${extractionMethod}):`, textContent.length, 'characters')
-      
-      // Show a sample of the extracted text for debugging
+        .trim();
+      console.log(`Final extracted text (method: ${extractionMethod}):`, textContent.length, 'characters');
       if (textContent.length > 0) {
-        const sample = textContent.substring(0, 500) + (textContent.length > 500 ? '...' : '')
-        console.log('Text sample:', sample)
+        const sample = textContent.substring(0, 500) + (textContent.length > 500 ? '...' : '');
+        console.log('Text sample:', sample);
       }
-      
       if (textContent.length === 0) {
-        console.log('WARNING: No text could be extracted from the document')
-        textContent = 'No extractable text found'
-        extractionMethod = 'no_text_found'
+        console.log('WARNING: No text could be extracted from the document');
+        textContent = 'No extractable text found';
+        extractionMethod = 'no_text_found';
       }
-      
     } catch (e) {
-      console.log('JSZip text extraction failed:', e instanceof Error ? e.message : 'Unknown error')
-      extractionMethod = 'failed'
-      textContent = 'Text extraction failed'
+      console.log('JSZip text extraction failed:', e instanceof Error ? e.message : 'Unknown error');
+      extractionMethod = 'failed';
+      textContent = 'Text extraction failed';
     }
 
     // Extract placeholders using comprehensive patterns
@@ -227,9 +221,15 @@ serve(async (req) => {
       'current_date', 'current_time', 'current_year', 'current_month', 'current_day'
     ]
 
-    // Use OpenAI to intelligently analyze placeholders and suggest mappings
-    const aiAnalysis = await analyzeWithOpenAI(placeholderArray, availableFields)
-    console.log('AI Analysis completed')
+    // Use OpenAI to intelligently analyze placeholders and suggest mappings (unless skipped)
+    let aiAnalysis = { success: false, suggestions: [], confidence_score: 0, analysis_summary: 'AI analysis skipped' };
+    
+    if (!skip_ai) {
+      aiAnalysis = await analyzeWithOpenAI(placeholderArray, availableFields)
+      console.log('AI Analysis completed')
+    } else {
+      console.log('AI Analysis skipped - using rule-based mapping only')
+    }
 
     // Combine AI suggestions with rule-based mapping
     const fieldMappings: Record<string, string> = {}
