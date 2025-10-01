@@ -14,7 +14,7 @@ import ConnectionManagement from './ConnectionManagement';
 import BrokerManagement from './BrokerManagement';
 import AIAssistant from './AIAssistant';
 import DocumentManagement from './DocumentManagement';
-import EnhancedDocumentTemplateManager from './EnhancedDocumentTemplateManager';
+import DocumentTemplateManager from './DocumentTemplateManager';
 import FilterManagement from './FilterManagement';
 import SubscriptionManagement from './SubscriptionManagement';
 import TutorialManagement from './TutorialManagement';
@@ -36,94 +36,94 @@ const AdminPanel = () => {
       </Card>
 
       <Tabs defaultValue="users" className="space-y-6">
-<TabsList
-  className="flex w-full overflow-x-auto whitespace-nowrap scrollbar-thin scrollbar-thumb-gray-400 scrollbar-track-gray-200"
->
-  <TabsTrigger value="users" className="flex items-center gap-2">
-    <Users className="h-4 w-4" />
-    Users
-  </TabsTrigger>
+        <div className="w-full bg-gray-50/50 rounded-lg p-2">
+          <TabsList className="grid w-full grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-2 h-auto p-2 bg-white shadow-sm">
+            <TabsTrigger value="users" className="flex flex-col items-center gap-1 p-3 h-auto min-h-[70px] rounded-lg transition-all duration-200 hover:bg-blue-50 hover:scale-105 data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 data-[state=active]:shadow-md">
+              <Users className="h-5 w-5" />
+              <span className="text-xs font-medium">Users</span>
+            </TabsTrigger>
 
-  <TabsTrigger value="subscriptions" className="flex items-center gap-2">
-    <CreditCard className="h-4 w-4" />
-    Subscriptions
-  </TabsTrigger>
+            <TabsTrigger value="subscriptions" className="flex flex-col items-center gap-1 p-3 h-auto min-h-[60px]">
+              <CreditCard className="h-5 w-5" />
+              <span className="text-xs font-medium">Subscriptions</span>
+            </TabsTrigger>
 
-  <TabsTrigger value="brokers" className="flex items-center gap-2">
-    <UserCheck className="h-4 w-4" />
-    Brokers
-  </TabsTrigger>
+            <TabsTrigger value="brokers" className="flex flex-col items-center gap-1 p-3 h-auto min-h-[60px]">
+              <UserCheck className="h-5 w-5" />
+              <span className="text-xs font-medium">Brokers</span>
+            </TabsTrigger>
 
-  <TabsTrigger value="vessels" className="flex items-center gap-2">
-    <Ship className="h-4 w-4" />
-    Vessels
-  </TabsTrigger>
+            <TabsTrigger value="vessels" className="flex flex-col items-center gap-1 p-3 h-auto min-h-[60px]">
+              <Ship className="h-5 w-5" />
+              <span className="text-xs font-medium">Vessels</span>
+            </TabsTrigger>
 
-  <TabsTrigger value="ports" className="flex items-center gap-2">
-    <MapPin className="h-4 w-4" />
-    Ports
-  </TabsTrigger>
+            <TabsTrigger value="ports" className="flex flex-col items-center gap-1 p-3 h-auto min-h-[60px]">
+              <MapPin className="h-5 w-5" />
+              <span className="text-xs font-medium">Ports</span>
+            </TabsTrigger>
 
-  <TabsTrigger value="companies" className="flex items-center gap-2">
-    <Building2 className="h-4 w-4" />
-    Companies
-  </TabsTrigger>
+            <TabsTrigger value="companies" className="flex flex-col items-center gap-1 p-3 h-auto min-h-[60px]">
+              <Building2 className="h-5 w-5" />
+              <span className="text-xs font-medium">Companies</span>
+            </TabsTrigger>
 
-  <TabsTrigger value="refineries" className="flex items-center gap-2">
-    <Factory className="h-4 w-4" />
-    Refineries
-  </TabsTrigger>
+            <TabsTrigger value="refineries" className="flex flex-col items-center gap-1 p-3 h-auto min-h-[60px]">
+              <Factory className="h-5 w-5" />
+              <span className="text-xs font-medium">Refineries</span>
+            </TabsTrigger>
 
-  <TabsTrigger value="connections" className="flex items-center gap-2">
-    <Ship className="h-4 w-4" />
-    Connections
-  </TabsTrigger>
+            <TabsTrigger value="connections" className="flex flex-col items-center gap-1 p-3 h-auto min-h-[60px]">
+              <Ship className="h-5 w-5" />
+              <span className="text-xs font-medium">Connections</span>
+            </TabsTrigger>
 
-  <TabsTrigger value="documents" className="flex items-center gap-2">
-    <FileText className="h-4 w-4" />
-    Documents
-  </TabsTrigger>
+            <TabsTrigger value="documents" className="flex flex-col items-center gap-1 p-3 h-auto min-h-[60px]">
+              <FileText className="h-5 w-5" />
+              <span className="text-xs font-medium">Documents</span>
+            </TabsTrigger>
 
-  <TabsTrigger value="templates" className="flex items-center gap-2">
-    <FileText className="h-4 w-4" />
-    Word Templates
-  </TabsTrigger>
+            <TabsTrigger value="templates" className="flex flex-col items-center gap-1 p-3 h-auto min-h-[60px]">
+              <FileText className="h-5 w-5" />
+              <span className="text-xs font-medium">Templates</span>
+            </TabsTrigger>
 
-  <TabsTrigger value="filters" className="flex items-center gap-2">
-    <Filter className="h-4 w-4" />
-    Filters
-  </TabsTrigger>
+            <TabsTrigger value="filters" className="flex flex-col items-center gap-1 p-3 h-auto min-h-[60px]">
+              <Filter className="h-5 w-5" />
+              <span className="text-xs font-medium">Filters</span>
+            </TabsTrigger>
 
-  <TabsTrigger value="ai-assistant" className="flex items-center gap-2">
-    <Bot className="h-4 w-4" />
-    AI Assistant
-  </TabsTrigger>
+            <TabsTrigger value="ai-assistant" className="flex flex-col items-center gap-1 p-3 h-auto min-h-[60px]">
+              <Bot className="h-5 w-5" />
+              <span className="text-xs font-medium">AI Assistant</span>
+            </TabsTrigger>
 
-  <TabsTrigger value="tutorials" className="flex items-center gap-2">
-    <Video className="h-4 w-4" />
-    Tutorials
-  </TabsTrigger>
+            <TabsTrigger value="tutorials" className="flex flex-col items-center gap-1 p-3 h-auto min-h-[60px]">
+              <Video className="h-5 w-5" />
+              <span className="text-xs font-medium">Tutorials</span>
+            </TabsTrigger>
 
-  <TabsTrigger value="landing-page" className="flex items-center gap-2">
-    <Layout className="h-4 w-4" />
-    Landing Page
-  </TabsTrigger>
+            <TabsTrigger value="landing-page" className="flex flex-col items-center gap-1 p-3 h-auto min-h-[60px]">
+              <Layout className="h-5 w-5" />
+              <span className="text-xs font-medium">Landing Page</span>
+            </TabsTrigger>
 
-  <TabsTrigger value="settings" className="flex items-center gap-2">
-    <Settings className="h-4 w-4" />
-    Settings
-  </TabsTrigger>
+            <TabsTrigger value="settings" className="flex flex-col items-center gap-1 p-3 h-auto min-h-[60px]">
+              <Settings className="h-5 w-5" />
+              <span className="text-xs font-medium">Settings</span>
+            </TabsTrigger>
 
-  <TabsTrigger value="notes" className="flex items-center gap-2">
-    <FileText className="h-4 w-4" />
-    Notes
-  </TabsTrigger>
+            <TabsTrigger value="notes" className="flex flex-col items-center gap-1 p-3 h-auto min-h-[60px]">
+              <FileText className="h-5 w-5" />
+              <span className="text-xs font-medium">Notes</span>
+            </TabsTrigger>
 
-  <TabsTrigger value="analytics" className="flex items-center gap-2">
-    <BarChart3 className="h-4 w-4" />
-    Analytics
-  </TabsTrigger>
-</TabsList>
+            <TabsTrigger value="analytics" className="flex flex-col items-center gap-1 p-3 h-auto min-h-[60px]">
+              <BarChart3 className="h-5 w-5" />
+              <span className="text-xs font-medium">Analytics</span>
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
 
         <TabsContent value="users">
@@ -163,7 +163,7 @@ const AdminPanel = () => {
         </TabsContent>
 
         <TabsContent value="templates">
-          <EnhancedDocumentTemplateManager />
+          <DocumentTemplateManager />
         </TabsContent>
 
         <TabsContent value="filters">

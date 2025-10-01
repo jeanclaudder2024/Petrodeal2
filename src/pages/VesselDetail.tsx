@@ -35,7 +35,6 @@ import {
 } from 'lucide-react';
 import { db, supabase } from '@/lib/supabase-helper';
 import LoadingFallback from '@/components/LoadingFallback';
-import EnhancedVesselDocumentGenerator from '@/components/EnhancedVesselDocumentGenerator';
 
 import VesselMap from '@/components/VesselMap';
 import { useAuth } from '@/contexts/AuthContext';
@@ -47,6 +46,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
+import VesselDocumentDownloader from '@/components/VesselDocumentDownloader';
 
 interface Vessel {
   id: string;
@@ -627,8 +627,10 @@ const VesselDetail = () => {
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
-              {/* Document Generator */}
-              <EnhancedVesselDocumentGenerator vessel={vessel} />
+              <VesselDocumentDownloader 
+                vesselImo={vessel.imo} 
+                vesselName={vessel.name} 
+              />
             </CardContent>
           </Card>
         </div>

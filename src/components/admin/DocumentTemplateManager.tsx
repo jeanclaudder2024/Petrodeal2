@@ -1,404 +1,547 @@
 import React, { useState, useEffect } from 'react';
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Textarea } from "@/components/ui/textarea";
-import { useToast } from "@/components/ui/use-toast";
-import { supabase } from "@/integrations/supabase/client";
-import { Upload, FileText, Eye, Trash2, CheckCircle, AlertCircle } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
+import { Upload, FileText, Download, Trash2, Plus, Eye, Edit, Save, X } from 'lucide-react';
+import { toast } from 'sonner';
 
 interface DocumentTemplate {
   id: string;
-  title: string;
-  description: string | null;
-  file_url: string;
-  file_name: string;
-  placeholders: any; // Changed from string[] to any to handle Json type
-  field_mappings: any; // Changed from Record<string, string> to any to handle Json type
-  analysis_result: any; // Changed to any to handle Json type
-  subscription_level: string;
+  name: string;
+  description: string;
+  placeholders: string[];
+  placeholder_mappings: Record<string, string>;
+  subscription_level: string; // basic, premium, enterprise
   is_active: boolean;
   created_at: string;
 }
 
-const DocumentTemplateManager: React.FC = () => {
+interface UserPermissions {
+  can_upload_templates: boolean;
+  can_edit_templates: boolean;
+  can_delete_templates: boolean;
+  can_process_documents: boolean;
+  max_templates: number;
+  max_documents_per_month: number;
+  plan: string;
+}
+
+interface VesselInfo {
+  id: string;
+  name: string;
+  imo: string;
+  vessel_type?: string;
+  flag?: string;
+}
+
+const API_BASE_URL = 'http://localhost:8000';
+
+export default function DocumentTemplateManager() {
   const [templates, setTemplates] = useState<DocumentTemplate[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [vessels, setVessels] = useState<VesselInfo[]>([]);
+  const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [analyzing, setAnalyzing] = useState(false);
-  const [showUploadDialog, setShowUploadDialog] = useState(false);
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [formData, setFormData] = useState({
-    title: '',
+  const [selectedTemplate, setSelectedTemplate] = useState<DocumentTemplate | null>(null);
+  const [showUploadForm, setShowUploadForm] = useState(false);
+  const [permissions, setPermissions] = useState<UserPermissions | null>(null);
+  const [editingTemplate, setEditingTemplate] = useState<DocumentTemplate | null>(null);
+  const [editForm, setEditForm] = useState({
+    name: '',
     description: '',
-    subscription_level: 'basic'
+    subscription_level: 'basic',
+    is_active: true
   });
-  const { toast } = useToast();
+  const [newTemplate, setNewTemplate] = useState({
+    name: '',
+    description: '',
+    subscription_level: 'basic',
+    file: null as File | null
+  });
 
   useEffect(() => {
     fetchTemplates();
+    fetchVessels();
+    fetchUserPermissions();
   }, []);
 
   const fetchTemplates = async () => {
     try {
-      const { data, error } = await supabase
-        .from('document_templates')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setTemplates(data || []);
+      setLoading(true);
+      const response = await fetch(`${API_BASE_URL}/templates`);
+      if (response.ok) {
+        const data = await response.json();
+        setTemplates(data);
+      } else {
+        toast.error('Failed to fetch templates');
+      }
     } catch (error) {
-      console.error('Error fetching templates:', error);
-      toast({
-        title: "Error",
-        description: "Failed to fetch document templates",
-        variant: "destructive",
-      });
+      toast.error('Error fetching templates');
+      console.error('Error:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (file) {
-      if (file.type !== 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') {
-        toast({
-          title: "Invalid File Type",
-          description: "Please select a Word document (.docx)",
-          variant: "destructive",
-        });
-        return;
+  const fetchVessels = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/vessels`);
+      if (response.ok) {
+        const data = await response.json();
+        setVessels(data);
       }
-      setSelectedFile(file);
-    }
-  };
-
-  const analyzeDocument = async () => {
-    if (!selectedFile) return;
-
-    setAnalyzing(true);
-    try {
-      // Upload file to storage first
-      const fileName = `template_${Date.now()}_${selectedFile.name}`;
-      const { data: uploadData, error: uploadError } = await supabase.storage
-        .from('document-templates')
-        .upload(fileName, selectedFile);
-
-      if (uploadError) throw uploadError;
-
-      const { data: { publicUrl } } = supabase.storage
-        .from('document-templates')
-        .getPublicUrl(fileName);
-
-      // Call edge function to analyze the document
-      const { data: analysisData, error: analysisError } = await supabase.functions.invoke('analyze-word-template', {
-        body: {
-          file_url: publicUrl,
-          file_name: selectedFile.name,
-          title: formData.title,
-          description: formData.description,
-          subscription_level: formData.subscription_level
-        }
-      });
-
-      if (analysisError) throw analysisError;
-
-      const aiAnalysis = analysisData.ai_analysis;
-      const suggestions = aiAnalysis?.suggestions || [];
-      
-      toast({
-        title: "AI Analysis Complete", 
-        description: `Found ${analysisData.placeholders?.length || 0} placeholders. AI confidence: ${aiAnalysis?.confidence_score || 0}%. ${suggestions.length} intelligent suggestions provided.`,
-      });
-
-      // Refresh templates list
-      fetchTemplates();
-      setShowUploadDialog(false);
-      resetForm();
-
     } catch (error) {
-      console.error('Error analyzing document:', error);
-      toast({
-        title: "Analysis Failed",
-        description: "Failed to analyze the document template",
-        variant: "destructive",
-      });
-    } finally {
-      setAnalyzing(false);
+      console.error('Error fetching vessels:', error);
     }
   };
 
-  const deleteTemplate = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this template?')) return;
-
+  const fetchUserPermissions = async () => {
     try {
-      const { error } = await supabase
-        .from('document_templates')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
-
-      toast({
-        title: "Template Deleted",
-        description: "Document template has been deleted successfully",
-      });
-
-      fetchTemplates();
+      const response = await fetch(`${API_BASE_URL}/user-permissions`);
+      if (response.ok) {
+        const data = await response.json();
+        setPermissions(data.permissions);
+      }
     } catch (error) {
-      console.error('Error deleting template:', error);
-      toast({
-        title: "Error",
-        description: "Failed to delete template",
-        variant: "destructive",
-      });
+      console.error('Error fetching permissions:', error);
     }
   };
 
-  const toggleActive = async (id: string, currentActive: boolean) => {
-    try {
-      const { error } = await supabase
-        .from('document_templates')
-        .update({ is_active: !currentActive })
-        .eq('id', id);
-
-      if (error) throw error;
-
-      toast({
-        title: "Status Updated",
-        description: `Template ${!currentActive ? 'activated' : 'deactivated'} successfully`,
-      });
-
-      fetchTemplates();
-    } catch (error) {
-      console.error('Error updating template status:', error);
-      toast({
-        title: "Error",
-        description: "Failed to update template status",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const resetForm = () => {
-    setFormData({
-      title: '',
-      description: '',
-      subscription_level: 'basic'
+  const handleEditTemplate = (template: DocumentTemplate) => {
+    setEditingTemplate(template);
+    setEditForm({
+      name: template.name,
+      description: template.description,
+      subscription_level: template.subscription_level,
+      is_active: template.is_active
     });
-    setSelectedFile(null);
   };
 
-  if (loading) {
-    return <div className="flex justify-center items-center p-8">Loading document templates...</div>;
-  }
+  const handleUpdateTemplate = async () => {
+    if (!editingTemplate) return;
+
+    try {
+      const formData = new FormData();
+      formData.append('name', editForm.name);
+      formData.append('description', editForm.description);
+      formData.append('subscription_level', editForm.subscription_level);
+      formData.append('is_active', editForm.is_active.toString());
+
+      const response = await fetch(`${API_BASE_URL}/templates/${editingTemplate.id}`, {
+        method: 'PUT',
+        body: formData,
+      });
+
+      if (response.ok) {
+        toast.success('Template updated successfully');
+        setEditingTemplate(null);
+        fetchTemplates();
+      } else {
+        toast.error('Failed to update template');
+      }
+    } catch (error) {
+      toast.error('Error updating template');
+      console.error('Error:', error);
+    }
+  };
+
+  const handleDeleteTemplate = async (templateId: string) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/templates/${templateId}`, {
+        method: 'DELETE',
+      });
+
+      if (response.ok) {
+        toast.success('Template deleted successfully');
+        fetchTemplates();
+      } else {
+        toast.error('Failed to delete template');
+      }
+    } catch (error) {
+      toast.error('Error deleting template');
+      console.error('Error:', error);
+    }
+  };
+
+  const handleFileUpload = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newTemplate.file) {
+      toast.error('Please select a file');
+      return;
+    }
+
+    try {
+      setUploading(true);
+      const formData = new FormData();
+      formData.append('name', newTemplate.name);
+      formData.append('description', newTemplate.description);
+      formData.append('subscription_level', newTemplate.subscription_level);
+      formData.append('template_file', newTemplate.file);
+
+      const response = await fetch(`${API_BASE_URL}/upload-template`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        toast.success('Template uploaded successfully');
+        setNewTemplate({ name: '', description: '', subscription_level: 'basic', file: null });
+        setShowUploadForm(false);
+        fetchTemplates();
+      } else {
+        toast.error('Failed to upload template');
+      }
+    } catch (error) {
+      toast.error('Error uploading template');
+      console.error('Error:', error);
+    } finally {
+      setUploading(false);
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setNewTemplate(prev => ({ ...prev, file }));
+    }
+  };
+
+  const processDocument = async (templateId: string, vesselImo: string) => {
+    try {
+      setLoading(true);
+      
+      // First, get the template file (in a real implementation, you'd fetch this from your database)
+      const templateFile = new File([''], 'template.docx', { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+      
+      const formData = new FormData();
+      formData.append('template_id', templateId);
+      formData.append('vessel_imo', vesselImo);
+      formData.append('template_file', templateFile);
+
+      const response = await fetch(`${API_BASE_URL}/process-document`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      if (response.ok) {
+        const result = await response.json();
+        if (result.success) {
+          // Download the processed document
+          window.open(`${API_BASE_URL}/download/${result.document_id}`, '_blank');
+          toast.success('Document processed and downloaded successfully');
+        } else {
+          toast.error(result.message || 'Document processing failed');
+        }
+      } else {
+        toast.error('Failed to process document');
+      }
+    } catch (error) {
+      toast.error('Error processing document');
+      console.error('Error:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h2 className="text-2xl font-bold">Document Templates</h2>
-          <p className="text-muted-foreground">
-            Manage Word document templates with placeholder analysis and data mapping
-          </p>
+          <h2 className="text-2xl font-bold">Document Template Manager</h2>
+          {permissions && (
+            <p className="text-sm text-muted-foreground">
+              Plan: {permissions.plan} | Templates: {templates.length}/{permissions.max_templates}
+            </p>
+          )}
         </div>
-        <Dialog open={showUploadDialog} onOpenChange={setShowUploadDialog}>
-          <DialogTrigger asChild>
-            <Button>
-              <Upload className="h-4 w-4 mr-2" />
-              Upload Template
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle>Upload Word Template</DialogTitle>
-              <DialogDescription>
-                Upload a Word document with placeholders. The system will analyze it and map placeholders to database fields.
-              </DialogDescription>
-            </DialogHeader>
-            <div className="space-y-4">
+        <Button 
+          onClick={() => setShowUploadForm(true)} 
+          className="flex items-center gap-2"
+          disabled={!permissions?.can_upload_templates || (permissions && templates.length >= permissions.max_templates)}
+        >
+          <Plus className="h-4 w-4" />
+          Upload Template
+        </Button>
+      </div>
+
+      {/* Upload Form Modal */}
+      {showUploadForm && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Upload New Template</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleFileUpload} className="space-y-4">
               <div>
-                <Label htmlFor="title">Template Title</Label>
+                <Label htmlFor="name">Template Name</Label>
                 <Input
-                  id="title"
-                  value={formData.title}
-                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                  placeholder="Enter template title"
+                  id="name"
+                  value={newTemplate.name}
+                  onChange={(e) => setNewTemplate(prev => ({ ...prev, name: e.target.value }))}
+                  placeholder="Enter template name"
+                  required
                 />
               </div>
               <div>
                 <Label htmlFor="description">Description</Label>
                 <Textarea
                   id="description"
-                  value={formData.description}
-                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                  placeholder="Template description"
-                  rows={3}
+                  value={newTemplate.description}
+                  onChange={(e) => setNewTemplate(prev => ({ ...prev, description: e.target.value }))}
+                  placeholder="Enter template description"
                 />
               </div>
               <div>
                 <Label htmlFor="subscription_level">Subscription Level</Label>
-                <Select
-                  value={formData.subscription_level}
-                  onValueChange={(value) => setFormData({ ...formData, subscription_level: value })}
+                <select
+                  id="subscription_level"
+                  value={newTemplate.subscription_level}
+                  onChange={(e) => setNewTemplate(prev => ({ ...prev, subscription_level: e.target.value }))}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                 >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="basic">Basic</SelectItem>
-                    <SelectItem value="professional">Professional</SelectItem>
-                    <SelectItem value="enterprise">Enterprise</SelectItem>
-                  </SelectContent>
-                </Select>
+                  <option value="basic">Basic Plan</option>
+                  <option value="premium">Premium Plan</option>
+                  <option value="enterprise">Enterprise Plan</option>
+                </select>
               </div>
               <div>
-                <Label htmlFor="file">Word Document (.docx)</Label>
+                <Label htmlFor="file">Template File (.docx)</Label>
                 <Input
                   id="file"
                   type="file"
                   accept=".docx"
-                  onChange={handleFileSelect}
+                  onChange={handleFileChange}
+                  required
                 />
               </div>
               <div className="flex gap-2">
-                <Button
-                  onClick={analyzeDocument}
-                  disabled={!selectedFile || !formData.title || analyzing}
-                  className="flex-1"
-                >
-                  {analyzing ? "Analyzing..." : "Analyze & Upload"}
+                <Button type="submit" disabled={uploading}>
+                  {uploading ? 'Uploading...' : 'Upload Template'}
                 </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => {
-                    setShowUploadDialog(false);
-                    resetForm();
-                  }}
+                <Button type="button" variant="outline" onClick={() => setShowUploadForm(false)}>
+                  Cancel
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Templates List */}
+      <div className="grid gap-4">
+        {loading ? (
+          <div className="text-center py-8">Loading templates...</div>
+        ) : templates.length === 0 ? (
+          <div className="text-center py-8 text-muted-foreground">
+            No templates found. Upload your first template to get started.
+          </div>
+        ) : (
+          templates.map((template) => (
+            <Card key={template.id}>
+              <CardHeader>
+                <div className="flex justify-between items-start">
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      <FileText className="h-5 w-5" />
+                      {template.name}
+                    </CardTitle>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      {template.description}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Badge variant={template.is_active ? "default" : "secondary"}>
+                      {template.is_active ? "Active" : "Inactive"}
+                    </Badge>
+                    <Badge variant="outline" className="capitalize">
+                      {template.subscription_level}
+                    </Badge>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setSelectedTemplate(template)}
+                    >
+                      <Eye className="h-4 w-4" />
+                    </Button>
+                    {permissions?.can_edit_templates && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleEditTemplate(template)}
+                      >
+                        <Edit className="h-4 w-4" />
+                      </Button>
+                    )}
+                    {permissions?.can_delete_templates && (
+                      <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                          <Button variant="outline" size="sm">
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                          <AlertDialogHeader>
+                            <AlertDialogTitle>Delete Template</AlertDialogTitle>
+                            <AlertDialogDescription>
+                              Are you sure you want to delete "{template.name}" ({template.subscription_level} plan)? This action cannot be undone.
+                            </AlertDialogDescription>
+                          </AlertDialogHeader>
+                          <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction
+                              onClick={() => handleDeleteTemplate(template.id)}
+                              className="bg-red-600 hover:bg-red-700"
+                            >
+                              Delete
+                            </AlertDialogAction>
+                          </AlertDialogFooter>
+                        </AlertDialogContent>
+                      </AlertDialog>
+                    )}
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  <div>
+                    <h4 className="font-medium mb-2">Placeholders:</h4>
+                    <div className="flex flex-wrap gap-2">
+                      {template.placeholders.map((placeholder) => (
+                        <Badge key={placeholder} variant="outline">
+                          {placeholder}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                  
+                  <div>
+                    <h4 className="font-medium mb-2">Test with Vessel:</h4>
+                    <div className="flex gap-2">
+                      <select
+                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                        onChange={(e) => {
+                          if (e.target.value) {
+                            processDocument(template.id, e.target.value);
+                          }
+                        }}
+                      >
+                        <option value="">Select a vessel to test...</option>
+                        {vessels.map((vessel) => (
+                          <option key={vessel.id} value={vessel.imo}>
+                            {vessel.name} (IMO: {vessel.imo})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))
+        )}
+      </div>
+
+      {/* Template Details Modal */}
+      {selectedTemplate && (
+        <Card>
+          <CardHeader>
+            <div className="flex justify-between items-center">
+              <CardTitle>Template Details: {selectedTemplate.name}</CardTitle>
+              <Button variant="outline" onClick={() => setSelectedTemplate(null)}>
+                Close
+              </Button>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              <div>
+                <h4 className="font-medium">Description:</h4>
+                <p className="text-sm text-muted-foreground">{selectedTemplate.description}</p>
+              </div>
+              <div>
+                <h4 className="font-medium">Placeholders:</h4>
+                <div className="grid grid-cols-2 gap-4 mt-2">
+                  {selectedTemplate.placeholders.map((placeholder) => (
+                    <div key={placeholder} className="flex justify-between items-center p-2 border rounded">
+                      <span className="font-mono text-sm">{placeholder}</span>
+                      <Badge variant="outline" className="text-xs">
+                        {selectedTemplate.placeholder_mappings[placeholder] || 'Not mapped'}
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Edit Template Dialog */}
+      {editingTemplate && (
+        <Dialog open={!!editingTemplate} onOpenChange={() => setEditingTemplate(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Edit Template: {editingTemplate.name}</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div>
+                <Label htmlFor="edit-name">Template Name</Label>
+                <Input
+                  id="edit-name"
+                  value={editForm.name}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, name: e.target.value }))}
+                  placeholder="Enter template name"
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit-description">Description</Label>
+                <Textarea
+                  id="edit-description"
+                  value={editForm.description}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, description: e.target.value }))}
+                  placeholder="Enter template description"
+                />
+              </div>
+              <div>
+                <Label htmlFor="edit-subscription-level">Subscription Level</Label>
+                <select
+                  id="edit-subscription-level"
+                  value={editForm.subscription_level}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, subscription_level: e.target.value }))}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
                 >
+                  <option value="basic">Basic Plan</option>
+                  <option value="premium">Premium Plan</option>
+                  <option value="enterprise">Enterprise Plan</option>
+                </select>
+              </div>
+              <div className="flex items-center space-x-2">
+                <input
+                  type="checkbox"
+                  id="edit-active"
+                  checked={editForm.is_active}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, is_active: e.target.checked }))}
+                />
+                <Label htmlFor="edit-active">Active</Label>
+              </div>
+              <div className="flex gap-2">
+                <Button onClick={handleUpdateTemplate} className="flex items-center gap-2">
+                  <Save className="h-4 w-4" />
+                  Save Changes
+                </Button>
+                <Button variant="outline" onClick={() => setEditingTemplate(null)}>
                   Cancel
                 </Button>
               </div>
             </div>
           </DialogContent>
         </Dialog>
-      </div>
-
-      <div className="grid gap-6">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Template</TableHead>
-              <TableHead>Placeholders</TableHead>
-              <TableHead>Analysis</TableHead>
-              <TableHead>Permission</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {templates.map((template) => (
-              <TableRow key={template.id}>
-                <TableCell>
-                  <div className="space-y-1">
-                    <div className="font-medium">{template.title}</div>
-                    <div className="text-sm text-muted-foreground">{template.description}</div>
-                    <div className="text-xs text-muted-foreground">{template.file_name}</div>
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <div className="space-y-1">
-                    <div className="text-sm font-medium">
-                      {Array.isArray(template.placeholders) ? template.placeholders.length : 0} placeholders
-                    </div>
-                    <div className="flex flex-wrap gap-1">
-                      {Array.isArray(template.placeholders) && template.placeholders.slice(0, 3).map((placeholder: string, index: number) => (
-                        <Badge key={index} variant="secondary" className="text-xs">
-                          {placeholder}
-                        </Badge>
-                      ))}
-                      {Array.isArray(template.placeholders) && template.placeholders.length > 3 && (
-                        <Badge variant="outline" className="text-xs">
-                          +{template.placeholders.length - 3} more
-                        </Badge>
-                      )}
-                    </div>
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <div className="space-y-2">
-                    <div className="flex items-center gap-2">
-                      <CheckCircle className="h-4 w-4 text-green-500" />
-                      <span className="text-sm">
-                        {template.analysis_result?.matched_fields?.length || 0} matched
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <AlertCircle className="h-4 w-4 text-orange-500" />
-                      <span className="text-sm">
-                        {template.analysis_result?.missing_fields?.length || 0} missing
-                      </span>
-                    </div>
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <Badge variant="outline">
-                    {template.subscription_level}
-                  </Badge>
-                </TableCell>
-                <TableCell>
-                  <Badge variant={template.is_active ? "default" : "secondary"}>
-                    {template.is_active ? "Active" : "Inactive"}
-                  </Badge>
-                </TableCell>
-                <TableCell>
-                  <div className="flex gap-2">
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => toggleActive(template.id, template.is_active)}
-                    >
-                      {template.is_active ? "Deactivate" : "Activate"}
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => deleteTemplate(template.id)}
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-
-        {templates.length === 0 && (
-          <Card>
-            <CardContent className="py-16">
-              <div className="text-center space-y-4">
-                <FileText className="h-12 w-12 mx-auto text-muted-foreground" />
-                <div>
-                  <h3 className="text-lg font-medium">No templates yet</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Upload your first Word document template to get started
-                  </p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-      </div>
+      )}
     </div>
   );
-};
-
-export default DocumentTemplateManager;
+}
