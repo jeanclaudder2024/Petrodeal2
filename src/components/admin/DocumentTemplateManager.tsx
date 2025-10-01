@@ -39,7 +39,7 @@ interface VesselInfo {
   flag?: string;
 }
 
-const API_BASE_URL = 'http://localhost:8000';
+const API_BASE_URL = 'https://auto-fill-1nk9.onrender.com';
 
 export default function DocumentTemplateManager() {
   const [templates, setTemplates] = useState<DocumentTemplate[]>([]);

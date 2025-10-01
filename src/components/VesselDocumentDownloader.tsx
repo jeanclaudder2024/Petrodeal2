@@ -26,7 +26,7 @@ interface VesselDocumentDownloaderProps {
   vesselName: string;
 }
 
-const API_BASE_URL = 'http://localhost:8000';
+const API_BASE_URL = 'https://auto-fill-1nk9.onrender.com';
 
 export default function VesselDocumentDownloader({ vesselImo, vesselName }: VesselDocumentDownloaderProps) {
   const [templates, setTemplates] = useState<DocumentTemplate[]>([]);
