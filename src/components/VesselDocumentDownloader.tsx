@@ -343,29 +343,13 @@ Generated on: {current_date}`;
                     
                   <div className="flex items-center gap-2">
                     {isCompleted ? (
-                      <div className="flex flex-col gap-2">
-                        <div className="flex gap-2">
-                          <Button
-                            onClick={() => downloadDocument(template.id, 'docx')}
-                            className="flex items-center gap-2"
-                            variant="default"
-                          >
-                            <FileText className="h-4 w-4" />
-                            Word (.docx)
-                          </Button>
-                          <Button
-                            onClick={() => downloadDocument(template.id, 'pdf')}
-                            className="flex items-center gap-2"
-                            variant="outline"
-                          >
-                            <Download className="h-4 w-4" />
-                            PDF
-                          </Button>
-                        </div>
-                        <p className="text-xs text-gray-500">
-                          Word file has exact template formatting
-                        </p>
-                      </div>
+                      <Button
+                        onClick={() => downloadDocument(template.id)}
+                        className="flex items-center gap-2"
+                      >
+                        <Download className="h-4 w-4" />
+                        Download PDF
+                      </Button>
                     ) : (
                       <Button
                         onClick={() => handleDownloadAttempt(template)}
