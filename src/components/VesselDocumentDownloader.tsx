@@ -202,15 +202,15 @@ Generated on: {current_date}`;
     }
   };
 
-  const downloadDocument = (templateId: string) => {
+  const downloadDocument = (templateId: string, format: string = 'pdf') => {
     const status = processingStatus[templateId];
     if (status?.download_url) {
-      const downloadUrl = `${API_BASE_URL}/download/${status.document_id}`;
+      const downloadUrl = `${API_BASE_URL}/download/${status.document_id}?format=${format}`;
       console.log('Manual download from:', downloadUrl);
       
       const link = document.createElement('a');
       link.href = downloadUrl;
-      link.download = `vessel_report_${status.document_id}.pdf`;
+      link.download = `vessel_report_${status.document_id}.${format}`;
       link.target = '_blank';
       document.body.appendChild(link);
       link.click();
@@ -341,32 +341,48 @@ Generated on: {current_date}`;
                       </div>
                     </div>
                     
-                    <div className="flex items-center gap-2">
-                      {isCompleted ? (
-                        <Button
-                          onClick={() => downloadDocument(template.id)}
-                          className="flex items-center gap-2"
-                        >
-                          <Download className="h-4 w-4" />
-                          Download
-                        </Button>
-                      ) : (
-                        <Button
-                          onClick={() => handleDownloadAttempt(template)}
-                          disabled={isProcessing || !canDownload}
-                          className={`flex items-center gap-2 ${!canDownload ? 'opacity-50' : ''}`}
-                        >
-                          {isProcessing ? (
-                            <Loader2 className="h-4 w-4 animate-spin" />
-                          ) : !canDownload ? (
-                            <Lock className="h-4 w-4" />
-                          ) : (
+                  <div className="flex items-center gap-2">
+                    {isCompleted ? (
+                      <div className="flex flex-col gap-2">
+                        <div className="flex gap-2">
+                          <Button
+                            onClick={() => downloadDocument(template.id, 'docx')}
+                            className="flex items-center gap-2"
+                            variant="default"
+                          >
                             <FileText className="h-4 w-4" />
-                          )}
-                          {isProcessing ? 'Processing...' : !canDownload ? 'Locked' : 'Download'}
-                        </Button>
-                      )}
-                    </div>
+                            Word (.docx)
+                          </Button>
+                          <Button
+                            onClick={() => downloadDocument(template.id, 'pdf')}
+                            className="flex items-center gap-2"
+                            variant="outline"
+                          >
+                            <Download className="h-4 w-4" />
+                            PDF
+                          </Button>
+                        </div>
+                        <p className="text-xs text-gray-500">
+                          Word file has exact template formatting
+                        </p>
+                      </div>
+                    ) : (
+                      <Button
+                        onClick={() => handleDownloadAttempt(template)}
+                        disabled={isProcessing || !canDownload}
+                        className={`flex items-center gap-2 ${!canDownload ? 'opacity-50' : ''}`}
+                      >
+                        {isProcessing ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : !canDownload ? (
+                          <Lock className="h-4 w-4" />
+                        ) : (
+                          <FileText className="h-4 w-4" />
+                        )}
+                        {isProcessing ? 'Processing...' : !canDownload ? 'Locked' : 'Download'}
+                      </Button>
+                    )}
+                  </div>
                   </div>
                 );
               })}
