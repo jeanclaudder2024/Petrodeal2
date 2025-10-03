@@ -45,21 +45,30 @@ export default function VesselDocumentDownloader({ vesselImo, vesselName }: Vess
       const response = await fetch(`${API_BASE_URL}/health`);
       if (response.ok) {
         const data = await response.json();
-        console.log('API Health Check:', data);
+        console.log('✅ API Health Check:', data);
+        toast.success('API connection successful');
       } else {
-        console.error('API Health Check Failed:', response.status);
+        console.error('❌ API Health Check Failed:', response.status);
+        toast.error(`API Health Check Failed: ${response.status}`);
       }
     } catch (error) {
-      console.error('API Connection Error:', error);
+      console.error('❌ API Connection Error:', error);
+      toast.error(`API Connection Error: ${error}`);
     }
   };
 
   const fetchTemplates = async () => {
     try {
       setLoading(true);
+      console.log('🔄 Fetching templates from:', `${API_BASE_URL}/templates`);
+      
       const response = await fetch(`${API_BASE_URL}/templates`);
+      console.log('📡 Templates response status:', response.status);
+      
       if (response.ok) {
         const data = await response.json();
+        console.log('📋 Raw templates data:', data);
+        
         // Filter templates based on user's subscription level
         const filteredTemplates = data.filter((template: DocumentTemplate) => {
           if (!template.is_active) return false;
@@ -71,13 +80,23 @@ export default function VesselDocumentDownloader({ vesselImo, vesselName }: Vess
           
           return false;
         });
+        
+        console.log('✅ Filtered templates:', filteredTemplates);
         setTemplates(filteredTemplates);
+        
+        if (filteredTemplates.length === 0) {
+          toast.warning('No templates available for your subscription level');
+        } else {
+          toast.success(`Loaded ${filteredTemplates.length} template(s)`);
+        }
       } else {
-        toast.error('Failed to fetch document templates');
+        const errorText = await response.text();
+        console.error('❌ Templates fetch failed:', response.status, errorText);
+        toast.error(`Failed to fetch templates: ${response.status}`);
       }
     } catch (error) {
-      toast.error('Error fetching document templates');
-      console.error('Error:', error);
+      console.error('❌ Templates fetch error:', error);
+      toast.error(`Error fetching templates: ${error}`);
     } finally {
       setLoading(false);
     }
@@ -85,6 +104,8 @@ export default function VesselDocumentDownloader({ vesselImo, vesselName }: Vess
 
   const processDocument = async (templateId: string, templateName: string) => {
     try {
+      console.log('🚀 Starting document processing for:', templateName, 'ID:', templateId);
+      
       // Set processing status
       setProcessingStatus(prev => ({
         ...prev,
@@ -116,13 +137,23 @@ Generated on: {current_date}`;
       formData.append('vessel_imo', vesselImo);
       formData.append('template_file', templateFile);
 
+      console.log('📤 Sending request to:', `${API_BASE_URL}/process-document`);
+      console.log('📋 Form data:', {
+        template_id: templateId,
+        vessel_imo: vesselImo,
+        template_file: templateFile.name
+      });
+
       const response = await fetch(`${API_BASE_URL}/process-document`, {
         method: 'POST',
         body: formData,
       });
 
+      console.log('📡 Process document response status:', response.status);
+
       if (response.ok) {
         const result = await response.json();
+        console.log('✅ Process document result:', result);
         
         if (result.success) {
           setProcessingStatus(prev => ({
@@ -151,6 +182,7 @@ Generated on: {current_date}`;
             document.body.removeChild(link);
           }, 1000);
         } else {
+          console.error('❌ Document processing failed:', result);
           setProcessingStatus(prev => ({
             ...prev,
             [templateId]: {
@@ -162,15 +194,17 @@ Generated on: {current_date}`;
           toast.error(result.message || 'Document processing failed');
         }
       } else {
+        const errorText = await response.text();
+        console.error('❌ Process document failed:', response.status, errorText);
         setProcessingStatus(prev => ({
           ...prev,
           [templateId]: {
             document_id: '',
             status: 'failed',
-            message: 'Failed to process document'
+            message: `Failed to process document (${response.status})`
           }
         }));
-        toast.error('Failed to process document');
+        toast.error(`Failed to process document: ${response.status}`);
       }
     } catch (error) {
       setProcessingStatus(prev => ({
@@ -243,15 +277,33 @@ Generated on: {current_date}`;
 
   return (
     <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Download className="h-5 w-5" />
-          Document Downloads
-        </CardTitle>
-        <p className="text-sm text-muted-foreground">
-          Generate and download documents for {vesselName} (IMO: {vesselImo})
-        </p>
-      </CardHeader>
+       <CardHeader>
+         <CardTitle className="flex items-center gap-2">
+           <Download className="h-5 w-5" />
+           Document Downloads
+         </CardTitle>
+         <p className="text-sm text-muted-foreground">
+           Generate and download documents for {vesselName} (IMO: {vesselImo})
+         </p>
+         <div className="flex gap-2 mt-2">
+           <Button 
+             onClick={testApiConnection} 
+             variant="outline" 
+             size="sm"
+             className="text-xs"
+           >
+             Test API Connection
+           </Button>
+           <Button 
+             onClick={fetchTemplates} 
+             variant="outline" 
+             size="sm"
+             className="text-xs"
+           >
+             Refresh Templates
+           </Button>
+         </div>
+       </CardHeader>
       <CardContent>
         {templates.length === 0 ? (
           <div className="text-center py-8 text-muted-foreground">
