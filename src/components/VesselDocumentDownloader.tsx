@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Download, FileText, Loader2, CheckCircle, XCircle } from 'lucide-react';
+import { Download, FileText, Loader2, CheckCircle, XCircle, Lock } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface DocumentTemplate {
@@ -10,6 +10,7 @@ interface DocumentTemplate {
   name: string;
   description: string;
   placeholders: string[];
+  subscription_level: string; // basic, premium, enterprise
   is_active: boolean;
 }
 
@@ -31,6 +32,9 @@ export default function VesselDocumentDownloader({ vesselImo, vesselName }: Vess
   const [templates, setTemplates] = useState<DocumentTemplate[]>([]);
   const [loading, setLoading] = useState(false);
   const [processingStatus, setProcessingStatus] = useState<Record<string, ProcessingStatus>>({});
+  const [userPlan, setUserPlan] = useState<string>('basic'); // This would come from your auth system
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState<DocumentTemplate | null>(null);
 
   useEffect(() => {
     fetchTemplates();
@@ -52,9 +56,27 @@ export default function VesselDocumentDownloader({ vesselImo, vesselName }: Vess
     }
   };
 
-  // Handle download attempt
+  // Check if user can download a template based on their plan
+  const canDownloadTemplate = (template: DocumentTemplate): boolean => {
+    if (template.subscription_level === 'basic') return true; // Everyone can download basic
+    if (template.subscription_level === 'premium' && ['premium', 'enterprise'].includes(userPlan)) return true;
+    if (template.subscription_level === 'enterprise' && userPlan === 'enterprise') return true;
+    return false;
+  };
+
+  // Get the required plan for a template
+  const getRequiredPlan = (template: DocumentTemplate): string => {
+    return template.subscription_level;
+  };
+
+  // Handle download attempt with permission check
   const handleDownloadAttempt = (template: DocumentTemplate) => {
-    processDocument(template.id, template.name);
+    if (canDownloadTemplate(template)) {
+      processDocument(template.id, template.name);
+    } else {
+      setSelectedTemplate(template);
+      setShowUpgradeModal(true);
+    }
   };
 
   const fetchTemplates = async () => {
@@ -63,7 +85,7 @@ export default function VesselDocumentDownloader({ vesselImo, vesselName }: Vess
       const response = await fetch(`${API_BASE_URL}/templates`);
       if (response.ok) {
         const data = await response.json();
-        // Show all active templates
+        // Show ALL templates but control download access
         const activeTemplates = data.filter((template: DocumentTemplate) => template.is_active);
         setTemplates(activeTemplates);
       } else {
@@ -180,15 +202,15 @@ Generated on: {current_date}`;
     }
   };
 
-  const downloadDocument = (templateId: string, format: string = 'pdf') => {
+  const downloadDocument = (templateId: string) => {
     const status = processingStatus[templateId];
     if (status?.download_url) {
-      const downloadUrl = `${API_BASE_URL}/download/${status.document_id}?format=${format}`;
+      const downloadUrl = `${API_BASE_URL}/download/${status.document_id}`;
       console.log('Manual download from:', downloadUrl);
       
       const link = document.createElement('a');
       link.href = downloadUrl;
-      link.download = `vessel_report_${status.document_id}.${format}`;
+      link.download = `vessel_report_${status.document_id}.pdf`;
       link.target = '_blank';
       document.body.appendChild(link);
       link.click();
@@ -247,6 +269,22 @@ Generated on: {current_date}`;
             Generate and download documents for {vesselName} (IMO: {vesselImo})
           </p>
           
+          {/* Plan Selector for Testing */}
+          <div className="mt-4 p-3 bg-gray-50 rounded-lg">
+            <label className="text-sm font-medium mb-2 block">Current Plan (for testing):</label>
+            <select
+              value={userPlan}
+              onChange={(e) => setUserPlan(e.target.value)}
+              className="px-3 py-2 border rounded-md text-sm"
+            >
+              <option value="basic">Basic Plan</option>
+              <option value="premium">Premium Plan</option>
+              <option value="enterprise">Enterprise Plan</option>
+            </select>
+            <p className="text-xs text-gray-500 mt-1">
+              Change this to test different permission levels
+            </p>
+          </div>
         </CardHeader>
         <CardContent>
           {templates.length === 0 ? (
@@ -259,9 +297,11 @@ Generated on: {current_date}`;
             <div className="space-y-4">
               {templates.map((template) => {
                 const status = processingStatus[template.id];
-              const isProcessing = status?.status === 'processing';
-              const isCompleted = status?.status === 'completed';
-              const isFailed = status?.status === 'failed';
+                const isProcessing = status?.status === 'processing';
+                const isCompleted = status?.status === 'completed';
+                const isFailed = status?.status === 'failed';
+                const canDownload = canDownloadTemplate(template);
+                const requiredPlan = getRequiredPlan(template);
 
                 return (
                   <div key={template.id} className="flex items-center justify-between p-4 border rounded-lg">
@@ -269,10 +309,24 @@ Generated on: {current_date}`;
                       <div className="flex items-center gap-3">
                         {getStatusIcon(status?.status || 'pending')}
                         <div>
-                        <div className="flex items-center gap-2">
-                          <h4 className="font-medium">{template.name}</h4>
-                        </div>
-                        <p className="text-sm text-muted-foreground">{template.description}</p>
+                          <div className="flex items-center gap-2">
+                            <h4 className="font-medium">{template.name}</h4>
+                            <Badge variant="outline" className="capitalize text-xs">
+                              {template.subscription_level}
+                            </Badge>
+                            {!canDownload && (
+                              <Badge variant="destructive" className="text-xs">
+                                <Lock className="h-3 w-3 mr-1" />
+                                {requiredPlan} required
+                              </Badge>
+                            )}
+                          </div>
+                          <p className="text-sm text-muted-foreground">{template.description}</p>
+                          {!canDownload && (
+                            <p className="text-xs text-orange-600 mt-1">
+                              Upgrade to {requiredPlan} plan to download this template
+                            </p>
+                          )}
                           {status && (
                             <div className="flex items-center gap-2 mt-1">
                               <Badge className={getStatusColor(status.status)}>
@@ -287,46 +341,32 @@ Generated on: {current_date}`;
                       </div>
                     </div>
                     
-                  <div className="flex items-center gap-2">
-                    {isCompleted ? (
-                      <div className="flex flex-col gap-2">
-                        <div className="flex gap-2">
-                          <Button
-                            onClick={() => downloadDocument(template.id, 'docx')}
-                            className="flex items-center gap-2"
-                            variant="default"
-                          >
+                    <div className="flex items-center gap-2">
+                      {isCompleted ? (
+                        <Button
+                          onClick={() => downloadDocument(template.id)}
+                          className="flex items-center gap-2"
+                        >
+                          <Download className="h-4 w-4" />
+                          Download
+                        </Button>
+                      ) : (
+                        <Button
+                          onClick={() => handleDownloadAttempt(template)}
+                          disabled={isProcessing || !canDownload}
+                          className={`flex items-center gap-2 ${!canDownload ? 'opacity-50' : ''}`}
+                        >
+                          {isProcessing ? (
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                          ) : !canDownload ? (
+                            <Lock className="h-4 w-4" />
+                          ) : (
                             <FileText className="h-4 w-4" />
-                            Word (.docx)
-                          </Button>
-                          <Button
-                            onClick={() => downloadDocument(template.id, 'pdf')}
-                            className="flex items-center gap-2"
-                            variant="outline"
-                          >
-                            <Download className="h-4 w-4" />
-                            PDF
-                          </Button>
-                        </div>
-                        <p className="text-xs text-gray-500">
-                          Word file has exact template design
-                        </p>
-                      </div>
-                    ) : (
-                      <Button
-                        onClick={() => handleDownloadAttempt(template)}
-                        disabled={isProcessing}
-                        className="flex items-center gap-2"
-                      >
-                        {isProcessing ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : (
-                          <FileText className="h-4 w-4" />
-                        )}
-                        {isProcessing ? 'Processing...' : 'Download'}
-                      </Button>
-                    )}
-                  </div>
+                          )}
+                          {isProcessing ? 'Processing...' : !canDownload ? 'Locked' : 'Download'}
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 );
               })}
@@ -334,6 +374,75 @@ Generated on: {current_date}`;
           )}
         </CardContent>
       </Card>
+
+      {/* Upgrade Modal */}
+      {showUpgradeModal && selectedTemplate && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="p-2 bg-orange-100 rounded-full">
+                <Lock className="h-6 w-6 text-orange-600" />
+              </div>
+              <div>
+                <h3 className="text-lg font-semibold">Upgrade Required</h3>
+                <p className="text-sm text-muted-foreground">This template requires a higher plan</p>
+              </div>
+            </div>
+            
+            <div className="mb-4">
+              <p className="text-sm text-gray-600 mb-2">
+                To download <strong>"{selectedTemplate.name}"</strong>, you need to upgrade to the <strong>{selectedTemplate.subscription_level}</strong> plan.
+              </p>
+              <div className="bg-gray-50 p-3 rounded-lg">
+                <h4 className="font-medium text-sm mb-2">Current Plan Benefits:</h4>
+                <ul className="text-xs text-gray-600 space-y-1">
+                  {userPlan === 'basic' && (
+                    <>
+                      <li>✅ Basic templates</li>
+                      <li>❌ Premium templates</li>
+                      <li>❌ Enterprise templates</li>
+                    </>
+                  )}
+                  {userPlan === 'premium' && (
+                    <>
+                      <li>✅ Basic templates</li>
+                      <li>✅ Premium templates</li>
+                      <li>❌ Enterprise templates</li>
+                    </>
+                  )}
+                  {userPlan === 'enterprise' && (
+                    <>
+                      <li>✅ Basic templates</li>
+                      <li>✅ Premium templates</li>
+                      <li>✅ Enterprise templates</li>
+                    </>
+                  )}
+                </ul>
+              </div>
+            </div>
+            
+            <div className="flex gap-3">
+              <Button
+                variant="outline"
+                onClick={() => setShowUpgradeModal(false)}
+                className="flex-1"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => {
+                  // Here you would redirect to your billing/upgrade page
+                  window.open('/billing', '_blank');
+                  setShowUpgradeModal(false);
+                }}
+                className="flex-1"
+              >
+                Upgrade Plan
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

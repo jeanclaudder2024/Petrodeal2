@@ -16,6 +16,7 @@ interface DocumentTemplate {
   description: string;
   placeholders: string[];
   placeholder_mappings: Record<string, string>;
+  subscription_level: string; // basic, premium, enterprise
   is_active: boolean;
   created_at: string;
 }
@@ -52,11 +53,13 @@ export default function DocumentTemplateManager() {
   const [editForm, setEditForm] = useState({
     name: '',
     description: '',
+    subscription_level: 'basic',
     is_active: true
   });
   const [newTemplate, setNewTemplate] = useState({
     name: '',
     description: '',
+    subscription_level: 'basic',
     file: null as File | null
   });
 
@@ -113,6 +116,7 @@ export default function DocumentTemplateManager() {
     setEditForm({
       name: template.name,
       description: template.description,
+      subscription_level: template.subscription_level,
       is_active: template.is_active
     });
   };
@@ -122,9 +126,10 @@ export default function DocumentTemplateManager() {
 
     try {
       const formData = new FormData();
-    formData.append('name', editForm.name);
-    formData.append('description', editForm.description);
-    formData.append('is_active', editForm.is_active.toString());
+      formData.append('name', editForm.name);
+      formData.append('description', editForm.description);
+      formData.append('subscription_level', editForm.subscription_level);
+      formData.append('is_active', editForm.is_active.toString());
 
       const response = await fetch(`${API_BASE_URL}/templates/${editingTemplate.id}`, {
         method: 'PUT',
@@ -172,9 +177,10 @@ export default function DocumentTemplateManager() {
     try {
       setUploading(true);
       const formData = new FormData();
-    formData.append('name', newTemplate.name);
-    formData.append('description', newTemplate.description);
-    formData.append('template_file', newTemplate.file);
+      formData.append('name', newTemplate.name);
+      formData.append('description', newTemplate.description);
+      formData.append('subscription_level', newTemplate.subscription_level);
+      formData.append('template_file', newTemplate.file);
 
       const response = await fetch(`${API_BASE_URL}/upload-template`, {
         method: 'POST',
@@ -291,6 +297,19 @@ export default function DocumentTemplateManager() {
                 />
               </div>
               <div>
+                <Label htmlFor="subscription_level">Subscription Level</Label>
+                <select
+                  id="subscription_level"
+                  value={newTemplate.subscription_level}
+                  onChange={(e) => setNewTemplate(prev => ({ ...prev, subscription_level: e.target.value }))}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <option value="basic">Basic Plan</option>
+                  <option value="premium">Premium Plan</option>
+                  <option value="enterprise">Enterprise Plan</option>
+                </select>
+              </div>
+              <div>
                 <Label htmlFor="file">Template File (.docx)</Label>
                 <Input
                   id="file"
@@ -339,6 +358,9 @@ export default function DocumentTemplateManager() {
                     <Badge variant={template.is_active ? "default" : "secondary"}>
                       {template.is_active ? "Active" : "Inactive"}
                     </Badge>
+                    <Badge variant="outline" className="capitalize">
+                      {template.subscription_level}
+                    </Badge>
                     <Button
                       variant="outline"
                       size="sm"
@@ -365,9 +387,9 @@ export default function DocumentTemplateManager() {
                         <AlertDialogContent>
                           <AlertDialogHeader>
                             <AlertDialogTitle>Delete Template</AlertDialogTitle>
-        <AlertDialogDescription>
-          Are you sure you want to delete "{template.name}"? This action cannot be undone.
-        </AlertDialogDescription>
+                            <AlertDialogDescription>
+                              Are you sure you want to delete "{template.name}" ({template.subscription_level} plan)? This action cannot be undone.
+                            </AlertDialogDescription>
                           </AlertDialogHeader>
                           <AlertDialogFooter>
                             <AlertDialogCancel>Cancel</AlertDialogCancel>
@@ -484,6 +506,19 @@ export default function DocumentTemplateManager() {
                   onChange={(e) => setEditForm(prev => ({ ...prev, description: e.target.value }))}
                   placeholder="Enter template description"
                 />
+              </div>
+              <div>
+                <Label htmlFor="edit-subscription-level">Subscription Level</Label>
+                <select
+                  id="edit-subscription-level"
+                  value={editForm.subscription_level}
+                  onChange={(e) => setEditForm(prev => ({ ...prev, subscription_level: e.target.value }))}
+                  className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  <option value="basic">Basic Plan</option>
+                  <option value="premium">Premium Plan</option>
+                  <option value="enterprise">Enterprise Plan</option>
+                </select>
               </div>
               <div className="flex items-center space-x-2">
                 <input
