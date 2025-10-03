@@ -203,16 +203,7 @@ Generated on: {current_date}`;
           
           // Auto-download the document
           setTimeout(() => {
-            const downloadUrl = `${API_BASE_URL}/download/${result.document_id}`;
-            console.log('Attempting to download from:', downloadUrl);
-            
-            const link = document.createElement('a');
-            link.href = downloadUrl;
-            link.download = `vessel_report_${result.document_id}.pdf`;
-            link.target = '_blank';
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
+            downloadDocumentFromAPI(result.document_id, `vessel_report_${result.document_id}.pdf`);
           }, 1000);
         } else {
           console.error('❌ Document processing failed:', result);
@@ -253,19 +244,46 @@ Generated on: {current_date}`;
     }
   };
 
-  const downloadDocument = (templateId: string) => {
-    const status = processingStatus[templateId];
-    if (status?.download_url) {
-      const downloadUrl = `${API_BASE_URL}/download/${status.document_id}`;
-      console.log('Manual download from:', downloadUrl);
+  const downloadDocumentFromAPI = async (documentId: string, filename: string) => {
+    try {
+      const downloadUrl = `${API_BASE_URL}/download/${documentId}`;
+      console.log('🔄 Fetching document from:', downloadUrl);
       
+      const response = await fetch(downloadUrl);
+      console.log('📡 Download response status:', response.status);
+      
+      if (!response.ok) {
+        throw new Error(`Download failed: ${response.status} ${response.statusText}`);
+      }
+      
+      const blob = await response.blob();
+      console.log('📄 Document blob size:', blob.size, 'bytes');
+      
+      // Create download link
+      const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
-      link.href = downloadUrl;
-      link.download = `vessel_report_${status.document_id}.pdf`;
-      link.target = '_blank';
+      link.href = url;
+      link.download = filename;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      
+      // Clean up the URL object
+      window.URL.revokeObjectURL(url);
+      
+      console.log('✅ Document downloaded successfully:', filename);
+      toast.success('Document downloaded successfully');
+      
+    } catch (error) {
+      console.error('❌ Download error:', error);
+      toast.error(`Download failed: ${error}`);
+    }
+  };
+
+  const downloadDocument = (templateId: string) => {
+    const status = processingStatus[templateId];
+    if (status?.document_id) {
+      downloadDocumentFromAPI(status.document_id, `vessel_report_${status.document_id}.pdf`);
     }
   };
 
@@ -334,6 +352,14 @@ Generated on: {current_date}`;
              className="text-xs"
            >
              Refresh Templates
+           </Button>
+           <Button 
+             onClick={() => downloadDocumentFromAPI('test-doc-id', 'test-document.pdf')} 
+             variant="outline" 
+             size="sm"
+             className="text-xs"
+           >
+             Test Download
            </Button>
          </div>
          <div className="mt-2 p-2 bg-gray-100 rounded text-xs">
