@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Download, FileText, Loader2, CheckCircle, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
+import { useAccess } from '@/contexts/AccessContext';
 
 interface DocumentTemplate {
   id: string;
@@ -32,7 +33,20 @@ export default function VesselDocumentDownloader({ vesselImo, vesselName }: Vess
   const [templates, setTemplates] = useState<DocumentTemplate[]>([]);
   const [loading, setLoading] = useState(false);
   const [processingStatus, setProcessingStatus] = useState<Record<string, ProcessingStatus>>({});
-  const [userPlan, setUserPlan] = useState<string>('premium'); // This would come from your auth system
+  const { accessType, isSubscribed } = useAccess();
+  
+  // Determine user plan based on access context
+  const getUserPlan = () => {
+    if (isSubscribed) {
+      return 'enterprise'; // If subscribed, give highest access
+    }
+    if (accessType === 'trial') {
+      return 'premium'; // Trial users get premium access
+    }
+    return 'basic'; // Default to basic
+  };
+  
+  const userPlan = getUserPlan();
 
   useEffect(() => {
     fetchTemplates();
@@ -68,17 +82,36 @@ export default function VesselDocumentDownloader({ vesselImo, vesselName }: Vess
       if (response.ok) {
         const data = await response.json();
         console.log('📋 Raw templates data:', data);
+        console.log('👤 User plan:', userPlan, 'Access type:', accessType, 'Is subscribed:', isSubscribed);
         
         // Filter templates based on user's subscription level
         const filteredTemplates = data.filter((template: DocumentTemplate) => {
+          console.log(`🔍 Checking template "${template.name}":`, {
+            is_active: template.is_active,
+            subscription_level: template.subscription_level,
+            userPlan: userPlan,
+            hasAccess: (
+              !template.is_active ? false :
+              template.subscription_level === 'basic' ? true :
+              template.subscription_level === 'premium' && ['premium', 'enterprise'].includes(userPlan) ? true :
+              template.subscription_level === 'enterprise' && userPlan === 'enterprise' ? true :
+              false
+            )
+          });
+          
           if (!template.is_active) return false;
           
-          // Check subscription level access
-          if (template.subscription_level === 'basic') return true; // Everyone can access basic
-          if (template.subscription_level === 'premium' && ['premium', 'enterprise'].includes(userPlan)) return true;
-          if (template.subscription_level === 'enterprise' && userPlan === 'enterprise') return true;
+          // TEMPORARY: Show all active templates for debugging
+          // TODO: Remove this override once subscription system is working properly
+          console.log('🚨 TEMPORARY OVERRIDE: Showing all active templates');
+          return true;
           
-          return false;
+          // Check subscription level access (commented out for debugging)
+          // if (template.subscription_level === 'basic') return true; // Everyone can access basic
+          // if (template.subscription_level === 'premium' && ['premium', 'enterprise'].includes(userPlan)) return true;
+          // if (template.subscription_level === 'enterprise' && userPlan === 'enterprise') return true;
+          // 
+          // return false;
         });
         
         console.log('✅ Filtered templates:', filteredTemplates);
@@ -302,6 +335,9 @@ Generated on: {current_date}`;
            >
              Refresh Templates
            </Button>
+         </div>
+         <div className="mt-2 p-2 bg-gray-100 rounded text-xs">
+           <strong>Debug Info:</strong> User Plan: {userPlan} | Access Type: {accessType} | Subscribed: {isSubscribed ? 'Yes' : 'No'}
          </div>
        </CardHeader>
       <CardContent>
