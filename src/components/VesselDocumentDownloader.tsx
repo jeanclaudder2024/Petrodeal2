@@ -258,21 +258,30 @@ Generated on: {current_date}`;
       
       const blob = await response.blob();
       console.log('📄 Document blob size:', blob.size, 'bytes');
+      console.log('📄 Document blob type:', blob.type);
       
-      // Create download link
+      // Ensure proper filename with extension
+      const finalFilename = filename.endsWith('.pdf') ? filename : `${filename}.pdf`;
+      
+      // Create download link with proper attributes
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = filename;
+      link.download = finalFilename;
+      link.style.display = 'none';
+      
+      // Add to DOM, click, and remove
       document.body.appendChild(link);
       link.click();
-      document.body.removeChild(link);
       
-      // Clean up the URL object
-      window.URL.revokeObjectURL(url);
+      // Clean up immediately
+      setTimeout(() => {
+        document.body.removeChild(link);
+        window.URL.revokeObjectURL(url);
+      }, 100);
       
-      console.log('✅ Document downloaded successfully:', filename);
-      toast.success('Document downloaded successfully');
+      console.log('✅ Document downloaded successfully:', finalFilename);
+      toast.success(`Document downloaded: ${finalFilename}`);
       
     } catch (error) {
       console.error('❌ Download error:', error);
