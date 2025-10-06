@@ -36,12 +36,13 @@ const BrokerVerificationWaiting = () => {
   const [loading, setLoading] = useState(true);
   const [checking, setChecking] = useState(false);
   const [profile, setProfile] = useState<BrokerProfile | null>(null);
+  const [hasCheckedMembership, setHasCheckedMembership] = useState(false);
 
   useEffect(() => {
-    if (user) {
+    if (user && !hasCheckedMembership) {
       checkVerificationStatus();
     }
-  }, [user]);
+  }, [user, hasCheckedMembership]);
 
   const checkVerificationStatus = async () => {
     try {
@@ -86,6 +87,7 @@ const BrokerVerificationWaiting = () => {
       });
     } finally {
       setLoading(false);
+      setHasCheckedMembership(true);
     }
   };
 

@@ -86,6 +86,7 @@ const BrokerDashboard = () => {
   const [newMessage, setNewMessage] = useState('');
   const [sending, setSending] = useState(false);
   const [editingProfile, setEditingProfile] = useState(false);
+  const [hasCheckedMembership, setHasCheckedMembership] = useState(false);
   const [stats, setStats] = useState({
     totalDeals: 0,
     completedDeals: 0,
@@ -287,29 +288,6 @@ const BrokerDashboard = () => {
     return <LoadingFallback />;
   }
 
-  // Check broker membership first
-  useEffect(() => {
-    const checkBrokerMembership = async () => {
-      try {
-        const { data: membershipData } = await supabase.functions.invoke('check-broker-membership');
-        
-        // If user doesn't have paid membership, redirect to membership page
-        if (!membershipData.has_membership || membershipData.payment_status !== 'paid') {
-          navigate('/broker-membership');
-          return;
-        }
-      } catch (error) {
-        console.error('Error checking broker membership:', error);
-        // If error, redirect to membership page to be safe
-        navigate('/broker-membership');
-      }
-    };
-
-    if (user) {
-      checkBrokerMembership();
-    }
-  }, [user, navigate]);
-
   // If user has no broker profile, show message
   if (!profile) {
     return (
@@ -332,6 +310,8 @@ const BrokerDashboard = () => {
       </div>
     );
   }
+
+
 
   return (
     <div className="container mx-auto px-4 py-8">
