@@ -5,7 +5,7 @@ CREATE TABLE public.broker_memberships (
   email TEXT NOT NULL,
   payment_status TEXT DEFAULT 'pending',
   stripe_session_id TEXT,
-  amount INTEGER DEFAULT 99900, -- $999 lifetime membership in cents
+  amount INTEGER DEFAULT 49900, -- $499 lifetime membership in cents (50% discount from $999)
   currency TEXT DEFAULT 'usd',
   payment_date TIMESTAMPTZ,
   membership_status TEXT DEFAULT 'pending', -- pending, active, suspended

@@ -45,6 +45,15 @@ const BrokerVerificationWaiting = () => {
 
   const checkVerificationStatus = async () => {
     try {
+      // First check if user has paid broker membership
+      const { data: membershipData } = await supabase.functions.invoke('check-broker-membership');
+      
+      if (!membershipData.has_membership || membershipData.payment_status !== 'paid') {
+        console.log('No paid membership found, redirecting to broker-membership');
+        navigate('/broker-membership');
+        return;
+      }
+
       const { data: profileData, error } = await supabase
         .from('broker_profiles')
         .select('id, full_name, company_name, verified_at, verification_notes, created_at')

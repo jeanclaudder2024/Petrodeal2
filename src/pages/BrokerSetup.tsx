@@ -195,6 +195,7 @@ const BrokerSetup = () => {
       setMembershipStatus(membershipData);
 
       if (!membershipData.has_membership || membershipData.payment_status !== 'paid') {
+        console.log('No paid membership found, redirecting to broker-membership');
         navigate('/broker-membership');
         return;
       }

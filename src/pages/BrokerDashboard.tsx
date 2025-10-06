@@ -22,6 +22,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
+import { useNavigate } from 'react-router-dom';
 import LoadingFallback from '@/components/LoadingFallback';
 import CreateDealForm from '@/components/broker/CreateDealForm';
 import DealSteps from '@/components/broker/DealSteps';
@@ -75,6 +76,7 @@ interface ChatMessage {
 const BrokerDashboard = () => {
   const { user } = useAuth();
   const { toast } = useToast();
+  const navigate = useNavigate();
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState<BrokerProfile | null>(null);
@@ -285,6 +287,29 @@ const BrokerDashboard = () => {
     return <LoadingFallback />;
   }
 
+  // Check broker membership first
+  useEffect(() => {
+    const checkBrokerMembership = async () => {
+      try {
+        const { data: membershipData } = await supabase.functions.invoke('check-broker-membership');
+        
+        // If user doesn't have paid membership, redirect to membership page
+        if (!membershipData.has_membership || membershipData.payment_status !== 'paid') {
+          navigate('/broker-membership');
+          return;
+        }
+      } catch (error) {
+        console.error('Error checking broker membership:', error);
+        // If error, redirect to membership page to be safe
+        navigate('/broker-membership');
+      }
+    };
+
+    if (user) {
+      checkBrokerMembership();
+    }
+  }, [user, navigate]);
+
   // If user has no broker profile, show message
   if (!profile) {
     return (
@@ -299,7 +324,7 @@ const BrokerDashboard = () => {
             <p className="text-muted-foreground mb-4">
               You don't have a broker profile. This dashboard is only accessible to verified brokers.
             </p>
-            <Button onClick={() => window.location.href = '/broker-membership'}>
+            <Button onClick={() => navigate('/broker-membership')}>
               Become a Broker
             </Button>
           </CardContent>

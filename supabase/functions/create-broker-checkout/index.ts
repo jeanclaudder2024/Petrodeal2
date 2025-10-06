@@ -77,7 +77,7 @@ serve(async (req) => {
               name: "Broker Lifetime Membership",
               description: "Lifetime access to broker features including deal management, verification badge, and admin support"
             },
-            unit_amount: 99900, // $999 lifetime membership
+            unit_amount: 49900, // $499 lifetime membership (50% discount from $999)
           },
           quantity: 1,
         },
@@ -96,7 +96,7 @@ serve(async (req) => {
       stripe_session_id: session.id,
       payment_status: "pending",
       membership_status: "pending",
-      amount: 99900,
+      amount: 49900,
       currency: "usd",
       updated_at: new Date().toISOString(),
     }, { onConflict: 'user_id' });

@@ -65,9 +65,10 @@ const Auth = () => {
     try {
       const { data, error: subError } = await supabase
         .from('subscribers')
-        .select('id')
+        .select('id, is_trial_active, trial_end_date, subscribed')
         .eq('email', signInData.email)
         .single();
+      
       if (subError || !data) {
         // Try to insert the user into subscribers table automatically
         const user = supabase.auth.getUser ? (await supabase.auth.getUser()).data.user : null;
@@ -88,33 +89,31 @@ const Auth = () => {
             updated_at: now.toISOString()
           });
           if (insertError) {
-            toast({
-              title: "Account Issue",
-              description: "Your account is missing a subscription record and could not be fixed automatically. Please contact support.",
-              variant: "destructive"
-            });
-            setIsLoading(false);
-            return;
+            console.error('Error creating trial record:', insertError);
+            // Don't block login for this error, just log it
           }
-        } else {
-          toast({
-            title: "Account Issue",
-            description: "Your account is missing a subscription record. Please contact support.",
-            variant: "destructive"
-          });
-          setIsLoading(false);
-          return;
+        }
+      } else {
+        // User exists, check if trial needs to be reactivated
+        const now = new Date();
+        const trialEndDate = data.trial_end_date ? new Date(data.trial_end_date) : null;
+        
+        // If trial is expired but user is not subscribed, give them a new trial
+        if (!data.subscribed && (!data.is_trial_active || (trialEndDate && trialEndDate < now))) {
+          const newTrialEnd = new Date(now.getTime() + 5 * 24 * 60 * 60 * 1000);
+          await supabase.from('subscribers').update({
+            is_trial_active: true,
+            trial_start_date: now.toISOString(),
+            trial_end_date: newTrialEnd.toISOString(),
+            unified_trial_end_date: newTrialEnd.toISOString(),
+            trial_used: false,
+            updated_at: now.toISOString()
+          }).eq('email', signInData.email);
         }
       }
     } catch (err) {
       console.error('Error checking/inserting subscribers table:', err);
-      toast({
-        title: "Login Error",
-        description: "Unexpected error. Please try again.",
-        variant: "destructive"
-      });
-      setIsLoading(false);
-      return;
+      // Don't block login for this error, just log it
     }
     toast({
       title: "Welcome back!",

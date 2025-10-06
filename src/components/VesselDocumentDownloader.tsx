@@ -4,15 +4,16 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Download, FileText, Loader2, CheckCircle, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
-import { useAccess } from '@/contexts/AccessContext';
 
 interface DocumentTemplate {
   id: string;
   name: string;
   description: string;
   placeholders: string[];
-  subscription_level: string; // basic, premium, enterprise
   is_active: boolean;
+  file_name?: string;
+  file_size?: number;
+  mime_type?: string;
 }
 
 interface ProcessingStatus {
@@ -27,109 +28,30 @@ interface VesselDocumentDownloaderProps {
   vesselName: string;
 }
 
-const API_BASE_URL = 'https://auto-fill-1nk9.onrender.com';
+const API_BASE_URL = 'http://localhost:8000';
 
 export default function VesselDocumentDownloader({ vesselImo, vesselName }: VesselDocumentDownloaderProps) {
   const [templates, setTemplates] = useState<DocumentTemplate[]>([]);
   const [loading, setLoading] = useState(false);
   const [processingStatus, setProcessingStatus] = useState<Record<string, ProcessingStatus>>({});
-  const { accessType, isSubscribed } = useAccess();
-  
-  // Determine user plan based on access context
-  const getUserPlan = () => {
-    if (isSubscribed) {
-      return 'enterprise'; // If subscribed, give highest access
-    }
-    if (accessType === 'trial') {
-      return 'premium'; // Trial users get premium access
-    }
-    return 'basic'; // Default to basic
-  };
-  
-  const userPlan = getUserPlan();
 
   useEffect(() => {
     fetchTemplates();
-    // Test API connectivity
-    testApiConnection();
   }, []);
-
-  const testApiConnection = async () => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/health`);
-      if (response.ok) {
-        const data = await response.json();
-        console.log('✅ API Health Check:', data);
-        toast.success('API connection successful');
-      } else {
-        console.error('❌ API Health Check Failed:', response.status);
-        toast.error(`API Health Check Failed: ${response.status}`);
-      }
-    } catch (error) {
-      console.error('❌ API Connection Error:', error);
-      toast.error(`API Connection Error: ${error}`);
-    }
-  };
 
   const fetchTemplates = async () => {
     try {
       setLoading(true);
-      console.log('🔄 Fetching templates from:', `${API_BASE_URL}/templates`);
-      
       const response = await fetch(`${API_BASE_URL}/templates`);
-      console.log('📡 Templates response status:', response.status);
-      
       if (response.ok) {
         const data = await response.json();
-        console.log('📋 Raw templates data:', data);
-        console.log('👤 User plan:', userPlan, 'Access type:', accessType, 'Is subscribed:', isSubscribed);
-        
-        // Filter templates based on user's subscription level
-        const filteredTemplates = data.filter((template: DocumentTemplate) => {
-          console.log(`🔍 Checking template "${template.name}":`, {
-            is_active: template.is_active,
-            subscription_level: template.subscription_level,
-            userPlan: userPlan,
-            hasAccess: (
-              !template.is_active ? false :
-              template.subscription_level === 'basic' ? true :
-              template.subscription_level === 'premium' && ['premium', 'enterprise'].includes(userPlan) ? true :
-              template.subscription_level === 'enterprise' && userPlan === 'enterprise' ? true :
-              false
-            )
-          });
-          
-          if (!template.is_active) return false;
-          
-          // TEMPORARY: Show all active templates for debugging
-          // TODO: Remove this override once subscription system is working properly
-          console.log('🚨 TEMPORARY OVERRIDE: Showing all active templates');
-          return true;
-          
-          // Check subscription level access (commented out for debugging)
-          // if (template.subscription_level === 'basic') return true; // Everyone can access basic
-          // if (template.subscription_level === 'premium' && ['premium', 'enterprise'].includes(userPlan)) return true;
-          // if (template.subscription_level === 'enterprise' && userPlan === 'enterprise') return true;
-          // 
-          // return false;
-        });
-        
-        console.log('✅ Filtered templates:', filteredTemplates);
-        setTemplates(filteredTemplates);
-        
-        if (filteredTemplates.length === 0) {
-          toast.warning('No templates available for your subscription level');
-        } else {
-          toast.success(`Loaded ${filteredTemplates.length} template(s)`);
-        }
+        setTemplates(data.filter((template: DocumentTemplate) => template.is_active));
       } else {
-        const errorText = await response.text();
-        console.error('❌ Templates fetch failed:', response.status, errorText);
-        toast.error(`Failed to fetch templates: ${response.status}`);
+        toast.error('Failed to fetch document templates');
       }
     } catch (error) {
-      console.error('❌ Templates fetch error:', error);
-      toast.error(`Error fetching templates: ${error}`);
+      toast.error('Error fetching document templates');
+      console.error('Error:', error);
     } finally {
       setLoading(false);
     }
@@ -137,8 +59,6 @@ export default function VesselDocumentDownloader({ vesselImo, vesselName }: Vess
 
   const processDocument = async (templateId: string, templateName: string) => {
     try {
-      console.log('🚀 Starting document processing for:', templateName, 'ID:', templateId);
-      
       // Set processing status
       setProcessingStatus(prev => ({
         ...prev,
@@ -149,44 +69,29 @@ export default function VesselDocumentDownloader({ vesselImo, vesselName }: Vess
         }
       }));
 
-      // Create a sample template file (in real implementation, fetch from database)
-      const templateContent = `Vessel Report for ${vesselName}
-      
-Vessel Name: {vessel_name}
-IMO: {imo}
-Vessel Type: {vessel_type}
-Flag: {flag}
-Owner: {owner}
-Operator: {operator}
-
-Generated on: {current_date}`;
-
-      const templateFile = new File([templateContent], `${templateName}.docx`, {
+      // Create a dummy file for the template_file parameter (required by API but not used)
+      const dummyFile = new File(['dummy'], 'dummy.docx', {
         type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
       });
 
       const formData = new FormData();
       formData.append('template_id', templateId);
       formData.append('vessel_imo', vesselImo);
-      formData.append('template_file', templateFile);
+      formData.append('template_file', dummyFile);
 
-      console.log('📤 Sending request to:', `${API_BASE_URL}/process-document`);
-      console.log('📋 Form data:', {
-        template_id: templateId,
-        vessel_imo: vesselImo,
-        template_file: templateFile.name
-      });
+      console.log('Processing document with template ID:', templateId, 'for vessel:', vesselImo);
 
       const response = await fetch(`${API_BASE_URL}/process-document`, {
         method: 'POST',
         body: formData,
       });
 
-      console.log('📡 Process document response status:', response.status);
+      console.log('Response status:', response.status);
+      const responseText = await response.text();
+      console.log('Response text:', responseText);
 
       if (response.ok) {
-        const result = await response.json();
-        console.log('✅ Process document result:', result);
+        const result = JSON.parse(responseText);
         
         if (result.success) {
           setProcessingStatus(prev => ({
@@ -203,10 +108,9 @@ Generated on: {current_date}`;
           
           // Auto-download the document
           setTimeout(() => {
-            downloadDocumentFromAPI(result.document_id, `vessel_report_${result.document_id}.pdf`);
+            window.open(`${API_BASE_URL}/download/${result.document_id}`, '_blank');
           }, 1000);
         } else {
-          console.error('❌ Document processing failed:', result);
           setProcessingStatus(prev => ({
             ...prev,
             [templateId]: {
@@ -216,10 +120,9 @@ Generated on: {current_date}`;
             }
           }));
           toast.error(result.message || 'Document processing failed');
+          console.error('Processing failed:', result);
         }
       } else {
-        const errorText = await response.text();
-        console.error('❌ Process document failed:', response.status, errorText);
         setProcessingStatus(prev => ({
           ...prev,
           [templateId]: {
@@ -228,7 +131,8 @@ Generated on: {current_date}`;
             message: `Failed to process document (${response.status})`
           }
         }));
-        toast.error(`Failed to process document: ${response.status}`);
+        toast.error(`Failed to process document (${response.status})`);
+        console.error('HTTP Error:', response.status, responseText);
       }
     } catch (error) {
       setProcessingStatus(prev => ({
@@ -244,55 +148,10 @@ Generated on: {current_date}`;
     }
   };
 
-  const downloadDocumentFromAPI = async (documentId: string, filename: string) => {
-    try {
-      const downloadUrl = `${API_BASE_URL}/download/${documentId}`;
-      console.log('🔄 Fetching document from:', downloadUrl);
-      
-      const response = await fetch(downloadUrl);
-      console.log('📡 Download response status:', response.status);
-      
-      if (!response.ok) {
-        throw new Error(`Download failed: ${response.status} ${response.statusText}`);
-      }
-      
-      const blob = await response.blob();
-      console.log('📄 Document blob size:', blob.size, 'bytes');
-      console.log('📄 Document blob type:', blob.type);
-      
-      // Ensure proper filename with extension
-      const finalFilename = filename.endsWith('.pdf') ? filename : `${filename}.pdf`;
-      
-      // Create download link with proper attributes
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = finalFilename;
-      link.style.display = 'none';
-      
-      // Add to DOM, click, and remove
-      document.body.appendChild(link);
-      link.click();
-      
-      // Clean up immediately
-      setTimeout(() => {
-        document.body.removeChild(link);
-        window.URL.revokeObjectURL(url);
-      }, 100);
-      
-      console.log('✅ Document downloaded successfully:', finalFilename);
-      toast.success(`Document downloaded: ${finalFilename}`);
-      
-    } catch (error) {
-      console.error('❌ Download error:', error);
-      toast.error(`Download failed: ${error}`);
-    }
-  };
-
   const downloadDocument = (templateId: string) => {
     const status = processingStatus[templateId];
-    if (status?.document_id) {
-      downloadDocumentFromAPI(status.document_id, `vessel_report_${status.document_id}.pdf`);
+    if (status?.download_url) {
+      window.open(`${API_BASE_URL}/download/${status.document_id}`, '_blank');
     }
   };
 
@@ -337,44 +196,15 @@ Generated on: {current_date}`;
 
   return (
     <Card>
-       <CardHeader>
-         <CardTitle className="flex items-center gap-2">
-           <Download className="h-5 w-5" />
-           Document Downloads
-         </CardTitle>
-         <p className="text-sm text-muted-foreground">
-           Generate and download documents for {vesselName} (IMO: {vesselImo})
-         </p>
-         <div className="flex gap-2 mt-2">
-           <Button 
-             onClick={testApiConnection} 
-             variant="outline" 
-             size="sm"
-             className="text-xs"
-           >
-             Test API Connection
-           </Button>
-           <Button 
-             onClick={fetchTemplates} 
-             variant="outline" 
-             size="sm"
-             className="text-xs"
-           >
-             Refresh Templates
-           </Button>
-           <Button 
-             onClick={() => downloadDocumentFromAPI('test-doc-id', 'test-document.pdf')} 
-             variant="outline" 
-             size="sm"
-             className="text-xs"
-           >
-             Test Download
-           </Button>
-         </div>
-         <div className="mt-2 p-2 bg-gray-100 rounded text-xs">
-           <strong>Debug Info:</strong> User Plan: {userPlan} | Access Type: {accessType} | Subscribed: {isSubscribed ? 'Yes' : 'No'}
-         </div>
-       </CardHeader>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Download className="h-5 w-5" />
+          Document Downloads
+        </CardTitle>
+        <p className="text-sm text-muted-foreground">
+          Generate and download documents for {vesselName} (IMO: {vesselImo})
+        </p>
+      </CardHeader>
       <CardContent>
         {templates.length === 0 ? (
           <div className="text-center py-8 text-muted-foreground">
@@ -396,12 +226,7 @@ Generated on: {current_date}`;
                     <div className="flex items-center gap-3">
                       {getStatusIcon(status?.status || 'pending')}
                       <div>
-                        <div className="flex items-center gap-2">
-                          <h4 className="font-medium">{template.name}</h4>
-                          <Badge variant="outline" className="capitalize text-xs">
-                            {template.subscription_level}
-                          </Badge>
-                        </div>
+                        <h4 className="font-medium">{template.name}</h4>
                         <p className="text-sm text-muted-foreground">{template.description}</p>
                         {status && (
                           <div className="flex items-center gap-2 mt-1">
@@ -437,7 +262,7 @@ Generated on: {current_date}`;
                         ) : (
                           <FileText className="h-4 w-4" />
                         )}
-                        {isProcessing ? 'Processing...' : 'Download'}
+                        {isProcessing ? 'Processing...' : 'Generate'}
                       </Button>
                     )}
                   </div>

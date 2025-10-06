@@ -116,6 +116,15 @@ serve(async (req) => {
           }
         }
 
+        // 🔧 FIX: Check if subscription is in trial period
+        const isInTrial = subscription.status === 'trialing' || 
+                         (subscription.trial_end && new Date(subscription.trial_end * 1000) > new Date());
+        
+        // 🔧 FIX: Set trial dates correctly
+        const trialEndDate = subscription.trial_end ? 
+          new Date(subscription.trial_end * 1000).toISOString() : 
+          null;
+
         // Update subscribers table
         const { error: updateError } = await supabaseClient.from("subscribers").upsert({
           email: customerEmail,
@@ -137,11 +146,11 @@ serve(async (req) => {
           user_seats: userSeats,
           api_access: apiAccess,
           real_time_analytics: realTimeAnalytics,
-          // Clear trial status since user now has paid subscription
-          is_trial_active: false,
-          trial_used: true,
-          // Clear unified trial as well
-          unified_trial_end_date: null,
+          // 🔧 FIX: Set trial status correctly
+          is_trial_active: isInTrial,
+          trial_used: !isInTrial,
+          trial_end_date: trialEndDate,
+          unified_trial_end_date: trialEndDate,
           updated_at: new Date().toISOString(),
         }, { onConflict: 'email' });
 

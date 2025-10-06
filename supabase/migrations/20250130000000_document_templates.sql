@@ -16,7 +16,6 @@ CREATE TABLE document_templates (
     mime_type VARCHAR(100) DEFAULT 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
     placeholders JSONB DEFAULT '[]'::jsonb, -- Array of placeholder names found in template
     placeholder_mappings JSONB DEFAULT '{}'::jsonb, -- Mapping of placeholders to data sources
-    subscription_level TEXT NOT NULL DEFAULT 'basic', -- basic, premium, enterprise
     is_active BOOLEAN DEFAULT true,
     created_by UUID REFERENCES auth.users(id),
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
@@ -51,29 +50,9 @@ ALTER TABLE document_templates ENABLE ROW LEVEL SECURITY;
 ALTER TABLE processed_documents ENABLE ROW LEVEL SECURITY;
 
 -- Create RLS policies for document_templates
-DROP POLICY IF EXISTS "Users can view templates based on subscription" ON document_templates;
-CREATE POLICY "Users can view templates based on subscription" ON document_templates
-    FOR SELECT USING (
-        is_active = true AND (
-            subscription_level = 'basic' OR
-            (subscription_level = 'premium' AND EXISTS (
-                SELECT 1 FROM subscribers 
-                WHERE user_id = auth.uid() 
-                AND subscribed = true 
-                AND subscription_tier IN ('premium', 'enterprise')
-            )) OR
-            (subscription_level = 'enterprise' AND EXISTS (
-                SELECT 1 FROM subscribers 
-                WHERE user_id = auth.uid() 
-                AND subscribed = true 
-                AND subscription_tier = 'enterprise'
-            ))
-        )
-    );
-
-DROP POLICY IF EXISTS "Admins can view all templates" ON document_templates;
-CREATE POLICY "Admins can view all templates" ON document_templates
-    FOR SELECT USING (has_role(auth.uid(), 'admin'::app_role));
+DROP POLICY IF EXISTS "Users can view active templates" ON document_templates;
+CREATE POLICY "Users can view active templates" ON document_templates
+    FOR SELECT USING (is_active = true);
 
 DROP POLICY IF EXISTS "Authenticated users can create templates" ON document_templates;
 CREATE POLICY "Authenticated users can create templates" ON document_templates
@@ -83,17 +62,9 @@ DROP POLICY IF EXISTS "Users can update their own templates" ON document_templat
 CREATE POLICY "Users can update their own templates" ON document_templates
     FOR UPDATE USING (auth.uid() = created_by);
 
-DROP POLICY IF EXISTS "Admins can update all templates" ON document_templates;
-CREATE POLICY "Admins can update all templates" ON document_templates
-    FOR UPDATE USING (has_role(auth.uid(), 'admin'::app_role));
-
 DROP POLICY IF EXISTS "Users can delete their own templates" ON document_templates;
 CREATE POLICY "Users can delete their own templates" ON document_templates
     FOR DELETE USING (auth.uid() = created_by);
-
-DROP POLICY IF EXISTS "Admins can delete all templates" ON document_templates;
-CREATE POLICY "Admins can delete all templates" ON document_templates
-    FOR DELETE USING (has_role(auth.uid(), 'admin'::app_role));
 
 -- Create RLS policies for processed_documents
 DROP POLICY IF EXISTS "Users can view their own processed documents" ON processed_documents;

@@ -254,12 +254,23 @@ async function updateSubscriberFromStripe(
 
     const subscriptionStatus = subscription.status === 'active' || subscription.status === 'trialing' ? 'active' : subscription.status;
     const isActive = subscriptionStatus === 'active';
+    
+    // 🔧 FIX: Check if subscription is in trial period
+    const isInTrial = subscription.status === 'trialing' || 
+                     (subscription.trial_end && new Date(subscription.trial_end * 1000) > new Date());
+    
+    // 🔧 FIX: Set trial dates correctly
+    const trialEndDate = subscription.trial_end ? 
+      new Date(subscription.trial_end * 1000).toISOString() : 
+      null;
 
     logStep("Updating subscriber from Stripe", { 
       email: customerEmail,
       tier: subscriptionTier,
       status: subscriptionStatus,
-      subscriptionId: subscription.id
+      subscriptionId: subscription.id,
+      isInTrial: isInTrial,
+      trialEndDate: trialEndDate
     });
 
     const { error } = await supabaseClient.from("subscribers").upsert({
@@ -281,9 +292,11 @@ async function updateSubscriberFromStripe(
       user_seats: userSeats,
       api_access: apiAccess,
       real_time_analytics: realTimeAnalytics,
-      // Clear trial status since user now has paid subscription
-      is_trial_active: false,
-      trial_used: true,
+      // 🔧 FIX: Set trial status correctly based on actual trial state
+      is_trial_active: isInTrial,
+      trial_used: !isInTrial,
+      trial_end_date: trialEndDate,
+      unified_trial_end_date: trialEndDate,
       updated_at: new Date().toISOString(),
     }, { onConflict: 'email' });
 
@@ -293,7 +306,8 @@ async function updateSubscriberFromStripe(
       logStep("Successfully updated subscriber from webhook", { 
         email: customerEmail,
         tier: subscriptionTier,
-        status: subscriptionStatus
+        status: subscriptionStatus,
+        isInTrial: isInTrial
       });
     }
   } catch (error) {
