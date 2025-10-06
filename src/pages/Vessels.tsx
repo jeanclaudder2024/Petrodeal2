@@ -23,10 +23,13 @@ import {
   Navigation,
   Package,
   Flag,
-  Filter
+  Filter,
+  Grid3X3,
+  List
 } from 'lucide-react';
 import { db } from '@/lib/supabase-helper';
 import LoadingFallback from '@/components/LoadingFallback';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 interface Vessel {
   id: number;
@@ -64,11 +67,13 @@ interface Vessel {
 
 const Vessels = () => {
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
   const [vessels, setVessels] = useState<Vessel[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [typeFilter, setTypeFilter] = useState('all');
+  const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
 
   useEffect(() => {
     fetchVessels();
@@ -227,6 +232,105 @@ const Vessels = () => {
     navigate(`/vessels/${vesselId}`);
   };
 
+  // Helper function to get vessel background image
+  const getVesselBackgroundImage = (vesselType: string, oilType: string) => {
+    // Use the hero oil trading image as background for all vessels
+    return '/hero-oil-trading.jpg';
+  };
+
+  // Mobile Grid Component
+  const VesselGrid = () => (
+    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      {filteredVessels.map((vessel) => {
+        const backgroundImage = getVesselBackgroundImage(vessel.vessel_type, vessel.oil_type);
+        
+        return (
+          <Card key={vessel.id} className="vessel-card hover:shadow-lg transition-all duration-300 hover:scale-105">
+            {/* Background Image */}
+            <div 
+              className="vessel-background"
+              style={{ 
+                backgroundImage: `url(${backgroundImage})`,
+                backgroundColor: 'hsl(var(--primary)/0.1)',
+                backgroundSize: 'cover',
+                backgroundPosition: 'center',
+                backgroundRepeat: 'no-repeat'
+              }}
+            />
+            
+            {/* Gradient Overlay */}
+            <div className="vessel-overlay" />
+            
+            <CardContent className="vessel-card-content">
+            {/* Header */}
+            <div className="flex items-start justify-between mb-3">
+              <div className="flex-1">
+                <h3 className="font-semibold text-base mb-1 text-foreground">{vessel.name}</h3>
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <span className="text-lg">{vessel.flag_emoji}</span>
+                  <span>{vessel.flag_country}</span>
+                </div>
+              </div>
+              <Badge 
+                variant={getStatusBadgeVariant(vessel.status)} 
+                className="text-xs shadow-sm"
+              >
+                {vessel.status}
+              </Badge>
+            </div>
+
+            {/* Vessel Info */}
+            <div className="space-y-2 mb-4">
+              <div className="flex items-center gap-2 text-sm">
+                <Ship className="h-4 w-4 text-muted-foreground" />
+                <span className="font-medium">{vessel.vessel_type}</span>
+              </div>
+              
+              <div className="flex items-center gap-2 text-sm">
+                <Navigation className="h-4 w-4 text-muted-foreground" />
+                <span>{vessel.speed || 'N/A'} kn</span>
+              </div>
+
+              <div className="flex items-center gap-2 text-sm">
+                <Package className="h-4 w-4 text-muted-foreground" />
+                <span>{vessel.oil_type} - {vessel.cargo_quantity?.toLocaleString()} bbl</span>
+              </div>
+            </div>
+
+            {/* Route Info */}
+            <div className="space-y-2 mb-4 p-3 bg-gradient-to-r from-muted/40 to-muted/20 rounded-lg border border-border/30">
+              <div className="flex items-center gap-2 text-sm">
+                <div className="p-1 bg-green-500/20 rounded-full">
+                  <MapPin className="h-3 w-3 text-green-600" />
+                </div>
+                <span className="font-medium text-foreground">From:</span>
+                <span className="text-muted-foreground">{vessel.departure_port_name}</span>
+              </div>
+              <div className="flex items-center gap-2 text-sm">
+                <div className="p-1 bg-blue-500/20 rounded-full">
+                  <MapPin className="h-3 w-3 text-blue-600" />
+                </div>
+                <span className="font-medium text-foreground">To:</span>
+                <span className="text-muted-foreground">{vessel.destination_port_name}</span>
+              </div>
+            </div>
+
+            {/* Action Button */}
+            <Button 
+              onClick={() => handleViewDetails(vessel.id)}
+              className="w-full bg-primary/90 hover:bg-primary text-white shadow-lg"
+              size="sm"
+            >
+              <Eye className="h-4 w-4 mr-2" />
+              View Details
+            </Button>
+          </CardContent>
+        </Card>
+        );
+      })}
+    </div>
+  );
+
 
 
   // Get unique vessel types and statuses for filter options
@@ -249,7 +353,7 @@ const Vessels = () => {
       </div>
 
       {/* Stats Overview */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+      <div className={`grid gap-4 mb-8 ${isMobile ? 'grid-cols-2' : 'grid-cols-1 md:grid-cols-4'}`}>
         <Card className="trading-card">
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Vessels</CardTitle>
@@ -306,7 +410,7 @@ const Vessels = () => {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div className={`grid gap-4 ${isMobile ? 'grid-cols-1' : 'grid-cols-1 md:grid-cols-3'}`}>
             <div className="relative">
               <Search className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
               <Input
@@ -344,99 +448,129 @@ const Vessels = () => {
         </CardContent>
       </Card>
 
-      {/* Vessels Table */}
+      {/* Vessels Table/Grid */}
       <Card className="trading-card">
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Ship className="h-5 w-5 text-primary" />
-            Fleet Overview ({filteredVessels.length} vessels)
-          </CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2">
+              <Ship className="h-5 w-5 text-primary" />
+              Fleet Overview ({filteredVessels.length} vessels)
+            </CardTitle>
+            
+            {/* View Mode Toggle - Only show on mobile */}
+            {isMobile && (
+              <div className="flex items-center gap-1 bg-muted/50 rounded-lg p-1">
+                <Button
+                  variant={viewMode === 'grid' ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => setViewMode('grid')}
+                  className="h-8 w-8 p-0"
+                >
+                  <Grid3X3 className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant={viewMode === 'table' ? 'default' : 'ghost'}
+                  size="sm"
+                  onClick={() => setViewMode('table')}
+                  className="h-8 w-8 p-0"
+                >
+                  <List className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Vessel Name</TableHead>
-                  <TableHead>Type</TableHead>
-                  <TableHead>Flag</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Current Route</TableHead>
-                  <TableHead>Cargo</TableHead>
-                  <TableHead>Speed</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredVessels.map((vessel) => (
-                  <TableRow key={vessel.id} className="hover:bg-muted/50">
-                    <TableCell>
-                      <div>
-                        <div className="font-semibold">{vessel.name}</div>
-                        <div className="text-sm text-muted-foreground">
-                          MMSI: {vessel.mmsi}
-                        </div>
-                        <div className="text-sm text-muted-foreground">
-                          IMO: {vessel.imo || 'N/A'}
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>{vessel.vessel_type}</TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <span className="text-lg">{vessel.flag_emoji}</span>
-                        <span className="text-sm">{vessel.flag_country}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <Badge variant={getStatusBadgeVariant(vessel.status)}>
-                        {vessel.status}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>
-                      <div className="text-sm">
-                        <div className="flex items-center gap-1">
-                          <MapPin className="h-3 w-3 text-green-600" />
-                          <span>{vessel.departure_port_name}</span>
-                        </div>
-                        <div className="text-muted-foreground flex items-center gap-1 mt-1">
-                          <span>→</span>
-                          <MapPin className="h-3 w-3 text-blue-600" />
-                          <span>{vessel.destination_port_name}</span>
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="text-sm">
-                        <div>{vessel.oil_type}</div>
-                        <div className="text-muted-foreground">
-                          {vessel.cargo_quantity?.toLocaleString()} bbl
-                        </div>
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                        <div className="flex items-center gap-1">
-                         <Navigation className="h-3 w-3 text-muted-foreground" />
-                         <span>{vessel.speed || 'N/A'} kn</span>
-                       </div>
-                    </TableCell>
-                     <TableCell>
-                       <div className="flex gap-2">
-                         <Button
-                           variant="ghost"
-                           size="sm"
-                           onClick={() => handleViewDetails(vessel.id)}
-                         >
-                           <Eye className="h-4 w-4 mr-2" />
-                           View
-                         </Button>
-                       </div>
-                     </TableCell>
+          {/* Mobile Grid View */}
+          {isMobile && viewMode === 'grid' ? (
+            <VesselGrid />
+          ) : (
+            /* Desktop Table View */
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Vessel Name</TableHead>
+                    <TableHead>Type</TableHead>
+                    <TableHead>Flag</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Current Route</TableHead>
+                    <TableHead>Cargo</TableHead>
+                    <TableHead>Speed</TableHead>
+                    <TableHead>Actions</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+                </TableHeader>
+                <TableBody>
+                  {filteredVessels.map((vessel) => (
+                    <TableRow key={vessel.id} className="hover:bg-muted/50">
+                      <TableCell>
+                        <div>
+                          <div className="font-semibold">{vessel.name}</div>
+                          <div className="text-sm text-muted-foreground">
+                            MMSI: {vessel.mmsi}
+                          </div>
+                          <div className="text-sm text-muted-foreground">
+                            IMO: {vessel.imo || 'N/A'}
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>{vessel.vessel_type}</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <span className="text-lg">{vessel.flag_emoji}</span>
+                          <span className="text-sm">{vessel.flag_country}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant={getStatusBadgeVariant(vessel.status)}>
+                          {vessel.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <div className="text-sm">
+                          <div className="flex items-center gap-1">
+                            <MapPin className="h-3 w-3 text-green-600" />
+                            <span>{vessel.departure_port_name}</span>
+                          </div>
+                          <div className="text-muted-foreground flex items-center gap-1 mt-1">
+                            <span>→</span>
+                            <MapPin className="h-3 w-3 text-blue-600" />
+                            <span>{vessel.destination_port_name}</span>
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <div className="text-sm">
+                          <div>{vessel.oil_type}</div>
+                          <div className="text-muted-foreground">
+                            {vessel.cargo_quantity?.toLocaleString()} bbl
+                          </div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                          <div className="flex items-center gap-1">
+                           <Navigation className="h-3 w-3 text-muted-foreground" />
+                           <span>{vessel.speed || 'N/A'} kn</span>
+                         </div>
+                      </TableCell>
+                       <TableCell>
+                         <div className="flex gap-2">
+                           <Button
+                             variant="ghost"
+                             size="sm"
+                             onClick={() => handleViewDetails(vessel.id)}
+                           >
+                             <Eye className="h-4 w-4 mr-2" />
+                             View
+                           </Button>
+                         </div>
+                       </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          )}
           
           {filteredVessels.length === 0 && (
             <div className="text-center py-8">
