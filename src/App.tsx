@@ -297,7 +297,7 @@ const App = () => (
               path="/broker-membership" 
               element={
                 <AppLayout>
-                  <ProtectedRoute>
+                  <ProtectedRoute requireSubscription={false}>
                     <BrokerMembership />
                   </ProtectedRoute>
                 </AppLayout>
@@ -307,7 +307,7 @@ const App = () => (
               path="/broker-setup" 
               element={
                 <AppLayout>
-                  <ProtectedRoute>
+                  <ProtectedRoute requireSubscription={false}>
                     <BrokerSetup />
                   </ProtectedRoute>
                 </AppLayout>
@@ -317,7 +317,7 @@ const App = () => (
               path="/broker-dashboard" 
               element={
                 <AppLayout>
-                  <ProtectedRoute>
+                  <ProtectedRoute requireSubscription={false}>
                     <BrokerDashboard />
                   </ProtectedRoute>
                 </AppLayout>
