@@ -39,6 +39,7 @@ const BrokerSetup = () => {
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [checkingStatus, setCheckingStatus] = useState(true);
+  const [hasCheckedMembership, setHasCheckedMembership] = useState(false);
   const [membershipStatus, setMembershipStatus] = useState<any>(null);
   const [hasProfile, setHasProfile] = useState(false);
   const [formData, setFormData] = useState({
@@ -172,10 +173,10 @@ const BrokerSetup = () => {
   ];
 
   useEffect(() => {
-    if (user) {
+    if (user && !hasCheckedMembership) {
       checkSetupStatus();
     }
-  }, [user]);
+  }, [user, hasCheckedMembership]);
 
   // Auto-populate name and email from user profile for new broker profiles
   useEffect(() => {
@@ -269,6 +270,7 @@ const BrokerSetup = () => {
       console.error('Error checking setup status:', error);
     } finally {
       setCheckingStatus(false);
+      setHasCheckedMembership(true);
     }
   };
 

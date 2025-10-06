@@ -38,6 +38,7 @@ import BrokerDetail from "./pages/BrokerDetail";
 import BrokerMembership from "./pages/BrokerMembership";
 import BrokerSetup from "./pages/BrokerSetup";
 import BrokerDashboard from "./pages/BrokerDashboard";
+import BrokerVerificationWaiting from "./pages/BrokerVerificationWaiting";
 import OilPrices from "./pages/OilPrices";
 import CompanyDetail from "./pages/CompanyDetail";
 import Profile from "./pages/Profile";
@@ -319,6 +320,16 @@ const App = () => (
                 <AppLayout>
                   <ProtectedRoute requireSubscription={false}>
                     <BrokerDashboard />
+                  </ProtectedRoute>
+                </AppLayout>
+              } 
+            />
+            <Route 
+              path="/broker-verification-waiting" 
+              element={
+                <AppLayout>
+                  <ProtectedRoute requireSubscription={false}>
+                    <BrokerVerificationWaiting />
                   </ProtectedRoute>
                 </AppLayout>
               } 
