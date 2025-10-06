@@ -9,6 +9,7 @@ import { db } from '@/lib/supabase-helper';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/contexts/AuthContext';
+import { useIsMobile } from '@/hooks/use-mobile';
 
 interface ChatMessage {
   id: string;
@@ -39,6 +40,7 @@ const FloatingAIAssistant = () => {
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
   const { user } = useAuth();
+  const isMobile = useIsMobile();
 
   useEffect(() => {
     if (user) {
@@ -207,48 +209,52 @@ const FloatingAIAssistant = () => {
     <>
       {/* Floating Button */}
       {!isOpen && (
-        <div className="fixed bottom-6 right-6 z-50">
+        <div className={`fixed z-50 ${isMobile ? 'bottom-24 right-4' : 'bottom-6 right-6'}`}>
           <Button
             onClick={() => setIsOpen(true)}
-            className={`h-14 w-14 rounded-full bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-lg hover:shadow-xl transition-all duration-300 ${
+            className={`${isMobile ? 'h-10 w-10' : 'h-14 w-14'} rounded-full bg-gradient-to-r from-primary to-primary/80 hover:from-primary/90 hover:to-primary/70 shadow-lg hover:shadow-xl transition-all duration-300 ${
               isAnimating ? 'animate-bounce' : ''
             } group relative overflow-hidden`}
           >
             <div className="absolute inset-0 bg-gradient-to-r from-white/20 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
-            <Bot className="h-7 w-7 text-white relative z-10" />
-            <Sparkles className="h-4 w-4 text-white absolute top-1 right-1 animate-pulse" />
+            <Bot className={`${isMobile ? 'h-5 w-5' : 'h-7 w-7'} text-white relative z-10`} />
+            <Sparkles className={`${isMobile ? 'h-3 w-3' : 'h-4 w-4'} text-white absolute top-1 right-1 animate-pulse`} />
           </Button>
           
-          {/* Tooltip */}
-          <div className="absolute bottom-16 right-0 bg-background border border-border rounded-lg px-3 py-2 shadow-lg opacity-0 group-hover:opacity-100 transition-all duration-300 whitespace-nowrap">
-            <div className="text-sm font-medium">AI Assistant</div>
-            <div className="text-xs text-muted-foreground">Ask me anything!</div>
-            <div className="absolute top-full right-4 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-border" />
-          </div>
+          {/* Tooltip - Hidden on mobile */}
+          {!isMobile && (
+            <div className="absolute bottom-16 right-0 bg-background border border-border rounded-lg px-3 py-2 shadow-lg opacity-0 group-hover:opacity-100 transition-all duration-300 whitespace-nowrap">
+              <div className="text-sm font-medium">AI Assistant</div>
+              <div className="text-xs text-muted-foreground">Ask me anything!</div>
+              <div className="absolute top-full right-4 w-0 h-0 border-l-4 border-r-4 border-t-4 border-transparent border-t-border" />
+            </div>
+          )}
         </div>
       )}
 
       {/* Chat Dialog */}
       <Dialog open={isOpen} onOpenChange={setIsOpen}>
         <DialogContent 
-          className={`max-w-lg transition-all duration-300 ${
-            isMinimized ? 'h-20' : 'h-[600px]'
+          className={`${isMobile ? 'max-w-full mx-4' : 'max-w-lg'} transition-all duration-300 ${
+            isMinimized ? 'h-20' : isMobile ? 'h-[80vh]' : 'h-[600px]'
           } p-0 overflow-hidden`}
         >
           {/* Header */}
-          <div className="flex items-center justify-between p-4 border-b bg-gradient-to-r from-primary/5 to-primary/10">
+          <div className={`flex items-center justify-between ${isMobile ? 'p-3' : 'p-4'} border-b bg-gradient-to-r from-primary/5 to-primary/10`}>
             <div className="flex items-center gap-3">
               <div className="relative">
-                <div className="h-10 w-10 rounded-full bg-gradient-to-r from-primary to-primary/80 flex items-center justify-center">
-                  <Bot className="h-6 w-6 text-white" />
+                <div className={`${isMobile ? 'h-8 w-8' : 'h-10 w-10'} rounded-full bg-gradient-to-r from-primary to-primary/80 flex items-center justify-center`}>
+                  <Bot className={`${isMobile ? 'h-4 w-4' : 'h-6 w-6'} text-white`} />
                 </div>
-                <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-500 rounded-full animate-pulse" />
+                <div className={`absolute -top-1 -right-1 ${isMobile ? 'w-2 h-2' : 'w-3 h-3'} bg-green-500 rounded-full animate-pulse`} />
               </div>
               <div>
-                <DialogTitle className="text-lg font-semibold">AI Assistant</DialogTitle>
-                <DialogDescription className="text-sm">
-                  Your intelligent platform companion
-                </DialogDescription>
+                <DialogTitle className={`${isMobile ? 'text-base' : 'text-lg'} font-semibold`}>AI Assistant</DialogTitle>
+                {!isMobile && (
+                  <DialogDescription className="text-sm">
+                    Your intelligent platform companion
+                  </DialogDescription>
+                )}
               </div>
             </div>
             <div className="flex items-center gap-1">
@@ -333,23 +339,23 @@ const FloatingAIAssistant = () => {
               </div>
 
               {/* Input */}
-              <div className="p-4 border-t bg-background">
+              <div className={`${isMobile ? 'p-3' : 'p-4'} border-t bg-background`}>
                 <div className="flex gap-2">
                   <Input
                     value={inputMessage}
                     onChange={(e) => setInputMessage(e.target.value)}
-                    placeholder="Ask about your platform..."
+                    placeholder={isMobile ? "Ask me anything..." : "Ask about your platform..."}
                     onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
                     disabled={isLoading}
-                    className="flex-1"
+                    className={`flex-1 ${isMobile ? 'text-base' : ''}`}
                   />
                   <Button 
                     onClick={handleSendMessage} 
                     disabled={isLoading || !inputMessage.trim()}
                     size="icon"
-                    className="bg-gradient-to-r from-primary to-primary/80"
+                    className={`bg-gradient-to-r from-primary to-primary/80 ${isMobile ? 'h-10 w-10' : ''}`}
                   >
-                    <Send className="h-4 w-4" />
+                    <Send className={`${isMobile ? 'h-4 w-4' : 'h-4 w-4'}`} />
                   </Button>
                 </div>
               </div>
