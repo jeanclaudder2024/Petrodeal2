@@ -7,12 +7,17 @@ import { ThemeProvider } from "next-themes";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { SubscriptionProvider } from "@/contexts/SubscriptionContext";
 import { AccessProvider } from "@/contexts/AccessContext";
+import { LanguageProvider } from "@/contexts/LanguageContext";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
+import { MobileLayout } from "@/components/MobileLayout";
+import { MobileBottomNav } from "@/components/MobileBottomNav";
+import { MobileHeader } from "@/components/MobileHeader";
 import FloatingAIAssistant from "@/components/FloatingAIAssistant";
 import ThemeToggle from "@/components/ThemeToggle";
 import LanguageSelector from "@/components/LanguageSelector";
 import UserProfileMenu from "@/components/UserProfileMenu";
+import { useIsMobile } from "@/hooks/use-mobile";
 import Index from "./pages/Index";
 import AboutUs from "./pages/AboutUs";
 import FutureTrading from "./pages/FutureTrading";
@@ -64,28 +69,45 @@ import ProtectedRoute from "./components/ProtectedRoute";
 
 const queryClient = new QueryClient();
 
-const AppLayout = ({ children }: { children: React.ReactNode }) => (
-  <SidebarProvider>
-    <div className="min-h-screen flex w-full light">
-      <AppSidebar />
-      <div className="flex-1">
-        <header className="h-12 flex items-center justify-between border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-4">
-          <SidebarTrigger className="ml-2" />
-          <div className="flex items-center gap-2">
-            <LanguageSelector />
-            <ThemeToggle />
-            <UserProfileMenu />
-          </div>
-        </header>
-        <main className="flex-1">
+const AppLayout = ({ children }: { children: React.ReactNode }) => {
+  const isMobile = useIsMobile();
+
+  if (isMobile) {
+    return (
+      <div className="flex flex-col h-screen bg-background">
+        <MobileHeader />
+        <main className="flex-1 overflow-auto pb-20">
           {children}
         </main>
+        <MobileBottomNav />
+        <FloatingAIAssistant />
       </div>
-    </div>
-    {/* AI Assistant available on all pages */}
-    <FloatingAIAssistant />
-  </SidebarProvider>
-);
+    );
+  }
+
+  return (
+    <SidebarProvider>
+      <div className="min-h-screen flex w-full light">
+        <AppSidebar />
+        <div className="flex-1">
+          <header className="h-12 flex items-center justify-between border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 px-4">
+            <SidebarTrigger className="ml-2" />
+            <div className="flex items-center gap-2">
+              <LanguageSelector />
+              <ThemeToggle />
+              <UserProfileMenu />
+            </div>
+          </header>
+          <main className="flex-1">
+            {children}
+          </main>
+        </div>
+      </div>
+      {/* AI Assistant available on all pages */}
+      <FloatingAIAssistant />
+    </SidebarProvider>
+  );
+};
 
 const App = () => (
   <QueryClientProvider client={queryClient}>
@@ -98,6 +120,7 @@ const App = () => (
       <AuthProvider>
         <SubscriptionProvider>
           <AccessProvider>
+          <LanguageProvider>
           <TooltipProvider>
             <Toaster />
             <Sonner />
@@ -407,6 +430,7 @@ const App = () => (
           </Routes>
             </BrowserRouter>
           </TooltipProvider>
+          </LanguageProvider>
         </AccessProvider>
       </SubscriptionProvider>
     </AuthProvider>

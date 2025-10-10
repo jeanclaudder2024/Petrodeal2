@@ -12,6 +12,42 @@ const logStep = (step: string, details?: any) => {
   console.log(`[CREATE-BROKER-CHECKOUT] ${step}${detailsStr}`);
 };
 
+// Helper function to clean up stuck membership records
+const cleanupStuckMembership = async (userId: string, supabaseClient: any) => {
+  try {
+    const { data: stuckMembership } = await supabaseClient
+      .from("broker_memberships")
+      .select("*")
+      .eq("user_id", userId)
+      .eq("payment_status", "pending")
+      .single();
+
+    if (stuckMembership) {
+      // Check if the Stripe session is expired (older than 24 hours)
+      const sessionAge = Date.now() - new Date(stuckMembership.created_at).getTime();
+      const hoursOld = sessionAge / (1000 * 60 * 60);
+      
+      if (hoursOld > 24) {
+        logStep("Cleaning up expired membership record", { 
+          membershipId: stuckMembership.id,
+          hoursOld: Math.round(hoursOld)
+        });
+        
+        await supabaseClient
+          .from("broker_memberships")
+          .delete()
+          .eq("id", stuckMembership.id);
+          
+        return true;
+      }
+    }
+    return false;
+  } catch (error) {
+    logStep("Error cleaning up stuck membership", { error: error instanceof Error ? error.message : 'Unknown error' });
+    return false;
+  }
+};
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -40,19 +76,36 @@ serve(async (req) => {
     if (!user?.email) throw new Error("User not authenticated or email not available");
     logStep("User authenticated", { userId: user.id, email: user.email });
 
-    // Check if user already has a broker membership
-    const { data: existingMembership } = await supabaseClient
+    // Check if user already has a PAID broker membership
+    const { data: existingMembership, error: membershipError } = await supabaseClient
       .from("broker_memberships")
       .select("*")
       .eq("user_id", user.id)
       .single();
 
+    // Only block if there's a paid membership (ignore errors for missing records)
     if (existingMembership && existingMembership.payment_status === 'paid') {
-      logStep("User already has paid membership");
+      logStep("User already has paid membership", { 
+        membershipId: existingMembership.id,
+        paymentStatus: existingMembership.payment_status 
+      });
       return new Response(JSON.stringify({ error: "You already have a broker membership" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 400,
       });
+    }
+
+    // If there's a pending membership, check if it's stuck and clean it up
+    if (existingMembership && existingMembership.payment_status === 'pending') {
+      const wasCleaned = await cleanupStuckMembership(user.id, supabaseClient);
+      if (wasCleaned) {
+        logStep("Cleaned up stuck membership, proceeding with new checkout");
+      } else {
+        logStep("Found pending membership, allowing retry", { 
+          membershipId: existingMembership.id,
+          sessionId: existingMembership.stripe_session_id 
+        });
+      }
     }
 
     const stripe = new Stripe(stripeKey, { apiVersion: "2023-10-16" });
@@ -90,7 +143,7 @@ serve(async (req) => {
     logStep("Checkout session created", { sessionId: session.id });
 
     // Create or update broker membership record
-    await supabaseClient.from("broker_memberships").upsert({
+    const { error: upsertError } = await supabaseClient.from("broker_memberships").upsert({
       user_id: user.id,
       email: user.email,
       stripe_session_id: session.id,
@@ -101,7 +154,15 @@ serve(async (req) => {
       updated_at: new Date().toISOString(),
     }, { onConflict: 'user_id' });
 
-    logStep("Membership record created/updated");
+    if (upsertError) {
+      logStep("Error creating/updating membership record", { error: upsertError.message });
+      throw new Error(`Failed to create membership record: ${upsertError.message}`);
+    }
+
+    logStep("Membership record created/updated successfully", { 
+      sessionId: session.id,
+      userId: user.id 
+    });
 
     return new Response(JSON.stringify({ url: session.url }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

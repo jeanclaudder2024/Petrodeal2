@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -6,30 +6,14 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Languages, Globe } from 'lucide-react';
-
-interface Language {
-  code: string;
-  name: string;
-  flag: string;
-}
-
-const languages: Language[] = [
-  { code: 'en', name: 'English', flag: '🇺🇸' },
-  { code: 'es', name: 'Español', flag: '🇪🇸' },
-  { code: 'fr', name: 'Français', flag: '🇫🇷' },
-  { code: 'de', name: 'Deutsch', flag: '🇩🇪' },
-  { code: 'ar', name: 'العربية', flag: '🇸🇦' },
-  { code: 'zh', name: '中文', flag: '🇨🇳' },
-];
+import { Globe } from 'lucide-react';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 const LanguageSelector = () => {
-  const [selectedLanguage, setSelectedLanguage] = useState<Language>(languages[0]);
+  const { currentLanguage, languages, changeLanguage } = useLanguage();
 
-  const handleLanguageChange = (language: Language) => {
-    setSelectedLanguage(language);
-    // Here you would typically integrate with i18n library
-    console.log('Language changed to:', language.code);
+  const handleLanguageChange = (language: typeof languages[0]) => {
+    changeLanguage(language);
   };
 
   return (
@@ -37,7 +21,7 @@ const LanguageSelector = () => {
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" size="sm" className="gap-2">
           <Globe className="h-4 w-4" />
-          <span className="hidden sm:inline">{selectedLanguage.flag}</span>
+          <span className="hidden sm:inline">{currentLanguage.flag}</span>
         </Button>
       </DropdownMenuTrigger>
       <DropdownMenuContent 
@@ -52,7 +36,7 @@ const LanguageSelector = () => {
           >
             <span className="text-lg">{language.flag}</span>
             <span className="flex-1">{language.name}</span>
-            {selectedLanguage.code === language.code && (
+            {currentLanguage.code === language.code && (
               <div className="w-2 h-2 bg-primary rounded-full" />
             )}
           </DropdownMenuItem>

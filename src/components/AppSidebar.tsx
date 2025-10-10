@@ -27,34 +27,35 @@ import {
 } from '@/components/ui/sidebar';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUserRole } from '@/hooks/useUserRole';
+import { useLanguage } from '@/contexts/LanguageContext';
 
-const mainItems = [
-  { title: 'Dashboard', url: '/dashboard', icon: LayoutDashboard },
-  { title: 'Vessels', url: '/vessels', icon: Ship },
-  { title: 'Ports', url: '/ports', icon: Anchor },
-  { title: 'Refineries', url: '/refineries', icon: Factory },
-  { title: 'Companies', url: '/companies', icon: Building2 },
-  { title: 'Map', url: '/map', icon: Map },
+const getMainItems = (t: (key: string) => string) => [
+  { title: t('navigation.dashboard'), url: '/dashboard', icon: LayoutDashboard },
+  { title: t('navigation.vessels'), url: '/vessels', icon: Ship },
+  { title: t('navigation.ports'), url: '/ports', icon: Anchor },
+  { title: t('navigation.refineries'), url: '/refineries', icon: Factory },
+  { title: t('navigation.companies'), url: '/companies', icon: Building2 },
+  { title: t('navigation.map'), url: '/map', icon: Map },
 ];
 
-const supportItems = [
-  { title: 'Tutorials', url: '/tutorials', icon: BookOpen },
-  { title: 'Support Center', url: '/support', icon: HelpCircle },
-  { title: 'My Tickets', url: '/my-tickets', icon: Shield },
-  { title: 'New Ticket', url: '/new-ticket', icon: Crown },
+const getSupportItems = (t: (key: string) => string) => [
+  { title: t('navigation.tutorials'), url: '/tutorials', icon: BookOpen },
+  { title: t('navigation.support'), url: '/support', icon: HelpCircle },
+  { title: t('support.myTickets'), url: '/my-tickets', icon: Shield },
+  { title: t('support.newTicket'), url: '/new-ticket', icon: Crown },
 ];
 
-const tradingItems = [
-  { title: 'Oil Prices', url: '/oil-prices', icon: TrendingUp },
+const getTradingItems = (t: (key: string) => string) => [
+  { title: t('navigation.oilPrices'), url: '/oil-prices', icon: TrendingUp },
 ];
 
-const accountItems = [
-  { title: 'Subscription', url: '/subscription', icon: Crown },
+const getAccountItems = (t: (key: string) => string) => [
+  { title: t('navigation.subscription'), url: '/subscription', icon: Crown },
 ];
 
-const brokerItems = [
-  { title: 'Broker Membership', url: '/broker-membership', icon: Shield },
-  { title: 'Broker Dashboard', url: '/broker-dashboard', icon: LayoutDashboard },
+const getBrokerItems = (t: (key: string) => string) => [
+  { title: t('brokers.membership', 'Broker Membership'), url: '/broker-membership', icon: Shield },
+  { title: t('brokers.dashboard', 'Broker Dashboard'), url: '/broker-dashboard', icon: LayoutDashboard },
 ];
 
 export function AppSidebar() {
@@ -62,6 +63,7 @@ export function AppSidebar() {
   const location = useLocation();
   const { signOut } = useAuth();
   const { isAdmin } = useUserRole();
+  const { t } = useLanguage();
   const currentPath = location.pathname;
   const collapsed = state === "collapsed";
 
@@ -94,11 +96,11 @@ export function AppSidebar() {
         {/* Main Navigation */}
         <SidebarGroup className="px-2 py-4">
           <SidebarGroupLabel className={`${collapsed ? 'sr-only' : 'px-2 text-xs uppercase tracking-wider text-muted-foreground/80 font-semibold'}`}>
-            Navigation
+            {t('navigation.title', 'Navigation')}
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu className="space-y-1">
-              {mainItems.map((item, index) => (
+              {getMainItems(t).map((item, index) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild>
                     <NavLink 
@@ -128,11 +130,11 @@ export function AppSidebar() {
         {/* Trading Section */}
         <SidebarGroup className="px-2 py-2">
           <SidebarGroupLabel className={`${collapsed ? 'sr-only' : 'px-2 text-xs uppercase tracking-wider text-muted-foreground/80 font-semibold'}`}>
-            Trading
+            {t('navigation.trading', 'Trading')}
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu className="space-y-1">
-              {tradingItems.map((item, index) => (
+              {getTradingItems(t).map((item, index) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild>
                     <NavLink 
@@ -162,11 +164,11 @@ export function AppSidebar() {
         {/* Broker Section */}
         <SidebarGroup className="px-2 py-2">
           <SidebarGroupLabel className={`${collapsed ? 'sr-only' : 'px-2 text-xs uppercase tracking-wider text-muted-foreground/80 font-semibold'}`}>
-            Broker Services
+            {t('brokers.services', 'Broker Services')}
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu className="space-y-1">
-              {brokerItems.map((item, index) => (
+              {getBrokerItems(t).map((item, index) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild>
                     <NavLink 
@@ -196,11 +198,11 @@ export function AppSidebar() {
         {/* Support Section */}
         <SidebarGroup className="px-2 py-2">
           <SidebarGroupLabel className={`${collapsed ? 'sr-only' : 'px-2 text-xs uppercase tracking-wider text-muted-foreground/80 font-semibold'}`}>
-            Support
+            {t('navigation.support')}
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu className="space-y-1">
-              {supportItems.map((item, index) => (
+              {getSupportItems(t).map((item, index) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild>
                     <NavLink 
@@ -230,11 +232,11 @@ export function AppSidebar() {
         {/* Account Section */}
         <SidebarGroup className="px-2 py-2">
           <SidebarGroupLabel className={`${collapsed ? 'sr-only' : 'px-2 text-xs uppercase tracking-wider text-muted-foreground/80 font-semibold'}`}>
-            Account
+            {t('settings.account')}
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu className="space-y-1">
-              {accountItems.map((item, index) => (
+              {getAccountItems(t).map((item, index) => (
                 <SidebarMenuItem key={item.title}>
                   <SidebarMenuButton asChild>
                     <NavLink 

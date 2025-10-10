@@ -6,9 +6,11 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Settings as SettingsIcon, Bell, Shield, Globe, Palette, Monitor } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 const Settings = () => {
   const { toast } = useToast();
+  const { t } = useLanguage();
   const [settings, setSettings] = useState({
     emailNotifications: true,
     pushNotifications: false,
@@ -22,8 +24,8 @@ const Settings = () => {
 
   const handleSave = () => {
     toast({
-      title: "Settings Saved",
-      description: "Your preferences have been successfully updated.",
+      title: t('settings.settingsSaved'),
+      description: t('settings.settingsDescription'),
     });
   };
 
@@ -35,10 +37,10 @@ const Settings = () => {
     <div className="container mx-auto px-4 py-8 max-w-4xl">
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-foreground">
-          Settings
+          {t('settings.title')}
         </h1>
         <p className="text-muted-foreground mt-2">
-          Manage your account preferences and application settings
+          {t('settings.managePreferences', 'Manage your account preferences and application settings')}
         </p>
       </div>
 
