@@ -93,7 +93,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                 progress: Math.min(current.progress + 8, 95),
                 message: current.progress < 25 ? 'Extracting placeholders...' :
                         current.progress < 50 ? 'Filling data...' :
-                        current.progress < 75 ? 'Protecting document...' :
+                        current.progress < 75 ? 'Converting to PDF...' :
                         current.progress < 95 ? 'Preparing download...' : 'Finalizing...'
               }
             };
@@ -142,15 +142,15 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
       console.log('Process response status:', response.status);
 
       if (response.ok) {
-        // Check if response is DOCX (direct download)
+        // Check if response is PDF (direct download)
         const contentType = response.headers.get('content-type');
-        if (contentType && contentType.includes('application/vnd.openxmlformats-officedocument.wordprocessingml.document')) {
-          // Handle direct DOCX download
+        if (contentType && contentType.includes('application/pdf')) {
+          // Handle direct PDF download
           const blob = await response.blob();
           const url = window.URL.createObjectURL(blob);
           const a = document.createElement('a');
           a.href = url;
-          a.download = `processed_${vesselImo}_${Date.now()}.docx`;
+          a.download = `processed_${vesselImo}_${Date.now()}.pdf`;
           document.body.appendChild(a);
           a.click();
           window.URL.revokeObjectURL(url);
@@ -165,7 +165,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
             }
           }));
           
-          toast.success('Password-protected document downloaded successfully');
+          toast.success('PDF document downloaded successfully');
         } else {
           // Handle JSON response (fallback)
           const responseText = await response.text();
