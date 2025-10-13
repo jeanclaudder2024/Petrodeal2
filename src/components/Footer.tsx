@@ -13,7 +13,7 @@ const Footer = () => {
           <div className="space-y-6">
             <Link to="/" className="inline-flex items-center" aria-label="Go to homepage">
               <img
-                src="https://i.postimg.cc/rppkVTQb/Chat-GPT-Image-Sep-6-2025-11-30-18-AM.png"
+                src="/lovable-uploads/92162cb9-ec10-41e2-bb64-5e35030478d1.png"
                 alt="PetroDealHub"
                 className="h-auto w-auto transition-transform hover:scale-110"
               />

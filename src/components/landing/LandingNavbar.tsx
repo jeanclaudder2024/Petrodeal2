@@ -82,7 +82,7 @@ const LandingNavbar = () => {
           {/* Logo (responsive sizing) */}
           <Link to="/" className="flex items-center space-x-3 group">
             <img
-              src="https://i.postimg.cc/rppkVTQb/Chat-GPT-Image-Sep-6-2025-11-30-18-AM.png"
+              src="/lovable-uploads/92162cb9-ec10-41e2-bb64-5e35030478d1.png"
               alt="PetroDealHub Logo"
               className="h-12 sm:h-16 md:h-20 lg:h-[150px] w-auto transition-transform group-hover:scale-110"
             />

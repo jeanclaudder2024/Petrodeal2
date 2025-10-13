@@ -46,7 +46,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Checkbox } from '@/components/ui/checkbox';
-import VesselDocumentDownloader from '@/components/VesselDocumentDownloader';
+import VesselDocumentGenerator from '@/components/VesselDocumentGenerator';
 
 interface Vessel {
   id: string;
@@ -618,21 +618,22 @@ const VesselDetail = () => {
             </CardContent>
           </Card>
 
-          {/* Document Generation & Storage Section */}
+          {/* File Download Section */}
           <Card className="trading-card">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <FileText className="h-5 w-5 text-primary" />
-                Vessel Documents
+                File Download
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-6">
-              <VesselDocumentDownloader 
+              <VesselDocumentGenerator 
                 vesselImo={vessel.imo} 
                 vesselName={vessel.name} 
               />
             </CardContent>
           </Card>
+
         </div>
 
         {/* Sidebar Information */}

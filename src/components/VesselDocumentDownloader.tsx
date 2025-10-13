@@ -42,27 +42,41 @@ export default function VesselDocumentDownloader({ vesselImo, vesselName }: Vess
   const fetchTemplates = async () => {
     try {
       setLoading(true);
+      console.log('Fetching templates from:', `${API_BASE_URL}/templates`);
+      
       const response = await fetch(`${API_BASE_URL}/templates`);
+      console.log('Templates response status:', response.status);
+      
       if (response.ok) {
         const data = await response.json();
-        setTemplates(data.filter((template: DocumentTemplate) => template.is_active));
+        console.log('Templates data:', data);
+        
+        // Filter only active templates
+        const activeTemplates = (data.templates || []).filter((template: DocumentTemplate) => template.is_active);
+        setTemplates(activeTemplates);
+        
+        console.log('Active templates:', activeTemplates);
       } else {
+        const errorText = await response.text();
+        console.error('Failed to fetch templates:', response.status, errorText);
         toast.error('Failed to fetch document templates');
       }
     } catch (error) {
+      console.error('Error fetching templates:', error);
       toast.error('Error fetching document templates');
-      console.error('Error:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  const processDocument = async (templateId: string, templateName: string) => {
+  const processDocument = async (templateName: string, templateDisplayName: string) => {
     try {
+      console.log('Processing document:', { templateName, templateDisplayName, vesselImo });
+      
       // Set processing status
       setProcessingStatus(prev => ({
         ...prev,
-        [templateId]: {
+        [templateName]: {
           document_id: '',
           status: 'processing',
           message: 'Processing document...'
@@ -75,57 +89,86 @@ export default function VesselDocumentDownloader({ vesselImo, vesselName }: Vess
       });
 
       const formData = new FormData();
-      formData.append('template_id', templateId);
+      formData.append('template_name', templateName);  // Use filename instead of ID
       formData.append('vessel_imo', vesselImo);
       formData.append('template_file', dummyFile);
 
-      console.log('Processing document with template ID:', templateId, 'for vessel:', vesselImo);
+      console.log('Sending request to:', `${API_BASE_URL}/process-document`);
 
       const response = await fetch(`${API_BASE_URL}/process-document`, {
         method: 'POST',
         body: formData,
       });
 
-      console.log('Response status:', response.status);
-      const responseText = await response.text();
-      console.log('Response text:', responseText);
+      console.log('Process response status:', response.status);
 
       if (response.ok) {
-        const result = JSON.parse(responseText);
-        
-        if (result.success) {
+        // Check if response is PDF (direct download)
+        const contentType = response.headers.get('content-type');
+        if (contentType && contentType.includes('application/pdf')) {
+          // Handle direct PDF download
+          const blob = await response.blob();
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `processed_${vesselImo}_${Date.now()}.pdf`;
+          document.body.appendChild(a);
+          a.click();
+          window.URL.revokeObjectURL(url);
+          document.body.removeChild(a);
+          
           setProcessingStatus(prev => ({
             ...prev,
-            [templateId]: {
-              document_id: result.document_id,
+            [templateName]: {
+              document_id: 'direct',
               status: 'completed',
-              message: 'Document ready for download',
-              download_url: result.download_url
+              message: 'Document downloaded successfully'
             }
           }));
           
-          toast.success('Document processed successfully');
-          
-          // Auto-download the document
-          setTimeout(() => {
-            window.open(`${API_BASE_URL}/download/${result.document_id}`, '_blank');
-          }, 1000);
+          toast.success('Document processed and downloaded successfully');
         } else {
-          setProcessingStatus(prev => ({
-            ...prev,
-            [templateId]: {
-              document_id: '',
-              status: 'failed',
-              message: result.message || 'Processing failed'
-            }
-          }));
-          toast.error(result.message || 'Document processing failed');
-          console.error('Processing failed:', result);
+          // Handle JSON response (fallback)
+          const responseText = await response.text();
+          const result = JSON.parse(responseText);
+          console.log('Process result:', result);
+          
+          if (result.success) {
+            setProcessingStatus(prev => ({
+              ...prev,
+              [templateName]: {
+                document_id: result.document_id,
+                status: 'completed',
+                message: 'Document ready for download',
+                download_url: result.download_url
+              }
+            }));
+            
+            toast.success('Document processed successfully');
+            
+            // Auto-download the document
+            setTimeout(() => {
+              console.log('Auto-downloading document:', `${API_BASE_URL}/download/${result.document_id}`);
+              window.open(`${API_BASE_URL}/download/${result.document_id}`, '_blank');
+            }, 1000);
+          } else {
+            setProcessingStatus(prev => ({
+              ...prev,
+              [templateName]: {
+                document_id: '',
+                status: 'failed',
+                message: result.message || 'Processing failed'
+              }
+            }));
+            toast.error(result.message || 'Document processing failed');
+            console.error('Processing failed:', result);
+          }
         }
       } else {
+        const responseText = await response.text();
         setProcessingStatus(prev => ({
           ...prev,
-          [templateId]: {
+          [templateName]: {
             document_id: '',
             status: 'failed',
             message: `Failed to process document (${response.status})`
@@ -135,22 +178,23 @@ export default function VesselDocumentDownloader({ vesselImo, vesselName }: Vess
         console.error('HTTP Error:', response.status, responseText);
       }
     } catch (error) {
+      console.error('Error processing document:', error);
       setProcessingStatus(prev => ({
         ...prev,
-        [templateId]: {
+        [templateName]: {
           document_id: '',
           status: 'failed',
           message: 'Error processing document'
         }
       }));
       toast.error('Error processing document');
-      console.error('Error:', error);
     }
   };
 
-  const downloadDocument = (templateId: string) => {
-    const status = processingStatus[templateId];
+  const downloadDocument = (templateName: string) => {
+    const status = processingStatus[templateName];
     if (status?.download_url) {
+      console.log('Downloading document:', `${API_BASE_URL}/download/${status.document_id}`);
       window.open(`${API_BASE_URL}/download/${status.document_id}`, '_blank');
     }
   };
@@ -211,11 +255,18 @@ export default function VesselDocumentDownloader({ vesselImo, vesselName }: Vess
             <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
             <p>No document templates available.</p>
             <p className="text-sm">Contact your administrator to upload templates.</p>
+            <Button 
+              variant="outline" 
+              className="mt-4"
+              onClick={fetchTemplates}
+            >
+              Refresh Templates
+            </Button>
           </div>
         ) : (
           <div className="space-y-4">
             {templates.map((template) => {
-              const status = processingStatus[template.id];
+              const status = processingStatus[template.file_name || template.name];
               const isProcessing = status?.status === 'processing';
               const isCompleted = status?.status === 'completed';
               const isFailed = status?.status === 'failed';
@@ -228,6 +279,11 @@ export default function VesselDocumentDownloader({ vesselImo, vesselName }: Vess
                       <div>
                         <h4 className="font-medium">{template.name}</h4>
                         <p className="text-sm text-muted-foreground">{template.description}</p>
+                        {template.placeholders && template.placeholders.length > 0 && (
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {template.placeholders.length} placeholders available
+                          </p>
+                        )}
                         {status && (
                           <div className="flex items-center gap-2 mt-1">
                             <Badge className={getStatusColor(status.status)}>
@@ -245,7 +301,7 @@ export default function VesselDocumentDownloader({ vesselImo, vesselName }: Vess
                   <div className="flex items-center gap-2">
                     {isCompleted ? (
                       <Button
-                        onClick={() => downloadDocument(template.id)}
+                        onClick={() => downloadDocument(template.file_name || template.name)}
                         className="flex items-center gap-2"
                       >
                         <Download className="h-4 w-4" />
@@ -253,7 +309,7 @@ export default function VesselDocumentDownloader({ vesselImo, vesselName }: Vess
                       </Button>
                     ) : (
                       <Button
-                        onClick={() => processDocument(template.id, template.name)}
+                        onClick={() => processDocument(template.file_name || template.name, template.name)}
                         disabled={isProcessing}
                         className="flex items-center gap-2"
                       >
