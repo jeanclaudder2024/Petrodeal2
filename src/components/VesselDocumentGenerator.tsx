@@ -67,6 +67,187 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
     }
   };
 
+  const createCustomViewer = (documentUrl: string, documentName: string) => {
+    // Create a data URL with HTML content that embeds the document
+    const htmlContent = `
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${documentName} - Document Viewer</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: Arial, sans-serif;
+            background-color: #f5f5f5;
+        }
+        .header {
+            background-color: #2c3e50;
+            color: white;
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .header h1 {
+            margin: 0;
+            font-size: 18px;
+        }
+        .print-btn {
+            background-color: #3498db;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            transition: background-color 0.3s;
+        }
+        .print-btn:hover {
+            background-color: #2980b9;
+        }
+        .viewer-container {
+            height: calc(100vh - 70px);
+            width: 100%;
+            border: none;
+        }
+        .loading {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            font-size: 18px;
+            color: #666;
+        }
+        .error {
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            color: #e74c3c;
+            text-align: center;
+            padding: 20px;
+        }
+        .error h2 {
+            margin-bottom: 10px;
+        }
+        .error p {
+            margin: 5px 0;
+        }
+        .download-btn {
+            background-color: #27ae60;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            margin-top: 15px;
+            text-decoration: none;
+            display: inline-block;
+        }
+        .download-btn:hover {
+            background-color: #229954;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>📄 ${documentName}</h1>
+        <button class="print-btn" onclick="window.print()">🖨️ Print Document</button>
+    </div>
+    
+    <div id="viewer-container">
+        <div class="loading">Loading document...</div>
+    </div>
+
+    <script>
+        const documentUrl = '${documentUrl}';
+        const container = document.getElementById('viewer-container');
+        
+        // Try multiple viewer approaches
+        function tryViewers() {
+            // Method 1: Try Google Docs viewer
+            const googleViewer = \`https://docs.google.com/viewer?url=\${encodeURIComponent(documentUrl)}&embedded=true&toolbar=0&navpanes=0&scrollbar=1&print=1\`;
+            
+            const iframe = document.createElement('iframe');
+            iframe.src = googleViewer;
+            iframe.className = 'viewer-container';
+            iframe.onload = function() {
+                // Check if Google Docs viewer loaded successfully
+                setTimeout(() => {
+                    try {
+                        const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+                        if (iframeDoc.body && iframeDoc.body.innerHTML.includes('Unable to display')) {
+                            throw new Error('Google Docs viewer failed');
+                        }
+                    } catch (e) {
+                        tryMicrosoftViewer();
+                    }
+                }, 3000);
+            };
+            iframe.onerror = tryMicrosoftViewer;
+            
+            container.innerHTML = '';
+            container.appendChild(iframe);
+        }
+        
+        function tryMicrosoftViewer() {
+            // Method 2: Try Microsoft Office Online viewer
+            const officeViewer = \`https://view.officeapps.live.com/op/embed.aspx?src=\${encodeURIComponent(documentUrl)}\`;
+            
+            const iframe = document.createElement('iframe');
+            iframe.src = officeViewer;
+            iframe.className = 'viewer-container';
+            iframe.onload = function() {
+                setTimeout(() => {
+                    try {
+                        const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+                        if (iframeDoc.body && iframeDoc.body.innerHTML.includes('error') || iframeDoc.body.innerHTML.includes('Error')) {
+                            throw new Error('Microsoft viewer failed');
+                        }
+                    } catch (e) {
+                        showError();
+                    }
+                }, 3000);
+            };
+            iframe.onerror = showError;
+            
+            container.innerHTML = '';
+            container.appendChild(iframe);
+        }
+        
+        function showError() {
+            container.innerHTML = \`
+                <div class="error">
+                    <h2>⚠️ Unable to preview document</h2>
+                    <p>The document cannot be displayed in the browser.</p>
+                    <p>This may be due to server restrictions or document format.</p>
+                    <a href="\${documentUrl}" class="download-btn" target="_blank">
+                        📥 Download Document to View
+                    </a>
+                    <p style="margin-top: 20px; font-size: 12px; color: #666;">
+                        Note: Downloaded documents preserve exact formatting and can be opened in Microsoft Word.
+                    </p>
+                </div>
+            \`;
+        }
+        
+        // Start trying viewers
+        tryViewers();
+    </script>
+</body>
+</html>`;
+
+    // Create a blob URL for the HTML content
+    const blob = new Blob([htmlContent], { type: 'text/html' });
+    return URL.createObjectURL(blob);
+  };
+
   const viewDocument = async (templateName: string, templateDisplayName: string) => {
     try {
       console.log('Viewing document:', { templateName, templateDisplayName, vesselImo });
@@ -84,18 +265,9 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
       // Generate DOCX document URL (preserves exact Word formatting)
       const documentUrl = `${API_BASE_URL}/view-document/${encodeURIComponent(templateName)}?vessel_imo=${encodeURIComponent(vesselImo)}`;
       
-      // Try multiple viewer approaches for read-only viewing
-      try {
-        // Method 1: Google Docs viewer (read-only, can print, cannot download)
-        const viewerUrl = `https://docs.google.com/viewer?url=${encodeURIComponent(documentUrl)}&embedded=true&toolbar=1&navpanes=1&scrollbar=1&print=1`;
-        window.open(viewerUrl, '_blank', 'width=1200,height=800,scrollbars=yes,resizable=yes');
-      } catch (viewerError) {
-        console.log('Google Docs viewer failed, trying Microsoft Office Online:', viewerError);
-        
-        // Method 2: Microsoft Office Online viewer (fallback)
-        const officeViewerUrl = `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(documentUrl)}`;
-        window.open(officeViewerUrl, '_blank', 'width=1200,height=800,scrollbars=yes,resizable=yes');
-      }
+      // Create a custom viewer page that embeds the document
+      const viewerPageUrl = createCustomViewer(documentUrl, templateDisplayName);
+      window.open(viewerPageUrl, '_blank', 'width=1200,height=800,scrollbars=yes,resizable=yes');
       
       setProcessingStatus(prev => ({
         ...prev,
