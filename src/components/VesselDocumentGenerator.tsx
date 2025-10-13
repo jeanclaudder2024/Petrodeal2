@@ -76,27 +76,27 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
         ...prev,
         [templateName]: {
           status: 'processing',
-          message: 'Generating document for viewer...',
+          message: 'Generating DOCX document...',
           progress: 50
         }
       }));
 
-      // Generate HTML document URL
+      // Generate DOCX document URL (preserves exact Word formatting)
       const documentUrl = `${API_BASE_URL}/view-document/${encodeURIComponent(templateName)}?vessel_imo=${encodeURIComponent(vesselImo)}`;
       
-      // Open HTML document directly (most reliable)
+      // Open DOCX document directly (preserves exact formatting)
       window.open(documentUrl, '_blank', 'width=1200,height=800,scrollbars=yes,resizable=yes');
       
       setProcessingStatus(prev => ({
         ...prev,
         [templateName]: {
           status: 'completed',
-          message: 'Document opened in browser',
+          message: 'DOCX document opened',
           progress: 100
         }
       }));
       
-      toast.success('Document opened in browser - you can view and print it');
+      toast.success('DOCX document opened - exact Word formatting preserved');
       
     } catch (error) {
       console.error('Error viewing document:', error);
@@ -108,7 +108,52 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
           progress: 0
         }
       }));
-      toast.error('Failed to open document in viewer');
+      toast.error('Failed to open document');
+    }
+  };
+
+  const viewPDF = async (templateName: string, templateDisplayName: string) => {
+    try {
+      console.log('Viewing PDF:', { templateName, templateDisplayName, vesselImo });
+      
+      // Set processing status
+      setProcessingStatus(prev => ({
+        ...prev,
+        [templateName]: {
+          status: 'processing',
+          message: 'Generating PDF document...',
+          progress: 50
+        }
+      }));
+
+      // Generate PDF document URL
+      const pdfUrl = `${API_BASE_URL}/generate-pdf/${encodeURIComponent(templateName)}?vessel_imo=${encodeURIComponent(vesselImo)}`;
+      
+      // Open PDF document
+      window.open(pdfUrl, '_blank', 'width=1200,height=800,scrollbars=yes,resizable=yes');
+      
+      setProcessingStatus(prev => ({
+        ...prev,
+        [templateName]: {
+          status: 'completed',
+          message: 'PDF document opened',
+          progress: 100
+        }
+      }));
+      
+      toast.success('PDF document opened');
+      
+    } catch (error) {
+      console.error('Error viewing PDF:', error);
+      setProcessingStatus(prev => ({
+        ...prev,
+        [templateName]: {
+          status: 'failed',
+          message: 'Failed to open PDF',
+          progress: 0
+        }
+      }));
+      toast.error('Failed to open PDF document');
     }
   };
 
@@ -291,11 +336,11 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <Eye className="h-5 w-5" />
-          Document Viewer
+          <FileText className="h-5 w-5" />
+          Document Generator
         </CardTitle>
         <p className="text-sm text-muted-foreground">
-          View and print documents for {vesselName} (IMO: {vesselImo})
+          Generate and view documents for {vesselName} (IMO: {vesselImo}) - DOCX preserves exact formatting, PDF for easy viewing
         </p>
       </CardHeader>
       <CardContent>
@@ -356,6 +401,21 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                     <Button
                       onClick={() => viewDocument(template.file_name, template.name)}
                       disabled={isProcessing}
+                      variant="default"
+                      className="flex items-center gap-2"
+                    >
+                      {isProcessing ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <FileText className="h-4 w-4" />
+                      )}
+                      {isProcessing ? 'Opening...' : 'View DOCX'}
+                    </Button>
+                    
+                    <Button
+                      onClick={() => viewPDF(template.file_name, template.name)}
+                      disabled={isProcessing}
+                      variant="outline"
                       className="flex items-center gap-2"
                     >
                       {isProcessing ? (
@@ -363,7 +423,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                       ) : (
                         <Eye className="h-4 w-4" />
                       )}
-                      {isProcessing ? 'Opening...' : 'View Document'}
+                      {isProcessing ? 'Opening...' : 'View PDF'}
                     </Button>
                   </div>
                 </div>
