@@ -81,25 +81,43 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
         }
       }));
 
-      // Generate PDF URL for PDF.js viewer
+      // Generate PDF URL
       const pdfUrl = `${API_BASE_URL}/generate-pdf/${encodeURIComponent(templateName)}?vessel_imo=${encodeURIComponent(vesselImo)}`;
       
-      // Use PDF.js viewer
-      const viewerUrl = `https://mozilla.github.io/pdf.js/web/viewer.html?file=${encodeURIComponent(pdfUrl)}`;
-      
-      // Open in new tab
-      window.open(viewerUrl, '_blank', 'width=1200,height=800,scrollbars=yes,resizable=yes');
-      
-      setProcessingStatus(prev => ({
-        ...prev,
-        [templateName]: {
-          status: 'completed',
-          message: 'Document opened in viewer',
-          progress: 100
-        }
-      }));
-      
-      toast.success('Document opened in PDF viewer');
+      // Try multiple PDF viewer approaches
+      try {
+        // Method 1: Direct PDF opening (most reliable)
+        window.open(pdfUrl, '_blank', 'width=1200,height=800,scrollbars=yes,resizable=yes');
+        
+        setProcessingStatus(prev => ({
+          ...prev,
+          [templateName]: {
+            status: 'completed',
+            message: 'Document opened in browser',
+            progress: 100
+          }
+        }));
+        
+        toast.success('Document opened in browser - you can view and print it');
+        
+      } catch (directError) {
+        console.log('Direct PDF opening failed, trying PDF.js viewer:', directError);
+        
+        // Method 2: PDF.js viewer (fallback)
+        const viewerUrl = `https://mozilla.github.io/pdf.js/web/viewer.html?file=${encodeURIComponent(pdfUrl)}`;
+        window.open(viewerUrl, '_blank', 'width=1200,height=800,scrollbars=yes,resizable=yes');
+        
+        setProcessingStatus(prev => ({
+          ...prev,
+          [templateName]: {
+            status: 'completed',
+            message: 'Document opened in PDF.js viewer',
+            progress: 100
+          }
+        }));
+        
+        toast.success('Document opened in PDF.js viewer');
+      }
       
     } catch (error) {
       console.error('Error viewing document:', error);
