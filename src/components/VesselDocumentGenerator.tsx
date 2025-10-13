@@ -109,11 +109,11 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
           ...prev,
           [templateName]: {
             status: 'failed',
-            message: 'Request timeout - please try again'
+            message: 'Request timeout - server may be busy, please try again'
           }
         }));
-        toast.error('Request timeout - please try again');
-      }, 30000); // 30 second timeout
+        toast.error('Request timeout - server may be busy, please try again');
+      }, 15000); // 15 second timeout
 
       // Create a dummy file for the template_file parameter (required by API)
       const dummyFile = new File(['dummy'], 'dummy.docx', {
@@ -126,11 +126,14 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
       formData.append('template_file', dummyFile);
 
       console.log('Sending request to:', `${API_BASE_URL}/process-document`);
+      console.log('Request data:', { templateName, vesselImo });
 
       const response = await fetch(`${API_BASE_URL}/process-document`, {
         method: 'POST',
         body: formData,
       });
+
+      console.log('Response received:', response.status, response.statusText);
 
       // Clear progress interval and timeout
       clearInterval(progressInterval);
