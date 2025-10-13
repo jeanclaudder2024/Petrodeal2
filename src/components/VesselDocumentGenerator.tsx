@@ -76,7 +76,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
         ...prev,
         [templateName]: {
           status: 'processing',
-          message: 'Generating DOCX document...',
+          message: 'Generating document for viewing...',
           progress: 50
         }
       }));
@@ -84,19 +84,29 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
       // Generate DOCX document URL (preserves exact Word formatting)
       const documentUrl = `${API_BASE_URL}/view-document/${encodeURIComponent(templateName)}?vessel_imo=${encodeURIComponent(vesselImo)}`;
       
-      // Open DOCX document directly (preserves exact formatting)
-      window.open(documentUrl, '_blank', 'width=1200,height=800,scrollbars=yes,resizable=yes');
+      // Try multiple viewer approaches for read-only viewing
+      try {
+        // Method 1: Google Docs viewer (read-only, can print, cannot download)
+        const viewerUrl = `https://docs.google.com/viewer?url=${encodeURIComponent(documentUrl)}&embedded=true&toolbar=1&navpanes=1&scrollbar=1&print=1`;
+        window.open(viewerUrl, '_blank', 'width=1200,height=800,scrollbars=yes,resizable=yes');
+      } catch (viewerError) {
+        console.log('Google Docs viewer failed, trying Microsoft Office Online:', viewerError);
+        
+        // Method 2: Microsoft Office Online viewer (fallback)
+        const officeViewerUrl = `https://view.officeapps.live.com/op/embed.aspx?src=${encodeURIComponent(documentUrl)}`;
+        window.open(officeViewerUrl, '_blank', 'width=1200,height=800,scrollbars=yes,resizable=yes');
+      }
       
       setProcessingStatus(prev => ({
         ...prev,
         [templateName]: {
           status: 'completed',
-          message: 'DOCX document opened',
+          message: 'Document opened in read-only viewer',
           progress: 100
         }
       }));
       
-      toast.success('DOCX document opened - exact Word formatting preserved');
+      toast.success('Document opened in read-only viewer - you can view and print but not download');
       
     } catch (error) {
       console.error('Error viewing document:', error);
@@ -340,7 +350,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
           Document Generator
         </CardTitle>
         <p className="text-sm text-muted-foreground">
-          Generate and view documents for {vesselName} (IMO: {vesselImo}) - DOCX preserves exact formatting, PDF for easy viewing
+          Generate and view documents for {vesselName} (IMO: {vesselImo}) - View & Print opens in read-only mode (no download), PDF for direct viewing
         </p>
       </CardHeader>
       <CardContent>
@@ -407,9 +417,9 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                       {isProcessing ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
                       ) : (
-                        <FileText className="h-4 w-4" />
+                        <Eye className="h-4 w-4" />
                       )}
-                      {isProcessing ? 'Opening...' : 'View DOCX'}
+                      {isProcessing ? 'Opening...' : 'View & Print'}
                     </Button>
                     
                     <Button
