@@ -149,12 +149,27 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
           
           toast.success('Password-protected document downloaded successfully');
         } else {
-          // Handle JSON response (fallback)
+          // Handle JSON response with document ID for secure viewing
           const responseText = await response.text();
           const result = JSON.parse(responseText);
           console.log('Process result:', result);
           
-          if (result.success) {
+          if (result.success && result.document_id) {
+            // Open document in secure viewer
+            const viewerUrl = `${API_BASE_URL}/view-document/${result.document_id}`;
+            window.open(viewerUrl, '_blank', 'width=1200,height=800,scrollbars=yes,resizable=yes');
+            
+            setProcessingStatus(prev => ({
+              ...prev,
+              [templateName]: {
+                status: 'completed',
+                message: 'Ready for secure viewing',
+                progress: 100
+              }
+            }));
+            
+            toast.success('Document ready for secure viewing and printing');
+          } else if (result.success) {
             setProcessingStatus(prev => ({
               ...prev,
               [templateName]: {
