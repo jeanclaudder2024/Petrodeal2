@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { Download, FileText, Loader2, CheckCircle, XCircle } from 'lucide-react';
+import { Download, FileText, Loader2, CheckCircle, XCircle, Eye } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface DocumentTemplate {
@@ -64,6 +64,54 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
       toast.error('Error fetching document templates');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const viewDocument = async (templateName: string, templateDisplayName: string) => {
+    try {
+      console.log('Viewing document:', { templateName, templateDisplayName, vesselImo });
+      
+      // Set processing status
+      setProcessingStatus(prev => ({
+        ...prev,
+        [templateName]: {
+          status: 'processing',
+          message: 'Generating PDF for viewer...',
+          progress: 50
+        }
+      }));
+
+      // Generate PDF URL for PDF.js viewer
+      const pdfUrl = `${API_BASE_URL}/generate-pdf/${encodeURIComponent(templateName)}?vessel_imo=${encodeURIComponent(vesselImo)}`;
+      
+      // Use PDF.js viewer
+      const viewerUrl = `https://mozilla.github.io/pdf.js/web/viewer.html?file=${encodeURIComponent(pdfUrl)}`;
+      
+      // Open in new tab
+      window.open(viewerUrl, '_blank', 'width=1200,height=800,scrollbars=yes,resizable=yes');
+      
+      setProcessingStatus(prev => ({
+        ...prev,
+        [templateName]: {
+          status: 'completed',
+          message: 'Document opened in viewer',
+          progress: 100
+        }
+      }));
+      
+      toast.success('Document opened in PDF viewer');
+      
+    } catch (error) {
+      console.error('Error viewing document:', error);
+      setProcessingStatus(prev => ({
+        ...prev,
+        [templateName]: {
+          status: 'failed',
+          message: 'Failed to open document',
+          progress: 0
+        }
+      }));
+      toast.error('Failed to open document in viewer');
     }
   };
 
@@ -246,11 +294,11 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <Download className="h-5 w-5" />
-          File Download
+          <Eye className="h-5 w-5" />
+          Document Viewer
         </CardTitle>
         <p className="text-sm text-muted-foreground">
-          Download files for {vesselName} (IMO: {vesselImo})
+          View and print documents for {vesselName} (IMO: {vesselImo})
         </p>
       </CardHeader>
       <CardContent>
@@ -309,16 +357,16 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                   
                   <div className="flex items-center gap-2">
                     <Button
-                      onClick={() => processDocument(template.file_name, template.name)}
+                      onClick={() => viewDocument(template.file_name, template.name)}
                       disabled={isProcessing}
                       className="flex items-center gap-2"
                     >
                       {isProcessing ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
                       ) : (
-                        <Download className="h-4 w-4" />
+                        <Eye className="h-4 w-4" />
                       )}
-                      {isProcessing ? 'Processing...' : 'Download'}
+                      {isProcessing ? 'Opening...' : 'View Document'}
                     </Button>
                   </div>
                 </div>
