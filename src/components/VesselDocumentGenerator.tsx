@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { Download, FileText, Loader2, CheckCircle, XCircle, Eye } from 'lucide-react';
+import { Download, FileText, Loader2, CheckCircle, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
 
 interface DocumentTemplate {
@@ -64,289 +64,6 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
       toast.error('Error fetching document templates');
     } finally {
       setLoading(false);
-    }
-  };
-
-  const createCustomViewer = (documentUrl: string, documentName: string) => {
-    // Create a data URL with HTML content that embeds the document
-    const htmlContent = `
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>${documentName} - Document Viewer</title>
-    <style>
-        body {
-            margin: 0;
-            padding: 0;
-            font-family: Arial, sans-serif;
-            background-color: #f5f5f5;
-        }
-        .header {
-            background-color: #2c3e50;
-            color: white;
-            padding: 15px 20px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        }
-        .header h1 {
-            margin: 0;
-            font-size: 18px;
-        }
-        .print-btn {
-            background-color: #3498db;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 14px;
-            transition: background-color 0.3s;
-        }
-        .print-btn:hover {
-            background-color: #2980b9;
-        }
-        .viewer-container {
-            height: calc(100vh - 70px);
-            width: 100%;
-            border: none;
-        }
-        .loading {
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            font-size: 18px;
-            color: #666;
-        }
-        .error {
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            color: #e74c3c;
-            text-align: center;
-            padding: 20px;
-        }
-        .error h2 {
-            margin-bottom: 10px;
-        }
-        .error p {
-            margin: 5px 0;
-        }
-    </style>
-</head>
-<body>
-    <div class="header">
-        <h1>📄 ${documentName}</h1>
-        <button class="print-btn" onclick="window.print()">🖨️ Print Document</button>
-    </div>
-    
-    <div id="viewer-container">
-        <div class="loading">Loading document...</div>
-    </div>
-
-    <script>
-        const documentUrl = '${documentUrl}';
-        const container = document.getElementById('viewer-container');
-        
-        // Try multiple viewer approaches
-        function tryViewers() {
-            // Method 1: Try Google Docs viewer
-            const googleViewer = \`https://docs.google.com/viewer?url=\${encodeURIComponent(documentUrl)}&embedded=true&toolbar=0&navpanes=0&scrollbar=1&print=1\`;
-            
-            const iframe = document.createElement('iframe');
-            iframe.src = googleViewer;
-            iframe.className = 'viewer-container';
-            iframe.onload = function() {
-                // Check if Google Docs viewer loaded successfully
-                setTimeout(() => {
-                    try {
-                        const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
-                        if (iframeDoc.body && iframeDoc.body.innerHTML.includes('Unable to display')) {
-                            throw new Error('Google Docs viewer failed');
-                        }
-                    } catch (e) {
-                        tryMicrosoftViewer();
-                    }
-                }, 3000);
-            };
-            iframe.onerror = tryMicrosoftViewer;
-            
-            container.innerHTML = '';
-            container.appendChild(iframe);
-        }
-        
-        function tryMicrosoftViewer() {
-            // Method 2: Try Microsoft Office Online viewer
-            const officeViewer = \`https://view.officeapps.live.com/op/embed.aspx?src=\${encodeURIComponent(documentUrl)}\`;
-            
-            const iframe = document.createElement('iframe');
-            iframe.src = officeViewer;
-            iframe.className = 'viewer-container';
-            iframe.onload = function() {
-                setTimeout(() => {
-                    try {
-                        const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
-                        if (iframeDoc.body && iframeDoc.body.innerHTML.includes('error') || iframeDoc.body.innerHTML.includes('Error')) {
-                            throw new Error('Microsoft viewer failed');
-                        }
-                    } catch (e) {
-                        showError();
-                    }
-                }, 3000);
-            };
-            iframe.onerror = showError;
-            
-            container.innerHTML = '';
-            container.appendChild(iframe);
-        }
-        
-        function showError() {
-            container.innerHTML = \`
-                <div class="error">
-                    <h2>⚠️ Unable to preview document</h2>
-                    <p>The document cannot be displayed in the browser.</p>
-                    <p>This may be due to server restrictions or document format.</p>
-                    <p style="margin-top: 20px; font-size: 14px; color: #666;">
-                        Please try refreshing the page or contact support for assistance.
-                    </p>
-                    <p style="margin-top: 10px; font-size: 12px; color: #999;">
-                        Note: Documents are view-only and cannot be downloaded for security reasons.
-                    </p>
-                </div>
-            \`;
-        }
-        
-        // Start trying viewers
-        tryViewers();
-    </script>
-</body>
-</html>`;
-
-    // Create a blob URL for the HTML content
-    const blob = new Blob([htmlContent], { type: 'text/html' });
-    return URL.createObjectURL(blob);
-  };
-
-  const viewDocument = async (templateName: string, templateDisplayName: string) => {
-    try {
-      console.log('Viewing document:', { templateName, templateDisplayName, vesselImo });
-      
-      // Set processing status
-      setProcessingStatus(prev => ({
-        ...prev,
-        [templateName]: {
-          status: 'processing',
-          message: 'Generating and uploading document...',
-          progress: 30
-        }
-      }));
-
-      // First, generate and upload document to Supabase storage
-      const response = await fetch(`${API_BASE_URL}/view-document/${encodeURIComponent(templateName)}?vessel_imo=${encodeURIComponent(vesselImo)}`);
-      
-      if (!response.ok) {
-        throw new Error('Failed to generate document');
-      }
-      
-      const result = await response.json();
-      
-      if (!result.success || !result.document_id) {
-        throw new Error('Failed to get document ID');
-      }
-      
-      setProcessingStatus(prev => ({
-        ...prev,
-        [templateName]: {
-          status: 'processing',
-          message: 'Opening secure viewer...',
-          progress: 80
-        }
-      }));
-
-      // Now open the document (try Supabase storage first, then fallback)
-      let viewerUrl;
-      if (result.fallback) {
-        // Use direct viewing fallback
-        viewerUrl = `${API_BASE_URL}/view-document-direct/${result.document_id}`;
-      } else {
-        // Use Supabase storage
-        viewerUrl = `${API_BASE_URL}/view-document-storage/${result.document_id}`;
-      }
-      window.open(viewerUrl, '_blank', 'width=1200,height=800,scrollbars=yes,resizable=yes');
-      
-      setProcessingStatus(prev => ({
-        ...prev,
-        [templateName]: {
-          status: 'completed',
-          message: 'Document opened in secure viewer',
-          progress: 100
-        }
-      }));
-      
-      toast.success('Document opened in secure viewer - view and print only, no downloads allowed');
-      
-    } catch (error) {
-      console.error('Error viewing document:', error);
-      setProcessingStatus(prev => ({
-        ...prev,
-        [templateName]: {
-          status: 'failed',
-          message: 'Failed to open document',
-          progress: 0
-        }
-      }));
-      toast.error('Failed to open document');
-    }
-  };
-
-  const viewPDF = async (templateName: string, templateDisplayName: string) => {
-    try {
-      console.log('Viewing PDF:', { templateName, templateDisplayName, vesselImo });
-      
-      // Set processing status
-      setProcessingStatus(prev => ({
-        ...prev,
-        [templateName]: {
-          status: 'processing',
-          message: 'Generating PDF document...',
-          progress: 50
-        }
-      }));
-
-      // Generate PDF document URL
-      const pdfUrl = `${API_BASE_URL}/generate-pdf/${encodeURIComponent(templateName)}?vessel_imo=${encodeURIComponent(vesselImo)}`;
-      
-      // Open PDF document
-      window.open(pdfUrl, '_blank', 'width=1200,height=800,scrollbars=yes,resizable=yes');
-      
-      setProcessingStatus(prev => ({
-        ...prev,
-        [templateName]: {
-          status: 'completed',
-          message: 'PDF document opened',
-          progress: 100
-        }
-      }));
-      
-      toast.success('PDF document opened');
-      
-    } catch (error) {
-      console.error('Error viewing PDF:', error);
-      setProcessingStatus(prev => ({
-        ...prev,
-        [templateName]: {
-          status: 'failed',
-          message: 'Failed to open PDF',
-          progress: 0
-        }
-      }));
-      toast.error('Failed to open PDF document');
     }
   };
 
@@ -529,11 +246,11 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <FileText className="h-5 w-5" />
-          Document Generator
+          <Download className="h-5 w-5" />
+          File Download
         </CardTitle>
         <p className="text-sm text-muted-foreground">
-          Generate and view documents for {vesselName} (IMO: {vesselImo}) - Documents stored securely in Supabase, view and print only (no downloads)
+          Download files for {vesselName} (IMO: {vesselImo})
         </p>
       </CardHeader>
       <CardContent>
@@ -592,17 +309,16 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                   
                   <div className="flex items-center gap-2">
                     <Button
-                      onClick={() => viewDocument(template.file_name, template.name)}
+                      onClick={() => processDocument(template.file_name, template.name)}
                       disabled={isProcessing}
-                      variant="default"
                       className="flex items-center gap-2"
                     >
                       {isProcessing ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
                       ) : (
-                        <Eye className="h-4 w-4" />
+                        <Download className="h-4 w-4" />
                       )}
-                      {isProcessing ? 'Opening...' : 'View & Print Only'}
+                      {isProcessing ? 'Processing...' : 'Download'}
                     </Button>
                   </div>
                 </div>
