@@ -247,10 +247,10 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
         }
       }));
 
-      // Generate HTML document URL (direct browser viewing, no external viewers)
+      // Generate DOCX document URL (preserves exact Word formatting)
       const documentUrl = `${API_BASE_URL}/view-document/${encodeURIComponent(templateName)}?vessel_imo=${encodeURIComponent(vesselImo)}`;
       
-      // Open HTML document directly in browser (no external viewers needed)
+      // Open DOCX document in browser (preserves exact Word formatting)
       window.open(documentUrl, '_blank', 'width=1200,height=800,scrollbars=yes,resizable=yes');
       
       setProcessingStatus(prev => ({
@@ -262,7 +262,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
         }
       }));
       
-      toast.success('Document opened in browser - view and print only, no downloads allowed');
+      toast.success('Document opened in browser - exact Word formatting preserved, view and print only');
       
     } catch (error) {
       console.error('Error viewing document:', error);
@@ -506,7 +506,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
           Document Generator
         </CardTitle>
         <p className="text-sm text-muted-foreground">
-          Generate and view documents for {vesselName} (IMO: {vesselImo}) - Opens directly in browser (view and print only, no downloads allowed)
+          Generate and view documents for {vesselName} (IMO: {vesselImo}) - Opens in browser with exact Word formatting preserved (view and print only)
         </p>
       </CardHeader>
       <CardContent>
