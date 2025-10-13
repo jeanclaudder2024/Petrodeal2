@@ -269,8 +269,15 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
         }
       }));
 
-      // Now open the document from Supabase storage
-      const viewerUrl = `${API_BASE_URL}/view-document-storage/${result.document_id}`;
+      // Now open the document (try Supabase storage first, then fallback)
+      let viewerUrl;
+      if (result.fallback) {
+        // Use direct viewing fallback
+        viewerUrl = `${API_BASE_URL}/view-document-direct/${result.document_id}`;
+      } else {
+        // Use Supabase storage
+        viewerUrl = `${API_BASE_URL}/view-document-storage/${result.document_id}`;
+      }
       window.open(viewerUrl, '_blank', 'width=1200,height=800,scrollbars=yes,resizable=yes');
       
       setProcessingStatus(prev => ({
