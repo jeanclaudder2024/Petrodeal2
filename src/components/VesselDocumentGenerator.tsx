@@ -76,48 +76,27 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
         ...prev,
         [templateName]: {
           status: 'processing',
-          message: 'Generating PDF for viewer...',
+          message: 'Generating document for viewer...',
           progress: 50
         }
       }));
 
-      // Generate PDF URL
-      const pdfUrl = `${API_BASE_URL}/generate-pdf/${encodeURIComponent(templateName)}?vessel_imo=${encodeURIComponent(vesselImo)}`;
+      // Generate HTML document URL
+      const documentUrl = `${API_BASE_URL}/view-document/${encodeURIComponent(templateName)}?vessel_imo=${encodeURIComponent(vesselImo)}`;
       
-      // Try multiple document viewer approaches
-      try {
-        // Method 1: Direct document opening (most reliable)
-        window.open(pdfUrl, '_blank', 'width=1200,height=800,scrollbars=yes,resizable=yes');
-        
-        setProcessingStatus(prev => ({
-          ...prev,
-          [templateName]: {
-            status: 'completed',
-            message: 'Document opened in browser',
-            progress: 100
-          }
-        }));
-        
-        toast.success('Document opened in browser - you can view and print it');
-        
-      } catch (directError) {
-        console.log('Direct document opening failed, trying Google Docs viewer:', directError);
-        
-        // Method 2: Google Docs viewer (works with both PDF and DOCX)
-        const viewerUrl = `https://docs.google.com/viewer?url=${encodeURIComponent(pdfUrl)}&embedded=true`;
-        window.open(viewerUrl, '_blank', 'width=1200,height=800,scrollbars=yes,resizable=yes');
-        
-        setProcessingStatus(prev => ({
-          ...prev,
-          [templateName]: {
-            status: 'completed',
-            message: 'Document opened in Google Docs viewer',
-            progress: 100
-          }
-        }));
-        
-        toast.success('Document opened in Google Docs viewer');
-      }
+      // Open HTML document directly (most reliable)
+      window.open(documentUrl, '_blank', 'width=1200,height=800,scrollbars=yes,resizable=yes');
+      
+      setProcessingStatus(prev => ({
+        ...prev,
+        [templateName]: {
+          status: 'completed',
+          message: 'Document opened in browser',
+          progress: 100
+        }
+      }));
+      
+      toast.success('Document opened in browser - you can view and print it');
       
     } catch (error) {
       console.error('Error viewing document:', error);
