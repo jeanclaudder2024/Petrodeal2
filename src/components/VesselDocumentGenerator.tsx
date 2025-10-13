@@ -85,21 +85,35 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
       const progressInterval = setInterval(() => {
         setProcessingStatus(prev => {
           const current = prev[templateName];
-          if (current && current.status === 'processing' && current.progress && current.progress < 90) {
+          if (current && current.status === 'processing' && current.progress && current.progress < 95) {
             return {
               ...prev,
               [templateName]: {
                 ...current,
-                progress: Math.min(current.progress + 10, 90),
-                message: current.progress < 30 ? 'Extracting placeholders...' :
-                        current.progress < 60 ? 'Filling data...' :
-                        current.progress < 90 ? 'Protecting document...' : 'Finalizing...'
+                progress: Math.min(current.progress + 8, 95),
+                message: current.progress < 25 ? 'Extracting placeholders...' :
+                        current.progress < 50 ? 'Filling data...' :
+                        current.progress < 75 ? 'Protecting document...' :
+                        current.progress < 95 ? 'Preparing download...' : 'Finalizing...'
               }
             };
           }
           return prev;
         });
-      }, 500);
+      }, 400);
+
+      // Add timeout to prevent stuck progress
+      const timeoutId = setTimeout(() => {
+        clearInterval(progressInterval);
+        setProcessingStatus(prev => ({
+          ...prev,
+          [templateName]: {
+            status: 'failed',
+            message: 'Request timeout - please try again'
+          }
+        }));
+        toast.error('Request timeout - please try again');
+      }, 30000); // 30 second timeout
 
       // Create a dummy file for the template_file parameter (required by API)
       const dummyFile = new File(['dummy'], 'dummy.docx', {
@@ -118,8 +132,9 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
         body: formData,
       });
 
-      // Clear progress interval
+      // Clear progress interval and timeout
       clearInterval(progressInterval);
+      clearTimeout(timeoutId);
 
       console.log('Process response status:', response.status);
 
@@ -179,6 +194,8 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
         }
       } else {
         const responseText = await response.text();
+        // Clear timeout
+        clearTimeout(timeoutId);
         setProcessingStatus(prev => ({
           ...prev,
           [templateName]: {
@@ -191,6 +208,10 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
       }
     } catch (error) {
       console.error('Error processing document:', error);
+      // Clear timeout if it exists
+      if (typeof timeoutId !== 'undefined') {
+        clearTimeout(timeoutId);
+      }
       setProcessingStatus(prev => ({
         ...prev,
         [templateName]: {
