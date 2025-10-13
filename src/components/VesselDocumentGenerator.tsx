@@ -242,27 +242,47 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
         ...prev,
         [templateName]: {
           status: 'processing',
-          message: 'Generating document for viewing...',
-          progress: 50
+          message: 'Generating and uploading document...',
+          progress: 30
         }
       }));
 
-      // Generate DOCX document URL (preserves exact Word formatting)
-      const documentUrl = `${API_BASE_URL}/view-document/${encodeURIComponent(templateName)}?vessel_imo=${encodeURIComponent(vesselImo)}`;
+      // First, generate and upload document to Supabase storage
+      const response = await fetch(`${API_BASE_URL}/view-document/${encodeURIComponent(templateName)}?vessel_imo=${encodeURIComponent(vesselImo)}`);
       
-      // Open DOCX document in browser (preserves exact Word formatting)
-      window.open(documentUrl, '_blank', 'width=1200,height=800,scrollbars=yes,resizable=yes');
+      if (!response.ok) {
+        throw new Error('Failed to generate document');
+      }
+      
+      const result = await response.json();
+      
+      if (!result.success || !result.document_id) {
+        throw new Error('Failed to get document ID');
+      }
+      
+      setProcessingStatus(prev => ({
+        ...prev,
+        [templateName]: {
+          status: 'processing',
+          message: 'Opening secure viewer...',
+          progress: 80
+        }
+      }));
+
+      // Now open the document from Supabase storage
+      const viewerUrl = `${API_BASE_URL}/view-document-storage/${result.document_id}`;
+      window.open(viewerUrl, '_blank', 'width=1200,height=800,scrollbars=yes,resizable=yes');
       
       setProcessingStatus(prev => ({
         ...prev,
         [templateName]: {
           status: 'completed',
-          message: 'Document opened in read-only viewer',
+          message: 'Document opened in secure viewer',
           progress: 100
         }
       }));
       
-      toast.success('Document opened in browser - exact Word formatting preserved, view and print only');
+      toast.success('Document opened in secure viewer - view and print only, no downloads allowed');
       
     } catch (error) {
       console.error('Error viewing document:', error);
@@ -506,7 +526,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
           Document Generator
         </CardTitle>
         <p className="text-sm text-muted-foreground">
-          Generate and view documents for {vesselName} (IMO: {vesselImo}) - Opens in browser with exact Word formatting preserved (view and print only)
+          Generate and view documents for {vesselName} (IMO: {vesselImo}) - Documents stored securely in Supabase, view and print only (no downloads)
         </p>
       </CardHeader>
       <CardContent>
