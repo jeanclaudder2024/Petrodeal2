@@ -138,21 +138,6 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
         .error p {
             margin: 5px 0;
         }
-        .download-btn {
-            background-color: #27ae60;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 5px;
-            cursor: pointer;
-            font-size: 14px;
-            margin-top: 15px;
-            text-decoration: none;
-            display: inline-block;
-        }
-        .download-btn:hover {
-            background-color: #229954;
-        }
     </style>
 </head>
 <body>
@@ -227,11 +212,11 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                     <h2>⚠️ Unable to preview document</h2>
                     <p>The document cannot be displayed in the browser.</p>
                     <p>This may be due to server restrictions or document format.</p>
-                    <a href="\${documentUrl}" class="download-btn" target="_blank">
-                        📥 Download Document to View
-                    </a>
-                    <p style="margin-top: 20px; font-size: 12px; color: #666;">
-                        Note: Downloaded documents preserve exact formatting and can be opened in Microsoft Word.
+                    <p style="margin-top: 20px; font-size: 14px; color: #666;">
+                        Please try refreshing the page or contact support for assistance.
+                    </p>
+                    <p style="margin-top: 10px; font-size: 12px; color: #999;">
+                        Note: Documents are view-only and cannot be downloaded for security reasons.
                     </p>
                 </div>
             \`;
@@ -278,7 +263,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
         }
       }));
       
-      toast.success('Document opened in read-only viewer - you can view and print but not download');
+      toast.success('Document opened in read-only viewer - view and print only, no downloads allowed');
       
     } catch (error) {
       console.error('Error viewing document:', error);
@@ -522,7 +507,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
           Document Generator
         </CardTitle>
         <p className="text-sm text-muted-foreground">
-          Generate and view documents for {vesselName} (IMO: {vesselImo}) - View & Print opens in read-only mode (no download), PDF for direct viewing
+          Generate and view documents for {vesselName} (IMO: {vesselImo}) - View & Print opens in read-only mode (view and print only, no downloads allowed)
         </p>
       </CardHeader>
       <CardContent>
@@ -591,21 +576,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                       ) : (
                         <Eye className="h-4 w-4" />
                       )}
-                      {isProcessing ? 'Opening...' : 'View & Print'}
-                    </Button>
-                    
-                    <Button
-                      onClick={() => viewPDF(template.file_name, template.name)}
-                      disabled={isProcessing}
-                      variant="outline"
-                      className="flex items-center gap-2"
-                    >
-                      {isProcessing ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Eye className="h-4 w-4" />
-                      )}
-                      {isProcessing ? 'Opening...' : 'View PDF'}
+                      {isProcessing ? 'Opening...' : 'View & Print Only'}
                     </Button>
                   </div>
                 </div>
