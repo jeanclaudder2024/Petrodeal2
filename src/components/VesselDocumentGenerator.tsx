@@ -84,9 +84,9 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
       // Generate PDF URL
       const pdfUrl = `${API_BASE_URL}/generate-pdf/${encodeURIComponent(templateName)}?vessel_imo=${encodeURIComponent(vesselImo)}`;
       
-      // Try multiple PDF viewer approaches
+      // Try multiple document viewer approaches
       try {
-        // Method 1: Direct PDF opening (most reliable)
+        // Method 1: Direct document opening (most reliable)
         window.open(pdfUrl, '_blank', 'width=1200,height=800,scrollbars=yes,resizable=yes');
         
         setProcessingStatus(prev => ({
@@ -101,22 +101,22 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
         toast.success('Document opened in browser - you can view and print it');
         
       } catch (directError) {
-        console.log('Direct PDF opening failed, trying PDF.js viewer:', directError);
+        console.log('Direct document opening failed, trying Google Docs viewer:', directError);
         
-        // Method 2: PDF.js viewer (fallback)
-        const viewerUrl = `https://mozilla.github.io/pdf.js/web/viewer.html?file=${encodeURIComponent(pdfUrl)}`;
+        // Method 2: Google Docs viewer (works with both PDF and DOCX)
+        const viewerUrl = `https://docs.google.com/viewer?url=${encodeURIComponent(pdfUrl)}&embedded=true`;
         window.open(viewerUrl, '_blank', 'width=1200,height=800,scrollbars=yes,resizable=yes');
         
         setProcessingStatus(prev => ({
           ...prev,
           [templateName]: {
             status: 'completed',
-            message: 'Document opened in PDF.js viewer',
+            message: 'Document opened in Google Docs viewer',
             progress: 100
           }
         }));
         
-        toast.success('Document opened in PDF.js viewer');
+        toast.success('Document opened in Google Docs viewer');
       }
       
     } catch (error) {
