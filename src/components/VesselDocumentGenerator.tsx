@@ -247,12 +247,11 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
         }
       }));
 
-      // Generate DOCX document URL (preserves exact Word formatting)
+      // Generate HTML document URL (direct browser viewing, no external viewers)
       const documentUrl = `${API_BASE_URL}/view-document/${encodeURIComponent(templateName)}?vessel_imo=${encodeURIComponent(vesselImo)}`;
       
-      // Create a custom viewer page that embeds the document
-      const viewerPageUrl = createCustomViewer(documentUrl, templateDisplayName);
-      window.open(viewerPageUrl, '_blank', 'width=1200,height=800,scrollbars=yes,resizable=yes');
+      // Open HTML document directly in browser (no external viewers needed)
+      window.open(documentUrl, '_blank', 'width=1200,height=800,scrollbars=yes,resizable=yes');
       
       setProcessingStatus(prev => ({
         ...prev,
@@ -263,7 +262,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
         }
       }));
       
-      toast.success('Document opened in read-only viewer - view and print only, no downloads allowed');
+      toast.success('Document opened in browser - view and print only, no downloads allowed');
       
     } catch (error) {
       console.error('Error viewing document:', error);
@@ -507,7 +506,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
           Document Generator
         </CardTitle>
         <p className="text-sm text-muted-foreground">
-          Generate and view documents for {vesselName} (IMO: {vesselImo}) - View & Print opens in read-only mode (view and print only, no downloads allowed)
+          Generate and view documents for {vesselName} (IMO: {vesselImo}) - Opens directly in browser (view and print only, no downloads allowed)
         </p>
       </CardHeader>
       <CardContent>
