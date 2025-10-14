@@ -26,7 +26,7 @@ interface VesselDocumentGeneratorProps {
   vesselName: string;
 }
 
-const API_BASE_URL = 'https://document-processor-production-8a35.up.railway.app';
+const API_BASE_URL = 'http://161.97.103.172:8000';
 
 export default function VesselDocumentGenerator({ vesselImo, vesselName }: VesselDocumentGeneratorProps) {
   const [templates, setTemplates] = useState<DocumentTemplate[]>([]);
@@ -167,33 +167,29 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
           
           toast.success('PDF document downloaded successfully');
         } else {
-          // Handle JSON response (fallback)
-          const responseText = await response.text();
-          const result = JSON.parse(responseText);
-          console.log('Process result:', result);
+          // Handle any other response format (treat as file download)
+          console.log('Response is not PDF, treating as file download');
           
-          if (result.success) {
-            setProcessingStatus(prev => ({
-              ...prev,
-              [templateName]: {
-                status: 'completed',
-                message: 'Ready for download',
-                progress: 100
-              }
-            }));
-            
-            toast.success('File processed successfully');
-          } else {
-            setProcessingStatus(prev => ({
-              ...prev,
-              [templateName]: {
-                status: 'failed',
-                message: result.message || 'Processing failed'
-              }
-            }));
-            toast.error(result.message || 'Document processing failed');
-            console.error('Processing failed:', result);
-          }
+          const blob = await response.blob();
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `processed_${vesselImo}_${Date.now()}.pdf`;
+          document.body.appendChild(a);
+          a.click();
+          window.URL.revokeObjectURL(url);
+          document.body.removeChild(a);
+          
+          setProcessingStatus(prev => ({
+            ...prev,
+            [templateName]: {
+              status: 'completed',
+              message: 'Downloaded successfully',
+              progress: 100
+            }
+          }));
+          
+          toast.success('Document downloaded successfully');
         }
       } else {
         const responseText = await response.text();
