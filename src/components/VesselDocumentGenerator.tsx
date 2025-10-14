@@ -331,12 +331,12 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                     <Button
                       onClick={() => processDocument(template.file_name, template.name)}
                       disabled={isProcessing}
-                      className="flex items-center gap-2"
+                      className="flex items-center gap-2 transition-all duration-300 hover:scale-105 hover:shadow-lg active:scale-95"
                     >
                       {isProcessing ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
                       ) : (
-                        <Download className="h-4 w-4" />
+                        <Download className="h-4 w-4 animate-pulse" />
                       )}
                       {isProcessing ? 'Processing...' : 'Download'}
                     </Button>
