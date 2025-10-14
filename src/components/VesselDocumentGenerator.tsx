@@ -113,7 +113,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
           }
         }));
         toast.error('Request timeout - server may be busy, please try again');
-      }, 15000); // 15 second timeout
+      }, 30000); // 30 second timeout
 
       // Create a dummy file for the template_file parameter (required by API)
       const dummyFile = new File(['dummy'], 'dummy.docx', {
