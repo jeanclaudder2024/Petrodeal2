@@ -26,7 +26,7 @@ interface VesselDocumentGeneratorProps {
   vesselName: string;
 }
 
-const API_BASE_URL = 'http://161.97.103.172:8000';
+const API_BASE_URL = 'https://161.97.103.172:8443';
 
 export default function VesselDocumentGenerator({ vesselImo, vesselName }: VesselDocumentGeneratorProps) {
   const [templates, setTemplates] = useState<DocumentTemplate[]>([]);
@@ -331,14 +331,22 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                     <Button
                       onClick={() => processDocument(template.file_name, template.name)}
                       disabled={isProcessing}
-                      className="flex items-center gap-2 transition-all duration-300 hover:scale-105 hover:shadow-lg active:scale-95"
+                      className="group relative flex items-center gap-2 transition-all duration-300 hover:scale-105 hover:shadow-xl hover:shadow-blue-500/25 active:scale-95 overflow-hidden bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 text-white border-0"
                     >
-                      {isProcessing ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Download className="h-4 w-4 animate-pulse" />
-                      )}
-                      {isProcessing ? 'Processing...' : 'Download'}
+                      {/* Animated background effect */}
+                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700 ease-out"></div>
+                      
+                      {/* Button content */}
+                      <div className="relative flex items-center gap-2">
+                        {isProcessing ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Download className="h-4 w-4 transition-all duration-300 group-hover:animate-bounce group-hover:scale-110" />
+                        )}
+                        <span className="transition-all duration-300 group-hover:font-semibold">
+                          {isProcessing ? 'Processing...' : 'Download'}
+                        </span>
+                      </div>
                     </Button>
                   </div>
                 </div>
