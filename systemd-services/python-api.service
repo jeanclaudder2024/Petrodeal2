@@ -1,0 +1,31 @@
+[Unit]
+Description=AI Vessel Trade Flow Python API
+After=network.target
+Wants=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+Group=ubuntu
+WorkingDirectory=/opt/aivessel-trade-flow/document-processor
+Environment=PATH=/opt/aivessel-trade-flow/document-processor/venv/bin
+ExecStart=/opt/aivessel-trade-flow/document-processor/venv/bin/python main.py
+Restart=always
+RestartSec=10
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=python-api
+
+# Security settings
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/opt/aivessel-trade-flow
+
+# Resource limits
+LimitNOFILE=65536
+MemoryMax=1G
+
+[Install]
+WantedBy=multi-user.target

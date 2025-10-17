@@ -26,7 +26,10 @@ interface VesselDocumentGeneratorProps {
   vesselName: string;
 }
 
-const API_BASE_URL = 'https://161.97.103.172:8443';
+// For VPS deployment - use local API
+const API_BASE_URL = process.env.NODE_ENV === 'production' 
+  ? 'http://localhost:8000'  // Same VPS deployment
+  : 'http://localhost:8000'; // Development
 
 export default function VesselDocumentGenerator({ vesselImo, vesselName }: VesselDocumentGeneratorProps) {
   const [templates, setTemplates] = useState<DocumentTemplate[]>([]);
@@ -68,6 +71,8 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
   };
 
   const processDocument = async (templateName: string, templateDisplayName: string) => {
+    let timeoutId: NodeJS.Timeout | undefined;
+    
     try {
       console.log('Processing document:', { templateName, templateDisplayName, vesselImo });
       
@@ -103,7 +108,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
       }, 400);
 
       // Add timeout to prevent stuck progress
-      const timeoutId = setTimeout(() => {
+      timeoutId = setTimeout(() => {
         clearInterval(progressInterval);
         setProcessingStatus(prev => ({
           ...prev,
