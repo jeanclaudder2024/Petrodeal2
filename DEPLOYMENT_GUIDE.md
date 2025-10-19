@@ -1,413 +1,226 @@
-# 🚀 Complete Guide: Deploy Document Processor API as Windows Service
+# 🚀 Complete Deployment Guide for PetroDealHub.com
 
-## 📋 Table of Contents
-1. [What is NSSM?](#what-is-nssm)
-2. [Download and Setup](#download-and-setup)
-3. [Install as Windows Service](#install-as-windows-service)
-4. [Configure React Project](#configure-react-project)
-5. [Testing and Verification](#testing-and-verification)
-6. [Service Management](#service-management)
-7. [Troubleshooting](#troubleshooting)
+## 📋 Pre-Deployment Checklist
 
----
+### 1. DNS Configuration (CRITICAL)
+Before starting deployment, make sure your domain is properly configured:
 
-## 🎯 What is NSSM?
-
-**NSSM (Non-Sucking Service Manager)** is a tool that allows you to run any executable as a Windows Service. This means:
-- ✅ Runs automatically when Windows starts
-- ✅ Runs even when you're not logged in
-- ✅ Automatically restarts if it crashes
-- ✅ Easy to manage (start/stop/restart)
-- ✅ Professional service management
-
----
-
-## 📥 Download and Setup
-
-### Step 1: Download NSSM
-1. Go to: https://nssm.cc/download
-2. Download: `nssm-2.24.zip` (or latest version)
-3. Extract to: `C:\nssm\`
-
-### Step 2: Verify Python Path
-1. Open Command Prompt
-2. Run: `python --version`
-3. Note your Python path (usually `C:\Python311\python.exe` or `C:\Users\YourName\AppData\Local\Programs\Python\Python311\python.exe`)
-
-### Step 3: Verify Project Path
-Your project should be at:
-```
-D:\ia oile project prop\aivessel-trade-flow-main\document-processor
+```bash
+# Check if domain points to your VPS
+nslookup petrodealhub.com
+nslookup www.petrodealhub.com
 ```
 
----
+**Required DNS Records:**
+- `petrodealhub.com` → Your VPS IP address
+- `www.petrodealhub.com` → Your VPS IP address
 
-## ⚙️ Install as Windows Service
+### 2. VPS Requirements
+- Ubuntu 20.04+ or Debian 11+
+- At least 2GB RAM
+- At least 20GB storage
+- Root access or sudo privileges
 
-### Step 1: Open Command Prompt as Administrator
-1. Press `Win + X`
-2. Select "Command Prompt (Admin)" or "PowerShell (Admin)"
+### 3. Project Files
+- Make sure you're in the project root directory
+- Verify `package.json` and `document-processor/requirements.txt` exist
 
-### Step 2: Navigate to NSSM
-```cmd
-cd C:\nssm\win64
+## 🚀 Step-by-Step Deployment
+
+### Step 1: Connect to Your VPS
+```bash
+ssh root@your-vps-ip
+# or
+ssh your-username@your-vps-ip
 ```
 
-### Step 3: Install the Service
-```cmd
-nssm install DocumentProcessor
+### Step 2: Upload Project Files
+```bash
+# Option A: Using SCP (from your local machine)
+scp -r . root@your-vps-ip:/tmp/aivessel-trade-flow
+
+# Option B: Using Git (on VPS)
+git clone https://github.com/your-repo/aivessel-trade-flow.git
+cd aivessel-trade-flow
 ```
 
-### Step 4: Configure the Service
-A GUI window will open. Fill in these details:
-
-**Application Tab:**
-- **Path**: `C:\Python311\python.exe` (or your Python path)
-- **Startup directory**: `D:\ia oile project prop\aivessel-trade-flow-main\document-processor`
-- **Arguments**: `-m uvicorn main:app --host 0.0.0.0 --port 8000`
-
-**Details Tab:**
-- **Display name**: `Document Processor API`
-- **Description**: `Oil Trading Document Processing API Service`
-
-**Log on Tab:**
-- **Log on as**: `Local System account`
-- Check: `Allow service to interact with desktop`
-
-### Step 5: Save Configuration
-Click "Install service"
-
-### Step 6: Start the Service
-```cmd
-nssm start DocumentProcessor
+### Step 3: Make Script Executable
+```bash
+chmod +x deploy-petrodealhub.sh
 ```
 
----
-
-## 🔗 Configure React Project
-
-### Step 1: Update API URL in React
-Open your React project and update the API URL:
-
-**File**: `src/components/VesselDocumentGenerator.tsx`
-
-**Change this line:**
-```typescript
-const API_BASE_URL = 'https://document-processor-production-8a35.up.railway.app';
+### Step 4: Run Deployment Script
+```bash
+./deploy-petrodealhub.sh
 ```
 
-**To this:**
-```typescript
-const API_BASE_URL = 'http://localhost:8000';
+**The script will:**
+1. ✅ Update system packages
+2. ✅ Install Node.js 18.x, Python 3.11, Nginx, PM2, Certbot
+3. ✅ Create application directory `/opt/petrodealhub`
+4. ✅ Copy project files
+5. ✅ Setup Python API with virtual environment
+6. ✅ Setup React app and build for production
+7. ✅ Configure PM2 processes
+8. ✅ Setup Nginx reverse proxy
+9. ✅ Configure firewall (ports 22, 80, 443)
+10. ✅ Obtain SSL certificate from Let's Encrypt
+11. ✅ Setup automatic SSL renewal
+
+### Step 5: Follow PM2 Startup Instructions
+After the script runs, you'll see a command like:
+```bash
+sudo env PATH=$PATH:/usr/bin /usr/lib/node_modules/pm2/bin/pm2 startup systemd -u your-username --hp /home/your-username
+```
+**Run this command exactly as shown!**
+
+### Step 6: Verify Deployment
+```bash
+# Check PM2 processes
+pm2 status
+
+# Check Nginx status
+sudo systemctl status nginx
+
+# Check SSL certificate
+sudo certbot certificates
+
+# Test your site
+curl -I https://petrodealhub.com
 ```
 
-### Step 2: Update Other API References
-Search for any other API references in your React project:
+## 🌐 Final Result
 
-**Files to check:**
-- `src/components/VesselDocumentGenerator.tsx`
-- `src/pages/VesselDetail.tsx`
-- Any other components that call the API
+After successful deployment, your application will be available at:
 
-**Replace all instances of:**
-```typescript
-'https://document-processor-production-8a35.up.railway.app'
+- **Main Site**: `https://petrodealhub.com`
+- **API Endpoints**: `https://petrodealhub.com/api/`
+- **Health Check**: `https://petrodealhub.com/health`
+
+## 📝 Useful Commands
+
+### PM2 Management
+```bash
+pm2 status              # Check process status
+pm2 logs                # View all logs
+pm2 logs petrodealhub-api    # View API logs
+pm2 logs petrodealhub-app    # View React app logs
+pm2 restart all         # Restart all processes
+pm2 stop all           # Stop all processes
+pm2 monit              # Monitor processes
 ```
 
-**With:**
-```typescript
-'http://localhost:8000'
+### Nginx Management
+```bash
+sudo systemctl status nginx    # Check Nginx status
+sudo systemctl restart nginx   # Restart Nginx
+sudo nginx -t                  # Test Nginx configuration
+sudo tail -f /var/log/nginx/error.log  # View Nginx errors
 ```
 
-### Step 3: Handle CORS (if needed)
-If you get CORS errors, update your Python API:
-
-**File**: `document-processor/main.py`
-
-**Add this import at the top:**
-```python
-from fastapi.middleware.cors import CORSMiddleware
+### SSL Certificate Management
+```bash
+sudo certbot certificates      # List certificates
+sudo certbot renew            # Renew certificates
+sudo certbot renew --dry-run  # Test renewal
 ```
-
-**Add this after creating the app:**
-```python
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:5173"],  # Add your React dev server ports
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-```
-
----
-
-## 🧪 Testing and Verification
-
-### Step 1: Check Service Status
-```cmd
-nssm status DocumentProcessor
-```
-
-### Step 2: Test API Endpoints
-Open your browser and test:
-
-1. **Health Check**: http://localhost:8000/health
-2. **Root Endpoint**: http://localhost:8000/
-3. **Templates**: http://localhost:8000/templates
-
-### Step 3: Test React Integration
-1. Start your React development server:
-   ```cmd
-   npm start
-   # or
-   yarn start
-   ```
-
-2. Open your React app in browser
-3. Try to generate a document
-4. Check browser console for any errors
-
-### Step 4: Check Service Logs
-```cmd
-nssm get DocumentProcessor AppStdout
-nssm get DocumentProcessor AppStderr
-```
-
----
-
-## 🎛️ Service Management
-
-### Start Service
-```cmd
-nssm start DocumentProcessor
-```
-
-### Stop Service
-```cmd
-nssm stop DocumentProcessor
-```
-
-### Restart Service
-```cmd
-nssm restart DocumentProcessor
-```
-
-### Check Service Status
-```cmd
-nssm status DocumentProcessor
-```
-
-### Remove Service
-```cmd
-nssm remove DocumentProcessor
-```
-
-### View Service Logs
-```cmd
-nssm get DocumentProcessor AppStdout
-nssm get DocumentProcessor AppStderr
-```
-
----
 
 ## 🔧 Troubleshooting
 
-### Problem: Service won't start
-**Solution:**
-1. Check Python path: `python --version`
-2. Check project path exists
-3. Check if port 8000 is free: `netstat -an | findstr :8000`
-4. Check service logs: `nssm get DocumentProcessor AppStderr`
+### Common Issues
 
-### Problem: CORS errors in React
-**Solution:**
-1. Add CORS middleware to Python API (see above)
-2. Restart the service: `nssm restart DocumentProcessor`
-3. Clear browser cache
-
-### Problem: API not responding
-**Solution:**
-1. Check service status: `nssm status DocumentProcessor`
-2. Check if port is listening: `netstat -an | findstr :8000`
-3. Test with curl: `curl http://localhost:8000/health`
-
-### Problem: Service stops unexpectedly
-**Solution:**
-1. Check service logs: `nssm get DocumentProcessor AppStderr`
-2. Check Windows Event Viewer
-3. Verify Python dependencies are installed
-
-### Problem: React can't connect to API
-**Solution:**
-1. Verify API URL in React code
-2. Check if service is running
-3. Test API directly in browser
-4. Check firewall settings
-
----
-
-## 🌐 Network Access (Optional)
-
-If you want to access the API from other computers on your network:
-
-### Step 1: Find Your IP Address
-```cmd
-ipconfig
+#### 1. DNS Not Propagated
+```bash
+# Check if domain points to your server
+dig petrodealhub.com
+# Wait for DNS propagation (can take up to 48 hours)
 ```
 
-### Step 2: Update React API URL
-```typescript
-const API_BASE_URL = 'http://YOUR_IP_ADDRESS:8000';
+#### 2. SSL Certificate Failed
+```bash
+# Check Nginx configuration
+sudo nginx -t
+
+# Check if ports 80 and 443 are open
+sudo ufw status
+
+# Manually obtain certificate
+sudo certbot --nginx -d petrodealhub.com -d www.petrodealhub.com
 ```
 
-### Step 3: Configure Windows Firewall
-1. Open Windows Defender Firewall
-2. Click "Allow an app or feature through Windows Defender Firewall"
-3. Click "Change settings" → "Allow another app"
-4. Browse to: `C:\Python311\python.exe`
-5. Check both "Private" and "Public"
+#### 3. PM2 Processes Not Starting
+```bash
+# Check logs
+pm2 logs
 
----
+# Restart processes
+pm2 restart all
+
+# Check if ports are in use
+sudo netstat -tlnp | grep :3000
+sudo netstat -tlnp | grep :8000
+```
+
+#### 4. API Not Responding
+```bash
+# Check if Python API is running
+curl http://localhost:8000/health
+
+# Check PM2 logs
+pm2 logs petrodealhub-api
+
+# Restart API
+pm2 restart petrodealhub-api
+```
+
+#### 5. React App Not Loading
+```bash
+# Check if React app is running
+curl http://localhost:3000
+
+# Check PM2 logs
+pm2 logs petrodealhub-app
+
+# Restart React app
+pm2 restart petrodealhub-app
+```
+
+## 🔒 Security Notes
+
+1. **Firewall**: Only ports 22 (SSH), 80 (HTTP), and 443 (HTTPS) are open
+2. **SSL**: Automatic renewal is configured
+3. **Updates**: System packages are updated during deployment
+4. **Process Management**: PM2 handles process restarts and monitoring
 
 ## 📊 Monitoring
 
-### Check Service Status
-```cmd
-nssm status DocumentProcessor
-```
+### Health Checks
+- **API Health**: `https://petrodealhub.com/health`
+- **Main Site**: `https://petrodealhub.com`
 
-### View Real-time Logs
-```cmd
-nssm get DocumentProcessor AppStdout
-```
+### Log Locations
+- **PM2 Logs**: `/var/log/pm2/`
+- **Nginx Logs**: `/var/log/nginx/`
+- **System Logs**: `journalctl -u nginx`
 
-### Check Port Usage
-```cmd
-netstat -an | findstr :8000
-```
+## 🆘 Support
 
-### Test API Health
-```cmd
-curl http://localhost:8000/health
-```
+If you encounter issues:
 
----
+1. Check the logs: `pm2 logs`
+2. Verify DNS: `nslookup petrodealhub.com`
+3. Test locally: `curl http://localhost:3000` and `curl http://localhost:8000/health`
+4. Check Nginx: `sudo nginx -t`
 
-## 🎉 Success Checklist
+## 🎉 Success!
 
-- [ ] NSSM downloaded and extracted
-- [ ] Service installed and configured
-- [ ] Service started successfully
-- [ ] API responds at http://localhost:8000/health
-- [ ] React project updated with local API URL
-- [ ] Document generation works in React app
-- [ ] Service runs automatically on Windows startup
-- [ ] Service restarts automatically if it crashes
+Once deployed successfully, you'll have:
+- ✅ Secure HTTPS website
+- ✅ Automatic SSL certificate renewal
+- ✅ Process monitoring with PM2
+- ✅ Reverse proxy with Nginx
+- ✅ Python API + React frontend
+- ✅ File upload capabilities
+- ✅ Health monitoring
 
----
-
-## 🚀 Final Result
-
-After completing this setup:
-
-1. **Your Python API runs 24/7** as a Windows Service
-2. **Automatically starts** when Windows boots
-3. **Runs even when you're not logged in**
-4. **Your React app connects** to the local API
-5. **Document generation works** seamlessly
-6. **Professional service management** with NSSM
-
-Your document processor is now running as a professional Windows service! 🎯
-
----
-
-## 📞 Support
-
-If you encounter any issues:
-1. Check the troubleshooting section above
-2. Verify all paths and configurations
-3. Check Windows Event Viewer for errors
-4. Test each component individually
-
-**Happy Document Processing!** 🚀
-
----
-
-## 🔄 Quick Commands Reference
-
-### Service Management
-```cmd
-# Install service
-nssm install DocumentProcessor
-
-# Start service
-nssm start DocumentProcessor
-
-# Stop service
-nssm stop DocumentProcessor
-
-# Restart service
-nssm restart DocumentProcessor
-
-# Check status
-nssm status DocumentProcessor
-
-# Remove service
-nssm remove DocumentProcessor
-```
-
-### Testing Commands
-```cmd
-# Check if port is in use
-netstat -an | findstr :8000
-
-# Test API health
-curl http://localhost:8000/health
-
-# Check service logs
-nssm get DocumentProcessor AppStdout
-nssm get DocumentProcessor AppStderr
-```
-
-### React Development
-```cmd
-# Start React dev server
-npm start
-
-# Build React for production
-npm run build
-
-# Install dependencies
-npm install
-```
-
----
-
-## 📁 File Structure
-
-```
-D:\ia oile project prop\aivessel-trade-flow-main\
-├── document-processor/           # Python API
-│   ├── main.py                  # Main API file
-│   ├── requirements.txt         # Python dependencies
-│   ├── templates/               # Word templates
-│   └── temp/                    # Temporary files
-├── src/                         # React frontend
-│   ├── components/
-│   │   └── VesselDocumentGenerator.tsx
-│   └── pages/
-│       └── VesselDetail.tsx
-└── DEPLOYMENT_GUIDE.md          # This file
-```
-
----
-
-## 🎯 Next Steps
-
-1. **Follow the setup guide** step by step
-2. **Test the service** thoroughly
-3. **Update your React app** to use local API
-4. **Monitor the service** for any issues
-5. **Enjoy 24/7 document processing!** 🚀
-
+Your AI Vessel Trade Flow application is now live on PetroDealHub.com! 🚀
