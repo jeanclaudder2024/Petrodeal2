@@ -125,17 +125,20 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
         type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
       });
 
-      const formData = new FormData();
-      formData.append('template_name', templateName);
-      formData.append('vessel_imo', vesselImo);
-      formData.append('template_file', dummyFile);
+      const requestData = {
+        template_name: templateName,
+        vessel_imo: vesselImo
+      };
 
       console.log('Sending request to:', `${API_BASE_URL}/process-document`);
-      console.log('Request data:', { templateName, vesselImo });
+      console.log('Request data:', requestData);
 
       const response = await fetch(`${API_BASE_URL}/process-document`, {
         method: 'POST',
-        body: formData,
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(requestData),
       });
 
       console.log('Response received:', response.status, response.statusText);
