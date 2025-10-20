@@ -26,9 +26,9 @@ interface VesselDocumentGeneratorProps {
   vesselName: string;
 }
 
-// For VPS deployment - use local API
+// For VPS deployment - use production API
 const API_BASE_URL = process.env.NODE_ENV === 'production' 
-  ? 'http://localhost:8000'  // Same VPS deployment
+  ? 'https://petrodealhub.com/api'  // Production API
   : 'http://localhost:8000'; // Development
 
 export default function VesselDocumentGenerator({ vesselImo, vesselName }: VesselDocumentGeneratorProps) {
