@@ -1,210 +1,63 @@
-# AI Vessel Trade Flow - Document Template System
+# Document Processor API
 
-## Overview
-This project implements a professional document template system for maritime/oil trading that allows users to upload Word document templates with placeholders, map them to database fields, and generate filled documents for specific vessels.
+A FastAPI-based document processing service that automatically fills Word document templates with vessel data from Supabase database.
 
-## What We've Accomplished
+## Features
 
-### 1. **Word Document Processing System**
-- **File**: `supabase/functions/analyze-word-template/index.ts`
-- **Purpose**: Analyzes uploaded Word documents to extract all placeholders
-- **Features**:
-  - Extracts text from all XML files in DOCX (document.xml, headers, footers)
-  - Detects placeholders in multiple formats: `{placeholder}`, `{{placeholder}}`, `[placeholder]`, `${placeholder}`, `@placeholder`
-  - Uses AI (OpenAI) to suggest database field mappings
-  - Handles split placeholders across Word XML tags
-  - Saves analysis results to `document_templates` table
+- 📄 **Word Document Processing**: Automatically fills placeholders in .docx templates
+- 🚢 **Vessel Data Integration**: Connects to Supabase database for real vessel information
+- 🔄 **PDF Conversion**: Converts filled Word documents to PDF format
+- 🎯 **Smart Placeholder Replacement**: Uses database data + realistic random data for missing fields
+- 🌐 **REST API**: Easy integration with React frontend
 
-### 2. **Document Generation System**
-- **File**: `supabase/functions/enhanced-document-processor/index.ts`
-- **Purpose**: Fills placeholders in Word documents with real vessel data
-- **Features**:
-  - Fetches data from vessels, ports, companies, refineries tables
-  - Uses advanced mapping priority: Database field → Fixed text → Multiple choices → Random generation
-  - Handles split placeholders by normalizing XML before replacement
-  - Converts filled documents to PDF
-  - Supports both DOCX and PDF output formats
+## API Endpoints
 
-### 3. **Admin Panel Interface**
-- **File**: `src/components/admin/EnhancedDocumentTemplateManager.tsx`
-- **Purpose**: Admin interface for managing document templates
-- **Features**:
-  - Upload Word document templates
-  - View all detected placeholders
-  - Map placeholders to database fields
-  - Activate/deactivate templates
-  - Test template generation
-  - Delete templates
+- `GET /health` - Health check
+- `GET /templates` - List available templates
+- `GET /vessels` - List vessels from database
+- `GET /vessel/{imo}` - Get specific vessel by IMO
+- `POST /process-document` - Process document with vessel data
+- `POST /upload-template` - Upload new template
 
-### 4. **Database Schema**
-- **Table**: `document_templates`
-- **Columns**:
-  - `id`, `title`, `description`, `file_url`, `file_name`
-  - `placeholders` (JSON array of detected placeholders)
-  - `field_mappings` (JSON object mapping placeholders to database fields)
-  - `advanced_mappings` (JSON object with detailed mapping options)
-  - `analysis_result` (JSON with AI analysis results)
-  - `is_active`, `template_status`, `mapping_confidence`
-  - `supports_pdf`, `last_tested`, `test_results`
+## Installation
 
-## Current System Flow
-
-### 1. **Template Upload Process**
-1. Admin uploads Word document (.docx) via admin panel
-2. System analyzes document to extract all placeholders
-3. AI suggests database field mappings
-4. Template saved to database with analysis results
-
-### 2. **Placeholder Mapping Process**
-1. Admin views template in admin panel
-2. Clicks "Edit" to open mapping interface
-3. For each placeholder, admin can set:
-   - Database field (from vessels, ports, companies, refineries)
-   - Fixed text value
-   - Multiple choices (comma-separated)
-   - Generate random value
-4. Mappings saved to `advanced_mappings` column
-
-### 3. **Document Generation Process**
-1. User visits vessel detail page
-2. Selects document template and clicks "Download"
-3. System fetches vessel data and related data (port, company, refinery)
-4. Fills placeholders using mapping priority:
-   - First: Database field value
-   - Second: Fixed text
-   - Third: Random choice from multiple choices
-   - Fourth: AI-generated or realistic random data
-5. Generates filled DOCX and PDF documents
-6. User downloads the filled document
-
-## Technical Implementation Details
-
-### **Placeholder Detection**
-- Uses JSZip to parse DOCX files as ZIP archives
-- Extracts text from `word/document.xml`, `word/header*.xml`, `word/footer*.xml`
-- Regex patterns detect placeholders in various formats
-- Handles placeholders split across multiple `<w:t>` tags
-
-### **Data Mapping Priority**
-1. **Database Field**: Direct mapping to vessel/port/company/refinery data
-2. **Fixed Text**: Static text value set by admin
-3. **Multiple Choices**: Random selection from comma-separated list
-4. **Random Generation**: AI-generated or realistic maritime data
-
-### **Document Processing**
-- Replaces placeholders in Word XML content
-- Preserves original document formatting
-- Handles XML escaping for special characters
-- Generates both DOCX and PDF versions
-
-## What Still Needs to Be Done
-
-### 1. **Improve Admin Mapping Interface** ⚠️ **HIGH PRIORITY**
-- **Current Issue**: The mapping interface is basic and not user-friendly
-- **Needed**: Professional UI with:
-  - Database table selection dropdown (vessels, ports, refineries, companies)
-  - Dynamic column selection based on selected table
-  - Visual drag-and-drop mapping interface
-  - Real-time preview of mapped data
-  - Better organization and layout
-
-### 2. **Add Preview Functionality** ⚠️ **MEDIUM PRIORITY**
-- **Needed**: "Preview" button in admin panel
-- **Purpose**: Show how document will look with sample data before generation
-- **Implementation**: Use sample vessel data to generate preview
-
-### 3. **Fix Linter Errors** ⚠️ **LOW PRIORITY**
-- **File**: `supabase/functions/enhanced-document-processor/index.ts`
-- **Issues**: TypeScript/Deno import errors (don't affect functionality)
-- **Status**: Non-critical, system works despite warnings
-
-### 4. **Add Error Handling** ⚠️ **MEDIUM PRIORITY**
-- **Needed**: Better error messages for failed placeholder replacements
-- **Needed**: Validation for mapping configurations
-- **Needed**: User feedback for missing or incorrect data
-
-### 5. **Database Field Validation** ⚠️ **MEDIUM PRIORITY**
-- **Needed**: Validate that selected database fields actually exist
-- **Needed**: Show available fields for each table dynamically
-- **Needed**: Prevent invalid field mappings
-
-## Database Tables Used
-
-### **Vessels Table**
-- Fields: `id`, `name`, `imo`, `mmsi`, `callsign`, `flag`, `built`, `deadweight`, `length`, `width`, `draught`, `speed`, `vessel_type`, `gross_tonnage`, `net_tonnage`, `owner_name`, `operator_name`, etc.
-
-### **Ports Table**
-- Fields: `id`, `name`, `country`, `city`, `region`, `port_type`, `address`, `phone`, `email`, `website`, `capacity`, `max_draught`, `berth_count`, etc.
-
-### **Companies Table**
-- Fields: `id`, `name`, `country`, `city`, `address`, `phone`, `email`, `website`, `ceo_name`, `founded_year`, etc.
-
-### **Refineries Table**
-- Fields: `id`, `name`, `country`, `city`, `address`, `processing_capacity`, `refinery_type`, `owner`, `operator`, `year_built`, etc.
-
-## File Structure
-
-```
-src/
-├── components/
-│   ├── admin/
-│   │   └── EnhancedDocumentTemplateManager.tsx  # Admin panel interface
-│   └── EnhancedVesselDocumentGenerator.tsx      # Vessel page document generation
-├── integrations/supabase/
-│   └── client.ts                                # Supabase client configuration
-└── pages/
-    └── VesselDetail.tsx                         # Vessel detail page
-
-supabase/
-├── functions/
-│   ├── analyze-word-template/
-│   │   └── index.ts                            # Template analysis function
-│   └── enhanced-document-processor/
-│       └── index.ts                            # Document generation function
-└── migrations/
-    └── *.sql                                   # Database schema migrations
+1. Install dependencies:
+```bash
+pip install -r requirements.txt
 ```
 
-## Usage Instructions
+2. Set environment variables:
+```bash
+SUPABASE_URL=your_supabase_url
+SUPABASE_KEY=your_supabase_key
+```
 
-### **For Administrators**
-1. Go to Admin Panel → Document Templates
-2. Click "Upload Template" and select Word document
-3. Wait for analysis to complete
-4. Click "Edit" on the template
-5. Map each placeholder to database fields or set fixed values
-6. Save mappings and activate template
+3. Run the server:
+```bash
+uvicorn main:app --host 0.0.0.0 --port 8000
+```
 
-### **For Users**
-1. Go to any vessel detail page
-2. Scroll to document generation section
-3. Select template from dropdown
-4. Click "Download" button
-5. Wait for processing and download filled document
+## Usage
 
-## Known Issues
+The API processes Word documents by:
+1. Extracting placeholders from templates
+2. Fetching vessel data from Supabase
+3. Replacing placeholders with real data
+4. Generating random data for missing fields
+5. Converting to PDF format
 
-1. **Mapping Interface**: Current interface is not user-friendly for complex mappings
-2. **Split Placeholders**: Some placeholders split across Word XML tags may not be detected
-3. **Error Messages**: Limited feedback when placeholder replacement fails
-4. **Preview**: No way to preview document before generation
+## Deployment
 
-## Next Steps
+This project is designed to be deployed on Railway.app with full LibreOffice support for perfect PDF conversion.
 
-1. **Immediate**: Improve admin mapping interface with professional UI
-2. **Short-term**: Add preview functionality and better error handling
-3. **Long-term**: Add more document formats and advanced features
+## Templates
 
-## Support
-
-If you encounter issues:
-1. Check browser console for error messages
-2. Verify template has valid placeholders in supported formats
-3. Ensure database has required data for mapping
-4. Test with simple templates first before complex ones
-
----
-
-**Last Updated**: January 2025
-**Status**: Core functionality working, UI improvements needed
-**Priority**: Focus on admin mapping interface improvements
+Place your .docx templates in the `templates/` folder. The system supports various placeholder formats:
+- `{{placeholder}}`
+- `{placeholder}`
+- `[placeholder]`
+- `[[placeholder]]`
+- `%placeholder%`
+- `<placeholder>`
+- `__placeholder__`
+- `##placeholder##`

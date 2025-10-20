@@ -61,16 +61,16 @@ sudo git clone https://github.com/jeanclaudder2024/Petrodeal2.git petrodealhub
 sudo chown -R $USER:$USER /opt/petrodealhub
 cd /opt/petrodealhub
 
-# Step 5: Clean Windows and Docker files
+# Step 5: Clean Windows and Docker files from document-processor
 print_status "Cleaning Windows and Docker files..."
-# Files are now in root directory, no need to cd to document-processor
+cd document-processor
 
-# Remove Windows files if they exist
-rm -f *.bat 2>/dev/null || true
-rm -f Dockerfile 2>/dev/null || true
-rm -f generate-ssl.py 2>/dev/null || true
-rm -rf __pycache__ 2>/dev/null || true
-rm -rf temp/* 2>/dev/null || true
+# Remove Windows files
+rm -f *.bat
+rm -f Dockerfile
+rm -f generate-ssl.py
+rm -rf __pycache__
+rm -rf temp/*
 
 # Step 6: Set up Python API
 print_status "Setting up Python API..."
@@ -133,10 +133,10 @@ module.exports = {
   apps: [
     {
       name: 'petrodealhub-api',
-      cwd: '/opt/petrodealhub',
+      cwd: '/opt/petrodealhub/document-processor',
       script: 'python',
       args: 'main.py',
-      interpreter: '/opt/petrodealhub/venv/bin/python',
+      interpreter: '/opt/petrodealhub/document-processor/venv/bin/python',
       env: {
         FASTAPI_PORT: 8000
       },
