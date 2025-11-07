@@ -53,3 +53,8 @@ tmp/
 # Test outputs
 test_output*.pdf
 test_processed*.docx
+
+# Frontend build artifacts
+node_modules/
+node_modules/.vite/
+supabase/.temp/

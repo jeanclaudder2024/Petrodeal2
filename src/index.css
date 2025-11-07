@@ -2,6 +2,38 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer utilities {
+  /* Shimmer animation for progress bar */
+  @keyframes shimmer {
+    0% {
+      background-position: -200% 0;
+    }
+    100% {
+      background-position: 200% 0;
+    }
+  }
+  
+  .animate-shimmer {
+    animation: shimmer 2s infinite;
+  }
+  
+  /* Pulse animation for glow effect */
+  @keyframes pulse-glow {
+    0%, 100% {
+      opacity: 0.5;
+      transform: scale(1);
+    }
+    50% {
+      opacity: 0.8;
+      transform: scale(1.02);
+    }
+  }
+  
+  .animate-pulse-glow {
+    animation: pulse-glow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  }
+}
+
 /* Clean Dark/Light Mode System */
 
 @layer base {

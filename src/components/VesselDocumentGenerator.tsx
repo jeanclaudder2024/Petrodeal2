@@ -5,6 +5,7 @@ import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 import { Download, FileText, Loader2, CheckCircle, XCircle } from 'lucide-react';
 import { toast } from 'sonner';
+import { useAuth } from '@/contexts/AuthContext';
 
 interface DocumentTemplate {
   id: string;
@@ -32,6 +33,7 @@ const API_BASE_URL = process.env.NODE_ENV === 'production'
   : 'http://localhost:8000'; // Development
 
 export default function VesselDocumentGenerator({ vesselImo, vesselName }: VesselDocumentGeneratorProps) {
+  const { user } = useAuth();
   const [templates, setTemplates] = useState<DocumentTemplate[]>([]);
   const [loading, setLoading] = useState(false);
   const [processingStatus, setProcessingStatus] = useState<Record<string, ProcessingStatus>>({});
@@ -45,7 +47,12 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
       setLoading(true);
       console.log('Fetching templates from:', `${API_BASE_URL}/templates`);
       
-      const response = await fetch(`${API_BASE_URL}/templates`);
+      const response = await fetch(`${API_BASE_URL}/templates`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+      });
       console.log('Templates response status:', response.status);
       
       if (response.ok) {
@@ -53,18 +60,25 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
         console.log('Templates data:', data);
         
         // Filter only active templates
-        const activeTemplates = (data.templates || []).filter((template: DocumentTemplate) => template.is_active);
+        const templatesList = data.templates || [];
+        const activeTemplates = templatesList.filter((template: DocumentTemplate) => template.is_active !== false);
         setTemplates(activeTemplates);
         
-        console.log('Active templates:', activeTemplates);
+        console.log('Active templates:', activeTemplates.length);
       } else {
         const errorText = await response.text();
         console.error('Failed to fetch templates:', response.status, errorText);
-        toast.error('Failed to fetch document templates');
+        toast.error(`Failed to fetch document templates: ${response.status} ${errorText.substring(0, 100)}`);
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error fetching templates:', error);
-      toast.error('Error fetching document templates');
+      const errorMessage = error?.message || 'Unknown error';
+      toast.error(`Error fetching document templates: ${errorMessage}`);
+      
+      // Show more helpful error message
+      if (errorMessage.includes('Failed to fetch') || errorMessage.includes('NetworkError') || errorMessage.includes('CORS')) {
+        toast.error('Cannot connect to API server. Make sure it is running on http://localhost:8000');
+      }
     } finally {
       setLoading(false);
     }
@@ -81,7 +95,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
         ...prev,
         [templateName]: {
           status: 'processing',
-          message: 'Initializing...',
+          message: 'Downloading',
           progress: 10
         }
       }));
@@ -96,10 +110,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
               [templateName]: {
                 ...current,
                 progress: Math.min(current.progress + 8, 95),
-                message: current.progress < 25 ? 'Extracting placeholders...' :
-                        current.progress < 50 ? 'Filling data...' :
-                        current.progress < 75 ? 'Converting to PDF...' :
-                        current.progress < 95 ? 'Preparing download...' : 'Finalizing...'
+                message: 'Downloading'  // Always show "Downloading"
               }
             };
           }
@@ -120,20 +131,16 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
         toast.error('Request timeout - server may be busy, please try again');
       }, 30000); // 30 second timeout
 
-      // Create a dummy file for the template_file parameter (required by API)
-      const dummyFile = new File(['dummy'], 'dummy.docx', {
-        type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
-      });
-
       const requestData = {
         template_name: templateName,
-        vessel_imo: vesselImo
+        vessel_imo: vesselImo,
+        user_id: user?.id || null
       };
 
-      console.log('Sending request to:', `${API_BASE_URL}/process-document`);
+      console.log('Sending request to:', `${API_BASE_URL}/generate-document`);
       console.log('Request data:', requestData);
 
-      const response = await fetch(`${API_BASE_URL}/process-document`, {
+      const response = await fetch(`${API_BASE_URL}/generate-document`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -150,55 +157,37 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
       console.log('Process response status:', response.status);
 
       if (response.ok) {
-        // Check if response is PDF (direct download)
-        const contentType = response.headers.get('content-type');
-        if (contentType && contentType.includes('application/pdf')) {
-          // Handle direct PDF download
-          const blob = await response.blob();
-          const url = window.URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = `processed_${vesselImo}_${Date.now()}.pdf`;
-          document.body.appendChild(a);
-          a.click();
-          window.URL.revokeObjectURL(url);
-          document.body.removeChild(a);
-          
-          setProcessingStatus(prev => ({
-            ...prev,
-            [templateName]: {
-              status: 'completed',
-              message: 'Downloaded successfully',
-              progress: 100
-            }
-          }));
-          
-          toast.success('PDF document downloaded successfully');
-        } else {
-          // Handle any other response format (treat as file download)
-          console.log('Response is not PDF, treating as file download');
-          
-          const blob = await response.blob();
-          const url = window.URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = `processed_${vesselImo}_${Date.now()}.pdf`;
-          document.body.appendChild(a);
-          a.click();
-          window.URL.revokeObjectURL(url);
-          document.body.removeChild(a);
-          
-          setProcessingStatus(prev => ({
-            ...prev,
-            [templateName]: {
-              status: 'completed',
-              message: 'Downloaded successfully',
-              progress: 100
-            }
-          }));
-          
-          toast.success('Document downloaded successfully');
+        // Get filename from Content-Disposition header
+        const contentDisposition = response.headers.get('Content-Disposition');
+        let filename = `generated_${templateName.replace('.docx', '')}_${vesselImo}.pdf`;
+        if (contentDisposition) {
+          const filenameMatch = contentDisposition.match(/filename=(.+?)(?:;|$)/);
+          if (filenameMatch) {
+            filename = filenameMatch[1].replace(/"/g, '').trim();
+          }
         }
+        
+        // Handle file download (PDF or DOCX)
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
+        
+        setProcessingStatus(prev => ({
+          ...prev,
+          [templateName]: {
+            status: 'completed',
+            message: 'Downloaded successfully',
+            progress: 100
+          }
+        }));
+        
+        toast.success('Document downloaded successfully');
       } else {
         const responseText = await response.text();
         // Clear timeout
@@ -308,25 +297,71 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                   <div className="flex-1">
                     <div className="flex items-center gap-3">
                       {getStatusIcon(status?.status || 'idle')}
-                      <div>
+                      <div className="flex-1">
                         <h4 className="font-medium">{template.name}</h4>
-                        <p className="text-sm text-muted-foreground">{template.description}</p>
                         {status && (
-                          <div className="mt-2 space-y-2">
-                            <div className="flex items-center gap-2">
-                              <Badge className={getStatusColor(status.status)}>
-                                {status.status}
-                              </Badge>
-                              <span className="text-xs text-muted-foreground">
-                                {status.message}
-                              </span>
-                            </div>
+                          <div className="mt-3">
                             {status.status === 'processing' && status.progress !== undefined && (
-                              <div className="space-y-1">
-                                <Progress value={status.progress} className="h-2" />
-                                <p className="text-xs text-muted-foreground text-center">
-                                  {status.progress}% complete
-                                </p>
+                              <div className="space-y-2">
+                                <div className="flex items-center justify-between mb-1">
+                                  <span className="text-xs font-medium text-blue-600 dark:text-blue-400">
+                                    {status.message}
+                                  </span>
+                                  <span className="text-xs font-semibold text-blue-600 dark:text-blue-400">
+                                    {status.progress}%
+                                  </span>
+                                </div>
+                                <div className="relative w-full h-3.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden shadow-inner">
+                                  {/* Animated progress bar with gradient */}
+                                  <div 
+                                    className="absolute inset-0 rounded-full transition-all duration-500 ease-out"
+                                    style={{ 
+                                      width: `${status.progress}%`,
+                                      background: 'linear-gradient(90deg, #3b82f6, #2563eb, #1d4ed8, #2563eb, #3b82f6)',
+                                      backgroundSize: '200% 100%',
+                                      boxShadow: '0 0 10px rgba(59, 130, 246, 0.5), 0 0 20px rgba(59, 130, 246, 0.3)'
+                                    }}
+                                  >
+                                    {/* Shimmer effect overlay */}
+                                    <div 
+                                      className="absolute inset-0 rounded-full"
+                                      style={{
+                                        background: 'linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.4) 50%, transparent 100%)',
+                                        backgroundSize: '200% 100%',
+                                        animation: 'shimmer 2s infinite'
+                                      }}
+                                    ></div>
+                                  </div>
+                                  {/* Pulse glow effect */}
+                                  <div 
+                                    className="absolute inset-0 rounded-full"
+                                    style={{
+                                      width: `${status.progress}%`,
+                                      background: 'radial-gradient(circle at center, rgba(59, 130, 246, 0.6) 0%, rgba(59, 130, 246, 0.2) 50%, transparent 100%)',
+                                      animation: 'pulse-glow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
+                                      filter: 'blur(4px)'
+                                    }}
+                                  ></div>
+                                  {/* Animated dots at the end */}
+                                  <div 
+                                    className="absolute top-1/2 -translate-y-1/2 right-0 w-2 h-2 rounded-full bg-white shadow-lg"
+                                    style={{
+                                      right: `${100 - status.progress}%`,
+                                      transform: 'translateY(-50%) translateX(50%)',
+                                      animation: 'pulse 1.5s ease-in-out infinite'
+                                    }}
+                                  ></div>
+                                </div>
+                              </div>
+                            )}
+                            {status.status !== 'processing' && (
+                              <div className="flex items-center gap-2 mt-2">
+                                <Badge className={getStatusColor(status.status)}>
+                                  {status.status}
+                                </Badge>
+                                <span className="text-xs text-muted-foreground">
+                                  {status.message}
+                                </span>
                               </div>
                             )}
                           </div>
@@ -352,7 +387,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                           <Download className="h-4 w-4 transition-all duration-300 group-hover:animate-bounce group-hover:scale-110" />
                         )}
                         <span className="transition-all duration-300 group-hover:font-semibold">
-                          {isProcessing ? 'Processing...' : 'Download'}
+                          {isProcessing ? 'Downloading...' : 'Download'}
                         </span>
                       </div>
                     </Button>

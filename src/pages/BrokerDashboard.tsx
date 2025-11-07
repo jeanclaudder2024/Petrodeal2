@@ -159,7 +159,12 @@ const BrokerDashboard = () => {
 
       if (dealsError) throw dealsError;
 
-      setDeals(dealsData || []);
+      // Sort deals by creation date (oldest first) for numbering, then reverse for display (newest first)
+      const sortedDeals = [...(dealsData || [])].sort((a, b) => 
+        new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+      ).reverse(); // Reverse to show newest first
+
+      setDeals(sortedDeals);
 
       // Calculate stats
       const totalDeals = dealsData?.length || 0;
@@ -421,12 +426,21 @@ const BrokerDashboard = () => {
                 </div>
               ) : (
                 <div className="space-y-4">
-                  {deals.map((deal) => (
+                  {deals.map((deal, index) => {
+                    // Calculate deal number (oldest deal = 1, newest = last number)
+                    // Since deals are sorted newest first, we need to reverse the index
+                    const dealNumber = deals.length - index;
+                    const dealName = deal.cargo_type 
+                      ? `Deal #${dealNumber} - ${deal.cargo_type}` 
+                      : `Deal #${dealNumber}`;
+                    
+                    return (
                     <div key={deal.id} className="border rounded-lg p-4">
                       <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-semibold text-primary">{dealName}</span>
                           <Badge variant="outline">{deal.deal_type}</Badge>
-                          <span className="font-medium">{deal.cargo_type}</span>
+                          <span className="text-xs text-muted-foreground">ID: {deal.id.substring(0, 8)}...</span>
                         </div>
                         <div className="flex items-center gap-2">
                           {getStatusIcon(deal.status)}
@@ -472,7 +486,8 @@ const BrokerDashboard = () => {
                         </Button>
                       </div>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </CardContent>
