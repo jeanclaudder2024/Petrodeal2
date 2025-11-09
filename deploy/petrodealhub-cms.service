@@ -1,0 +1,16 @@
+[Unit]
+Description=PetrodealHub CMS FastAPI Service
+After=network.target
+
+[Service]
+User=www-data
+Group=www-data
+WorkingDirectory=/opt/petrodealhub/document-processor
+Environment="PATH=/opt/petrodealhub/document-processor/venv/bin"
+ExecStart=/opt/petrodealhub/document-processor/venv/bin/uvicorn cms_app:app --host 127.0.0.1 --port 8050
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+
