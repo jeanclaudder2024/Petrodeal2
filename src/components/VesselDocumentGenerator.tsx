@@ -138,12 +138,17 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
     let timeoutId: NodeJS.Timeout | undefined;
     
     try {
-      console.log('Processing document:', { templateName, templateDisplayName, vesselImo });
+      // Ensure templateName has .docx extension for consistency
+      const templateKey = templateName?.endsWith('.docx') 
+        ? templateName 
+        : `${templateName}.docx`;
+      
+      console.log('Processing document:', { templateKey, templateDisplayName, vesselImo });
       
       // Set processing status with progress
       setProcessingStatus(prev => ({
         ...prev,
-        [templateName]: {
+        [templateKey]: {
           status: 'processing',
           message: 'Downloading',
           progress: 10
@@ -153,11 +158,11 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
       // Simulate progress updates
       const progressInterval = setInterval(() => {
         setProcessingStatus(prev => {
-          const current = prev[templateName];
+          const current = prev[templateKey];
           if (current && current.status === 'processing' && current.progress && current.progress < 95) {
             return {
               ...prev,
-              [templateName]: {
+              [templateKey]: {
                 ...current,
                 progress: Math.min(current.progress + 8, 95),
                 message: 'Downloading'  // Always show "Downloading"
@@ -173,7 +178,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
         clearInterval(progressInterval);
         setProcessingStatus(prev => ({
           ...prev,
-          [templateName]: {
+          [templateKey]: {
             status: 'failed',
             message: 'Request timeout - server may be busy, please try again'
           }
@@ -181,8 +186,10 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
         toast.error('Request timeout - server may be busy, please try again');
       }, 30000); // 30 second timeout
 
+      // Use original templateName (without .docx extension) for API request
+      const apiTemplateName = templateName.replace('.docx', '');
       const requestData = {
-        template_name: templateName,
+        template_name: apiTemplateName,
         vessel_imo: vesselImo,
         user_id: user?.id || null
       };
@@ -210,7 +217,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
       if (response.ok) {
         // Get filename from Content-Disposition header
         const contentDisposition = response.headers.get('Content-Disposition');
-        let filename = `generated_${templateName.replace('.docx', '')}_${vesselImo}.pdf`;
+        let filename = `generated_${apiTemplateName}_${vesselImo}.pdf`;
         if (contentDisposition) {
           const filenameMatch = contentDisposition.match(/filename=(.+?)(?:;|$)/);
           if (filenameMatch) {
@@ -231,7 +238,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
         
         setProcessingStatus(prev => ({
           ...prev,
-          [templateName]: {
+          [templateKey]: {
             status: 'completed',
             message: 'Downloaded successfully',
             progress: 100
@@ -245,7 +252,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
         clearTimeout(timeoutId);
         setProcessingStatus(prev => ({
           ...prev,
-          [templateName]: {
+          [templateKey]: {
             status: 'failed',
             message: `Failed to process (${response.status})`
           }
@@ -261,7 +268,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
       }
       setProcessingStatus(prev => ({
         ...prev,
-        [templateName]: {
+        [templateKey]: {
           status: 'failed',
           message: 'Processing error',
           progress: 0
@@ -338,43 +345,68 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
         ) : (
           <div className="space-y-4">
             {templates.map((template) => {
-              const status = processingStatus[template.file_name];
+              // Use template.file_name as key for processingStatus (ensure it has .docx extension)
+              const templateKey = template.file_name?.endsWith('.docx') 
+                ? template.file_name 
+                : `${template.file_name || template.name || template.id}.docx`;
+              const status = processingStatus[templateKey];
               const isProcessing = status?.status === 'processing';
               const isCompleted = status?.status === 'completed';
               const isFailed = status?.status === 'failed';
 
-              const canDownload = template.can_download !== false;
-              const planName = template.plan_name || template.plan_tier;
-              const displayName = template.name || template.title || template.file_name || 'Unknown Template';
-              const displayDescription = template.description || template.metadata?.description || '';
+              // Determine if user can download this template
+              const canDownload = template.can_download !== false && template.can_download !== undefined 
+                ? template.can_download 
+                : true; // Default to true if not specified
+              
+              // Get plan name - prioritize plan_name, then plan_tier
+              const planName = template.plan_name || template.plan_tier || null;
+              
+              // Get display name - check multiple fields
+              const displayName = template.name || template.title || 
+                (template.file_name ? template.file_name.replace('.docx', '') : '') || 
+                'Unknown Template';
+              
+              // Get description - check multiple fields
+              const displayDescription = template.description || 
+                template.metadata?.description || 
+                '';
               
               return (
-                <div key={template.id} className="flex items-center justify-between p-4 border rounded-lg">
+                <div key={template.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/50 transition-colors">
                   <div className="flex-1">
-                    <div className="flex items-center gap-3">
+                    <div className="flex items-start gap-3">
                       {getStatusIcon(status?.status || 'idle')}
-                      <div className="flex-1">
-                        <h4 className="font-medium">{displayName}</h4>
+                      <div className="flex-1 min-w-0">
+                        {/* Template Name */}
+                        <h4 className="font-medium text-base">{displayName}</h4>
                         
-                        {/* Plan Name - Always show if user is logged in */}
-                        {user?.id && (planName || !canDownload) && (
+                        {/* Plan Name - Show below template name if user is logged in */}
+                        {user?.id && planName && (
                           <p className="text-sm text-muted-foreground mt-1">
-                            <span className="font-medium">Plan:</span> {planName || 'Not available in your plan'}
+                            <span className="font-medium text-primary">Plan:</span> {planName}
                           </p>
                         )}
                         
-                        {/* Description */}
+                        {/* Plan Name - Show if template is not available in user's plan */}
+                        {user?.id && !canDownload && !planName && (
+                          <p className="text-sm text-amber-600 dark:text-amber-400 mt-1">
+                            <span className="font-medium">Plan:</span> Not available in your plan
+                          </p>
+                        )}
+                        
+                        {/* Description - Always show if available */}
                         {displayDescription && (
-                          <p className="text-sm text-muted-foreground mt-1">
+                          <p className="text-sm text-muted-foreground mt-1.5 leading-relaxed">
                             {displayDescription}
                           </p>
                         )}
                         
                         {/* Lock indicator if cannot download */}
                         {!canDownload && (
-                          <div className="flex items-center gap-2 mt-2">
-                            <Lock className="h-4 w-4 text-amber-500" />
-                            <span className="text-xs text-amber-600 dark:text-amber-400">
+                          <div className="flex items-center gap-2 mt-2 text-amber-600 dark:text-amber-400">
+                            <Lock className="h-4 w-4" />
+                            <span className="text-xs font-medium">
                               This template is not available in your current plan
                             </span>
                           </div>
@@ -453,7 +485,12 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                   
                   <div className="flex items-center gap-2">
                     <Button
-                      onClick={() => processDocument(template.file_name, template.name)}
+                      onClick={() => {
+                        // Use file_name if available, otherwise use name or id
+                        const fileName = template.file_name || template.name || template.id;
+                        const displayName = template.name || template.title || fileName;
+                        processDocument(fileName, displayName);
+                      }}
                       disabled={isProcessing || !canDownload}
                       className={`group relative flex items-center gap-2 transition-all duration-300 ${
                         !canDownload 
