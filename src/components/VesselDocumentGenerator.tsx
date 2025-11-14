@@ -96,9 +96,18 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
         const templatesList = data.templates || [];
         const activeTemplates = templatesList.filter((template: DocumentTemplate) => template.is_active !== false);
         // Set can_download to true by default for non-logged-in users
+        // Also ensure plan_name and description are available from metadata
         activeTemplates.forEach(t => {
           if (t.can_download === undefined) {
             t.can_download = true;
+          }
+          // Use metadata description if available
+          if (!t.description && t.metadata?.description) {
+            t.description = t.metadata.description;
+          }
+          // Use metadata display_name if available
+          if (!t.name && t.metadata?.display_name) {
+            t.name = t.metadata.display_name;
           }
         });
         setTemplates(activeTemplates);
@@ -333,6 +342,8 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
 
               const canDownload = template.can_download !== false;
               const planName = template.plan_name || template.plan_tier;
+              const displayName = template.name || template.title || template.file_name || 'Unknown Template';
+              const displayDescription = template.description || template.metadata?.description || '';
               
               return (
                 <div key={template.id} className="flex items-center justify-between p-4 border rounded-lg">
@@ -340,19 +351,19 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                     <div className="flex items-center gap-3">
                       {getStatusIcon(status?.status || 'idle')}
                       <div className="flex-1">
-                        <h4 className="font-medium">{template.name}</h4>
+                        <h4 className="font-medium">{displayName}</h4>
                         
-                        {/* Plan Name */}
-                        {planName && (
+                        {/* Plan Name - Always show if user is logged in */}
+                        {user?.id && (planName || !canDownload) && (
                           <p className="text-sm text-muted-foreground mt-1">
-                            <span className="font-medium">Plan:</span> {planName}
+                            <span className="font-medium">Plan:</span> {planName || 'Not available in your plan'}
                           </p>
                         )}
                         
                         {/* Description */}
-                        {template.description && (
+                        {displayDescription && (
                           <p className="text-sm text-muted-foreground mt-1">
-                            {template.description}
+                            {displayDescription}
                           </p>
                         )}
                         
