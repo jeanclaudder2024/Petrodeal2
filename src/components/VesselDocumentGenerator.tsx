@@ -58,6 +58,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
           headers: {
             'Content-Type': 'application/json',
           },
+          credentials: 'include', // Include cookies for authentication
           body: JSON.stringify({ user_id: user.id }),
         });
         
@@ -85,6 +86,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include', // Include cookies for authentication
       });
       console.log('Templates response status:', response.status);
       
@@ -193,6 +195,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
         headers: {
           'Content-Type': 'application/json',
         },
+        credentials: 'include', // Include cookies for authentication
         body: JSON.stringify(requestData),
       });
 
