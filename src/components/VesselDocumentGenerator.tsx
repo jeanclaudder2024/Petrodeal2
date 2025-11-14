@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { Download, FileText, Loader2, CheckCircle, XCircle } from 'lucide-react';
+import { Download, FileText, Loader2, CheckCircle, XCircle, Lock } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 
@@ -14,6 +14,9 @@ interface DocumentTemplate {
   file_name: string;
   placeholders: string[];
   is_active: boolean;
+  can_download?: boolean;
+  plan_name?: string;
+  plan_tier?: string;
 }
 
 interface ProcessingStatus {
@@ -40,12 +43,42 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
 
   useEffect(() => {
     fetchTemplates();
-  }, []);
+  }, [user?.id]);
 
   const fetchTemplates = async () => {
     try {
       setLoading(true);
-      console.log('Fetching templates from:', `${API_BASE_URL}/templates`);
+      
+      // If user is logged in, use user-downloadable-templates endpoint to get templates with plan info
+      if (user?.id) {
+        console.log('Fetching user downloadable templates from:', `${API_BASE_URL}/user-downloadable-templates`);
+        
+        const response = await fetch(`${API_BASE_URL}/user-downloadable-templates`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ user_id: user.id }),
+        });
+        
+        console.log('User templates response status:', response.status);
+        
+        if (response.ok) {
+          const data = await response.json();
+          console.log('User templates data:', data);
+          
+          if (data.templates && Array.isArray(data.templates)) {
+            // Templates already have plan_name and plan_tier from backend
+            setTemplates(data.templates);
+            console.log('User downloadable templates loaded:', data.templates.length);
+            setLoading(false);
+            return;
+          }
+        }
+      }
+      
+      // Fallback: fetch all templates (for non-logged-in users or if user endpoint fails)
+      console.log('Fetching all templates from:', `${API_BASE_URL}/templates`);
       
       const response = await fetch(`${API_BASE_URL}/templates`, {
         method: 'GET',
@@ -62,6 +95,12 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
         // Filter only active templates
         const templatesList = data.templates || [];
         const activeTemplates = templatesList.filter((template: DocumentTemplate) => template.is_active !== false);
+        // Set can_download to true by default for non-logged-in users
+        activeTemplates.forEach(t => {
+          if (t.can_download === undefined) {
+            t.can_download = true;
+          }
+        });
         setTemplates(activeTemplates);
         
         console.log('Active templates:', activeTemplates.length);
@@ -292,6 +331,9 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
               const isCompleted = status?.status === 'completed';
               const isFailed = status?.status === 'failed';
 
+              const canDownload = template.can_download !== false;
+              const planName = template.plan_name || template.plan_tier;
+              
               return (
                 <div key={template.id} className="flex items-center justify-between p-4 border rounded-lg">
                   <div className="flex-1">
@@ -299,6 +341,31 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                       {getStatusIcon(status?.status || 'idle')}
                       <div className="flex-1">
                         <h4 className="font-medium">{template.name}</h4>
+                        
+                        {/* Plan Name */}
+                        {planName && (
+                          <p className="text-sm text-muted-foreground mt-1">
+                            <span className="font-medium">Plan:</span> {planName}
+                          </p>
+                        )}
+                        
+                        {/* Description */}
+                        {template.description && (
+                          <p className="text-sm text-muted-foreground mt-1">
+                            {template.description}
+                          </p>
+                        )}
+                        
+                        {/* Lock indicator if cannot download */}
+                        {!canDownload && (
+                          <div className="flex items-center gap-2 mt-2">
+                            <Lock className="h-4 w-4 text-amber-500" />
+                            <span className="text-xs text-amber-600 dark:text-amber-400">
+                              This template is not available in your current plan
+                            </span>
+                          </div>
+                        )}
+                        
                         {status && (
                           <div className="mt-3">
                             {status.status === 'processing' && status.progress !== undefined && (
@@ -373,21 +440,30 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                   <div className="flex items-center gap-2">
                     <Button
                       onClick={() => processDocument(template.file_name, template.name)}
-                      disabled={isProcessing}
-                      className="group relative flex items-center gap-2 transition-all duration-300 hover:scale-105 hover:shadow-xl hover:shadow-blue-500/25 active:scale-95 overflow-hidden bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600 text-white border-0"
+                      disabled={isProcessing || !canDownload}
+                      className={`group relative flex items-center gap-2 transition-all duration-300 ${
+                        !canDownload 
+                          ? 'bg-gray-400 cursor-not-allowed opacity-60' 
+                          : 'hover:scale-105 hover:shadow-xl hover:shadow-blue-500/25 active:scale-95 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600'
+                      } text-white border-0`}
+                      title={!canDownload ? 'This template is not available in your current plan' : ''}
                     >
-                      {/* Animated background effect */}
-                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700 ease-out"></div>
+                      {/* Animated background effect - only if enabled */}
+                      {canDownload && (
+                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700 ease-out"></div>
+                      )}
                       
                       {/* Button content */}
                       <div className="relative flex items-center gap-2">
                         {isProcessing ? (
                           <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : !canDownload ? (
+                          <Lock className="h-4 w-4" />
                         ) : (
                           <Download className="h-4 w-4 transition-all duration-300 group-hover:animate-bounce group-hover:scale-110" />
                         )}
                         <span className="transition-all duration-300 group-hover:font-semibold">
-                          {isProcessing ? 'Downloading...' : 'Download'}
+                          {isProcessing ? 'Downloading...' : !canDownload ? 'Locked' : 'Download'}
                         </span>
                       </div>
                     </Button>
