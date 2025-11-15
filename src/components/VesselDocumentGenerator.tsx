@@ -10,13 +10,21 @@ import { useAuth } from '@/contexts/AuthContext';
 interface DocumentTemplate {
   id: string;
   name: string;
-  description: string;
+  title?: string;
+  description?: string;
   file_name: string;
-  placeholders: string[];
-  is_active: boolean;
+  placeholders?: string[];
+  is_active?: boolean;
   can_download?: boolean;
   plan_name?: string;
   plan_tier?: string;
+  remaining_downloads?: number;
+  max_downloads?: number;
+  current_downloads?: number;
+  metadata?: {
+    description?: string;
+    display_name?: string;
+  };
 }
 
 interface ProcessingStatus {
@@ -137,12 +145,12 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
   const processDocument = async (templateName: string, templateDisplayName: string) => {
     let timeoutId: NodeJS.Timeout | undefined;
     
+    // Ensure templateName has .docx extension for consistency
+    const templateKey = templateName?.endsWith('.docx') 
+      ? templateName 
+      : `${templateName}.docx`;
+    
     try {
-      // Ensure templateName has .docx extension for consistency
-      const templateKey = templateName?.endsWith('.docx') 
-        ? templateName 
-        : `${templateName}.docx`;
-      
       console.log('Processing document:', { templateKey, templateDisplayName, vesselImo });
       
       // Set processing status with progress
@@ -355,9 +363,14 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
               const isFailed = status?.status === 'failed';
 
               // Determine if user can download this template
-              const canDownload = template.can_download !== false && template.can_download !== undefined 
+              // Check both can_download flag and remaining downloads
+              const hasRemainingDownloads = template.remaining_downloads === undefined || 
+                                           template.remaining_downloads === null || 
+                                           template.remaining_downloads > 0;
+              
+              const canDownload = (template.can_download !== false && template.can_download !== undefined 
                 ? template.can_download 
-                : true; // Default to true if not specified
+                : true) && hasRemainingDownloads; // Default to true if not specified, but respect download limits
               
               // Get plan name - prioritize plan_name, then plan_tier
               const planName = template.plan_name || template.plan_tier || null;
@@ -371,6 +384,12 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
               const displayDescription = template.description || 
                 template.metadata?.description || 
                 '';
+              
+              // Get download limits info
+              const remainingDownloads = template.remaining_downloads;
+              const maxDownloads = template.max_downloads;
+              const currentDownloads = template.current_downloads;
+              const hasDownloadLimit = maxDownloads !== undefined && maxDownloads !== null;
               
               return (
                 <div key={template.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/50 transition-colors">
@@ -400,6 +419,34 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                           <p className="text-sm text-muted-foreground mt-1.5 leading-relaxed">
                             {displayDescription}
                           </p>
+                        )}
+                        
+                        {/* Download Counter - Show if user is logged in and has limits */}
+                        {user?.id && hasDownloadLimit && (
+                          <div className="flex items-center gap-2 mt-2">
+                            <div className="flex items-center gap-1.5 text-xs">
+                              <span className="font-medium text-muted-foreground">Downloads:</span>
+                              <span className={`font-semibold ${
+                                remainingDownloads !== undefined && remainingDownloads > 0 
+                                  ? 'text-green-600 dark:text-green-400' 
+                                  : 'text-red-600 dark:text-red-400'
+                              }`}>
+                                {remainingDownloads !== undefined ? remainingDownloads : 0}
+                              </span>
+                              <span className="text-muted-foreground">/</span>
+                              <span className="text-muted-foreground">{maxDownloads}</span>
+                              {currentDownloads !== undefined && currentDownloads > 0 && (
+                                <span className="text-muted-foreground">
+                                  ({currentDownloads} used)
+                                </span>
+                              )}
+                            </div>
+                            {remainingDownloads !== undefined && remainingDownloads === 0 && (
+                              <Badge variant="destructive" className="text-xs">
+                                Limit Reached
+                              </Badge>
+                            )}
+                          </div>
                         )}
                         
                         {/* Lock indicator if cannot download */}
