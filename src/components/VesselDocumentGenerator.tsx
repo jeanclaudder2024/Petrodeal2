@@ -77,9 +77,25 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
           console.log('User templates data:', data);
           
           if (data.templates && Array.isArray(data.templates)) {
-            // Templates already have plan_name and plan_tier from backend
-            setTemplates(data.templates);
-            console.log('User downloadable templates loaded:', data.templates.length);
+            // Ensure description is populated from metadata if missing
+            const enrichedTemplates = data.templates.map((t: DocumentTemplate) => {
+              if (!t.description && t.metadata?.description) {
+                t.description = t.metadata.description;
+              }
+              // Log each template for debugging
+              console.log('Template loaded:', {
+                name: t.name,
+                file_name: t.file_name,
+                description: t.description,
+                remaining_downloads: t.remaining_downloads,
+                max_downloads: t.max_downloads,
+                can_download: t.can_download,
+                plan_name: t.plan_name
+              });
+              return t;
+            });
+            setTemplates(enrichedTemplates);
+            console.log('User downloadable templates loaded:', enrichedTemplates.length);
             setLoading(false);
             return;
           }
@@ -107,7 +123,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
         const activeTemplates = templatesList.filter((template: DocumentTemplate) => template.is_active !== false);
         // Set can_download to true by default for non-logged-in users
         // Also ensure plan_name and description are available from metadata
-        activeTemplates.forEach(t => {
+        const enrichedTemplates = activeTemplates.map((t: DocumentTemplate) => {
           if (t.can_download === undefined) {
             t.can_download = true;
           }
@@ -119,10 +135,22 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
           if (!t.name && t.metadata?.display_name) {
             t.name = t.metadata.display_name;
           }
+          // Log each template for debugging
+          console.log('Template loaded (fallback):', {
+            name: t.name,
+            file_name: t.file_name,
+            description: t.description,
+            remaining_downloads: t.remaining_downloads,
+            max_downloads: t.max_downloads,
+            can_download: t.can_download,
+            plan_name: t.plan_name,
+            metadata: t.metadata
+          });
+          return t;
         });
-        setTemplates(activeTemplates);
+        setTemplates(enrichedTemplates);
         
-        console.log('Active templates:', activeTemplates.length);
+        console.log('Active templates loaded:', enrichedTemplates.length);
       } else {
         const errorText = await response.text();
         console.error('Failed to fetch templates:', response.status, errorText);
@@ -415,9 +443,13 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                         )}
                         
                         {/* Description - Always show if available */}
-                        {displayDescription && (
+                        {displayDescription ? (
                           <p className="text-sm text-muted-foreground mt-1.5 leading-relaxed">
                             {displayDescription}
+                          </p>
+                        ) : (
+                          <p className="text-xs text-muted-foreground/60 mt-1 italic">
+                            No description available
                           </p>
                         )}
                         
