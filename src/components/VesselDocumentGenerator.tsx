@@ -77,20 +77,43 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
           console.log('User templates data:', data);
           
           if (data.templates && Array.isArray(data.templates)) {
-            // Ensure description is populated from metadata if missing
+            // Ensure description is populated from all possible sources
             const enrichedTemplates = data.templates.map((t: DocumentTemplate) => {
-              if (!t.description && t.metadata?.description) {
-                t.description = t.metadata.description;
+              // Try to get description from multiple sources
+              const finalDescription = t.description || 
+                                       t.metadata?.description || 
+                                       (t as any).template_description ||
+                                       '';
+              
+              // Set description if we found it
+              if (finalDescription && !t.description) {
+                t.description = finalDescription;
               }
+              
+              // Ensure metadata object exists
+              if (!t.metadata) {
+                t.metadata = {};
+              }
+              
+              // Fill metadata if available
+              if (finalDescription && !t.metadata.description) {
+                t.metadata.description = finalDescription;
+              }
+              
               // Log each template for debugging
               console.log('Template loaded:', {
+                id: t.id,
                 name: t.name,
+                title: t.title,
                 file_name: t.file_name,
                 description: t.description,
+                metadata_description: t.metadata?.description,
+                finalDescription,
                 remaining_downloads: t.remaining_downloads,
                 max_downloads: t.max_downloads,
                 can_download: t.can_download,
-                plan_name: t.plan_name
+                plan_name: t.plan_name,
+                fullTemplate: t
               });
               return t;
             });
@@ -408,23 +431,24 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                 (template.file_name ? template.file_name.replace('.docx', '') : '') || 
                 'Unknown Template';
               
-              // Get description - check multiple fields
+              // Get description - check multiple fields in order of priority
               const displayDescription = template.description || 
                 template.metadata?.description || 
+                (template as any).template_description ||
                 '';
               
               // Debug: Log template data for this specific template
-              if (displayName) {
-                console.log(`Template "${displayName}" data:`, {
-                  description: template.description,
-                  metadata_description: template.metadata?.description,
-                  displayDescription,
-                  remaining_downloads: template.remaining_downloads,
-                  max_downloads: template.max_downloads,
-                  can_download: template.can_download,
-                  plan_name: template.plan_name
-                });
-              }
+              console.log(`Template "${displayName}" rendering data:`, {
+                id: template.id,
+                name: template.name,
+                title: template.title,
+                file_name: template.file_name,
+                description: template.description,
+                metadata_description: template.metadata?.description,
+                displayDescription,
+                hasDescription: !!displayDescription,
+                templateObject: template
+              });
               
               // Get download limits info
               const remainingDownloads = template.remaining_downloads;
@@ -465,18 +489,20 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                           </p>
                         )}
                         
-                        {/* Description - Always show (even if empty for debugging) */}
-                        <div className="mt-1.5">
-                          {displayDescription ? (
-                            <p className="text-sm text-muted-foreground leading-relaxed">
+                        {/* Description - Always show */}
+                        {displayDescription && displayDescription.trim() ? (
+                          <div className="mt-1.5">
+                            <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap">
                               {displayDescription}
                             </p>
-                          ) : (
+                          </div>
+                        ) : (
+                          <div className="mt-1.5">
                             <p className="text-xs text-muted-foreground/60 italic">
                               No description available
                             </p>
-                          )}
-                        </div>
+                          </div>
+                        )}
                         
                         {/* Download Counter - Show if user is logged in */}
                         {user?.id && (
