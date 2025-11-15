@@ -413,11 +413,34 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                 template.metadata?.description || 
                 '';
               
+              // Debug: Log template data for this specific template
+              if (displayName) {
+                console.log(`Template "${displayName}" data:`, {
+                  description: template.description,
+                  metadata_description: template.metadata?.description,
+                  displayDescription,
+                  remaining_downloads: template.remaining_downloads,
+                  max_downloads: template.max_downloads,
+                  can_download: template.can_download,
+                  plan_name: template.plan_name
+                });
+              }
+              
               // Get download limits info
               const remainingDownloads = template.remaining_downloads;
               const maxDownloads = template.max_downloads;
               const currentDownloads = template.current_downloads;
               const hasDownloadLimit = maxDownloads !== undefined && maxDownloads !== null;
+              
+              // Debug: Log download limits
+              if (user?.id) {
+                console.log(`Download limits for "${displayName}":`, {
+                  remainingDownloads,
+                  maxDownloads,
+                  currentDownloads,
+                  hasDownloadLimit
+                });
+              }
               
               return (
                 <div key={template.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/50 transition-colors">
@@ -442,41 +465,51 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                           </p>
                         )}
                         
-                        {/* Description - Always show if available */}
-                        {displayDescription ? (
-                          <p className="text-sm text-muted-foreground mt-1.5 leading-relaxed">
-                            {displayDescription}
-                          </p>
-                        ) : (
-                          <p className="text-xs text-muted-foreground/60 mt-1 italic">
-                            No description available
-                          </p>
-                        )}
+                        {/* Description - Always show (even if empty for debugging) */}
+                        <div className="mt-1.5">
+                          {displayDescription ? (
+                            <p className="text-sm text-muted-foreground leading-relaxed">
+                              {displayDescription}
+                            </p>
+                          ) : (
+                            <p className="text-xs text-muted-foreground/60 italic">
+                              No description available
+                            </p>
+                          )}
+                        </div>
                         
-                        {/* Download Counter - Show if user is logged in and has limits */}
-                        {user?.id && hasDownloadLimit && (
-                          <div className="flex items-center gap-2 mt-2">
-                            <div className="flex items-center gap-1.5 text-xs">
-                              <span className="font-medium text-muted-foreground">Downloads:</span>
-                              <span className={`font-semibold ${
-                                remainingDownloads !== undefined && remainingDownloads > 0 
-                                  ? 'text-green-600 dark:text-green-400' 
-                                  : 'text-red-600 dark:text-red-400'
-                              }`}>
-                                {remainingDownloads !== undefined ? remainingDownloads : 0}
-                              </span>
-                              <span className="text-muted-foreground">/</span>
-                              <span className="text-muted-foreground">{maxDownloads}</span>
-                              {currentDownloads !== undefined && currentDownloads > 0 && (
-                                <span className="text-muted-foreground">
-                                  ({currentDownloads} used)
-                                </span>
-                              )}
-                            </div>
-                            {remainingDownloads !== undefined && remainingDownloads === 0 && (
-                              <Badge variant="destructive" className="text-xs">
-                                Limit Reached
-                              </Badge>
+                        {/* Download Counter - Show if user is logged in */}
+                        {user?.id && (
+                          <div className="mt-2">
+                            {hasDownloadLimit ? (
+                              <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-1.5 text-xs">
+                                  <span className="font-medium text-muted-foreground">Downloads:</span>
+                                  <span className={`font-semibold ${
+                                    remainingDownloads !== undefined && remainingDownloads !== null && remainingDownloads > 0 
+                                      ? 'text-green-600 dark:text-green-400' 
+                                      : 'text-red-600 dark:text-red-400'
+                                  }`}>
+                                    {remainingDownloads !== undefined && remainingDownloads !== null ? remainingDownloads : 0}
+                                  </span>
+                                  <span className="text-muted-foreground">/</span>
+                                  <span className="text-muted-foreground">{maxDownloads}</span>
+                                  {currentDownloads !== undefined && currentDownloads !== null && currentDownloads > 0 && (
+                                    <span className="text-muted-foreground">
+                                      ({currentDownloads} used)
+                                    </span>
+                                  )}
+                                </div>
+                                {remainingDownloads !== undefined && remainingDownloads !== null && remainingDownloads === 0 && (
+                                  <Badge variant="destructive" className="text-xs">
+                                    Limit Reached
+                                  </Badge>
+                                )}
+                              </div>
+                            ) : (
+                              <p className="text-xs text-muted-foreground/60 italic">
+                                Download limits not available
+                              </p>
                             )}
                           </div>
                         )}
