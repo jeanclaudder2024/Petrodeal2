@@ -426,8 +426,10 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
               // Get plan name - prioritize plan_name, then plan_tier
               const planName = template.plan_name || template.plan_tier || null;
               
-              // Get display name - check multiple fields
-              const displayName = template.name || template.title || 
+              // Get display name - prioritize metadata.display_name, then title, then name
+              const displayName = template.metadata?.display_name || 
+                template.title || 
+                template.name || 
                 (template.file_name ? template.file_name.replace('.docx', '') : '') || 
                 'Unknown Template';
               
