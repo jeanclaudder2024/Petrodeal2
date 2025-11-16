@@ -274,15 +274,17 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
       console.log('Process response status:', response.status);
 
       if (response.ok) {
-        // Get filename from Content-Disposition header
+        // Get filename from Content-Disposition header (backend now sends correct filename)
         const contentDisposition = response.headers.get('Content-Disposition');
-        let filename = `generated_${apiTemplateName}_${vesselImo}.pdf`;
+        let filename = `${apiTemplateName}_${vesselImo}.pdf`; // Fallback without "generated_" prefix
         if (contentDisposition) {
-          const filenameMatch = contentDisposition.match(/filename=(.+?)(?:;|$)/);
+          const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
           if (filenameMatch) {
-            filename = filenameMatch[1].replace(/"/g, '').trim();
+            filename = filenameMatch[1].replace(/['"]/g, '').trim();
+            console.log('Filename from Content-Disposition:', filename);
           }
         }
+        console.log('Using filename:', filename);
         
         // Handle file download (PDF or DOCX)
         const blob = await response.blob();
