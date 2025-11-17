@@ -522,14 +522,16 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
               // Get plan name - prioritize plan_name, then plan_tier
               const planName = template.plan_name || template.plan_tier || null;
               
-              // Get display name - prioritize metadata.display_name, then title, then name
-              // CRITICAL: Check title FIRST because backend sends title as display_name
-              // Note: template.name might still be file_name if enrichment didn't run
-              const displayName = template.metadata?.display_name || 
-                template.title ||  // Backend sends title as display_name - CHECK THIS FIRST!
-                template.name ||  // This should already be display_name from enrichedTemplates, but might be file_name
+              // Get display name - EXACTLY like CMS: meta.display_name || template.title || template.name
+              // CRITICAL: Check in this exact order to match CMS behavior
+              const displayName = (template.metadata?.display_name) || 
+                (template.title) ||  // Backend sends title as display_name
+                (template.name) ||  // This should already be display_name from enrichedTemplates
                 (template.file_name ? template.file_name.replace('.docx', '') : '') || 
                 'Unknown Template';
+              
+              // Force use title if available (CMS behavior)
+              const finalDisplayName = template.metadata?.display_name || template.title || template.name || displayName;
               
               // Get description - check multiple fields in order of priority
               const displayDescription = template.description || 
@@ -538,25 +540,24 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                 '';
               
               // Debug: Log template data for this specific template - CRITICAL FOR DEBUGGING
-              console.log(`🎨 Template "${displayName}" RENDERING:`, {
+              console.log(`🎨 Template RENDERING (CMS format):`, {
                 id: template.id,
-                'template.name': template.name,
-                'template.title': template.title,
-                'template.file_name': template.file_name,
-                'template.description': template.description,
                 'template.metadata?.display_name': template.metadata?.display_name,
+                'template.title': template.title,
+                'template.name': template.name,
+                'template.file_name': template.file_name,
+                'RESULT finalDisplayName': finalDisplayName,
+                'template.description': template.description,
                 'template.metadata?.description': template.metadata?.description,
-                'RESULT displayName': displayName,
                 'RESULT displayDescription': displayDescription,
                 'RESULT planName': planName,
                 'hasDescription': !!displayDescription,
-                'can_download': template.can_download,
-                'FULL template object': template
+                'can_download': template.can_download
               });
               
-              // WARNING: If displayName is still file_name, log a warning
-              if (displayName && template.file_name && displayName === template.file_name.replace('.docx', '')) {
-                console.warn(`⚠️ WARNING: displayName is still file_name for template ${template.id}. Title: ${template.title}, Name: ${template.name}`);
+              // WARNING: If finalDisplayName is still file_name, log a warning
+              if (finalDisplayName && template.file_name && finalDisplayName === template.file_name.replace('.docx', '')) {
+                console.warn(`⚠️ WARNING: finalDisplayName is still file_name for template ${template.id}. Title: ${template.title}, Name: ${template.name}, Metadata: ${template.metadata?.display_name}`);
               }
               
               // Get download limits info
@@ -581,10 +582,10 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                     <div className="flex items-start gap-3">
                       {getStatusIcon(status?.status || 'idle')}
                       <div className="flex-1 min-w-0">
-                        {/* Template Name - Same as CMS: meta.display_name || template.title || template.name */}
+                        {/* Template Name - EXACTLY like CMS: meta.display_name || template.title || template.name */}
                         <h4 className="font-medium text-base flex items-center gap-2">
                           <FileText className="h-4 w-4 text-primary" />
-                          {displayName}
+                          {finalDisplayName}
                         </h4>
                         
                         {/* File Info - Same as CMS: File size and placeholders count */}
