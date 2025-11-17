@@ -506,21 +506,22 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                     <div className="flex items-start gap-3">
                       {getStatusIcon(status?.status || 'idle')}
                       <div className="flex-1 min-w-0">
-                        {/* Template Name */}
+                        {/* Template Name - Always show display_name */}
                         <h4 className="font-medium text-base">{displayName}</h4>
                         
-                        {/* Plan Name - Show below template name if user is logged in */}
-                        {user?.id && planName && (
-                          <p className="text-sm text-muted-foreground mt-1">
-                            <span className="font-medium text-primary">Plan:</span> {planName}
-                          </p>
-                        )}
-                        
-                        {/* Plan Name - Show if template is not available in user's plan */}
-                        {user?.id && !canDownload && !planName && (
-                          <p className="text-sm text-amber-600 dark:text-amber-400 mt-1">
-                            <span className="font-medium">Plan:</span> Not available in your plan
-                          </p>
+                        {/* Plan Name - Always show if user is logged in */}
+                        {user?.id && (
+                          <div className="mt-1">
+                            {planName ? (
+                              <p className="text-sm text-muted-foreground">
+                                <span className="font-medium text-primary">Plan:</span> {planName}
+                              </p>
+                            ) : !canDownload ? (
+                              <p className="text-sm text-amber-600 dark:text-amber-400">
+                                <span className="font-medium">Plan:</span> Not available in your plan
+                              </p>
+                            ) : null}
+                          </div>
                         )}
                         
                         {/* Description - Always show */}
