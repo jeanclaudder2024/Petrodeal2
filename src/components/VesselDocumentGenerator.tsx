@@ -513,25 +513,25 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                 ? template.can_download 
                 : true) && hasRemainingDownloads; // Default to true if not specified, but respect download limits
               
-              // Get plan name - prioritize plan_name, then plan_tier
-              const planName = template.plan_name || template.plan_tier || null;
-              
-              // Get display name - prioritize metadata.display_name, then title, then name
-              // Note: template.name should already be set to display_name from enrichedTemplates
+              // Get display name - prioritize metadata.display_name, then name, then title
+              // Backend returns: name (display_name), metadata.display_name, title
               const displayName = template.metadata?.display_name || 
-                template.name ||  // This should already be display_name from enrichedTemplates
+                template.name ||  // Backend sets this to display_name
                 template.title || 
                 (template.file_name ? template.file_name.replace('.docx', '') : '') || 
                 'Unknown Template';
               
-              // Get description - check multiple fields in order of priority
+              // Get description - backend returns: description, metadata.description
               const displayDescription = template.description || 
                 template.metadata?.description || 
                 (template as any).template_description ||
                 '';
               
+              // Get plan name - backend returns: plan_name, plan_tier
+              const finalPlanName = template.plan_name || template.plan_tier || null;
+              
               // Debug: Log template data for this specific template
-              console.log(`Template "${displayName}" rendering data:`, {
+              console.log(`📄 Template "${displayName}" rendering data:`, {
                 id: template.id,
                 name: template.name,
                 title: template.title,
@@ -539,11 +539,13 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                 description: template.description,
                 metadata_description: template.metadata?.description,
                 metadata_display_name: template.metadata?.display_name,
+                displayName,
                 displayDescription,
                 plan_name: template.plan_name,
                 plan_tier: template.plan_tier,
-                planName,
+                finalPlanName,
                 hasDescription: !!displayDescription,
+                hasPlanName: !!finalPlanName,
                 can_download: template.can_download,
                 fullTemplate: template
               });
@@ -576,9 +578,9 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                         {/* Plan Name - Always show if user is logged in */}
                         {user?.id && (
                           <div className="mt-1">
-                            {planName ? (
+                            {finalPlanName ? (
                               <p className="text-sm text-muted-foreground">
-                                <span className="font-medium text-primary">Plan:</span> {planName}
+                                <span className="font-medium text-primary">Plan:</span> {finalPlanName}
                               </p>
                             ) : !canDownload ? (
                               <p className="text-sm text-amber-600 dark:text-amber-400">
@@ -588,27 +590,14 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                           </div>
                         )}
                         
-                        {/* Description - Always show */}
+                        {/* Description - Always show if available */}
                         {displayDescription && displayDescription.trim() ? (
                           <div className="mt-1.5">
                             <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap">
                               {displayDescription}
                             </p>
                           </div>
-                        ) : (
-                          <div className="mt-1.5">
-                            <p className="text-xs text-muted-foreground/60 italic">
-                              No description available
-                            </p>
-                            {/* Debug: Show why description is not available */}
-                            {process.env.NODE_ENV === 'development' && (
-                              <p className="text-xs text-red-500 mt-1">
-                                Debug: description={String(template.description)}, 
-                                metadata.desc={String(template.metadata?.description)}
-                              </p>
-                            )}
-                          </div>
-                        )}
+                        ) : null}
                         
                         {/* Download Counter - Show if user is logged in */}
                         {user?.id && (
@@ -654,9 +643,9 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                               <span className="text-xs font-medium text-amber-800 dark:text-amber-200 block">
                                 This template is not available in your current plan
                               </span>
-                              {planName && (
+                              {finalPlanName && (
                                 <span className="text-xs text-amber-700 dark:text-amber-300 mt-1 block">
-                                  Upgrade to <strong>{planName}</strong> plan to download this document
+                                  Upgrade to <strong>{finalPlanName}</strong> plan to download this document
                                 </span>
                               )}
                             </div>
@@ -743,7 +732,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                           ? 'bg-gray-400 cursor-not-allowed opacity-60' 
                           : 'hover:scale-105 hover:shadow-xl hover:shadow-blue-500/25 active:scale-95 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600'
                       } text-white border-0`}
-                      title={!canDownload ? (planName ? `Upgrade to ${planName} plan to download this document` : 'This template is not available in your current plan') : ''}
+                      title={!canDownload ? (finalPlanName ? `Upgrade to ${finalPlanName} plan to download this document` : 'This template is not available in your current plan') : ''}
                     >
                       {/* Animated background effect - only if enabled */}
                       {canDownload && (
