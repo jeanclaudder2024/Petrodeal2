@@ -43,6 +43,15 @@ const API_BASE_URL = process.env.NODE_ENV === 'production'
   ? 'https://petrodealhub.com/api'  // Production API
   : 'http://localhost:8000'; // Development
 
+// Format bytes to human readable format (same as CMS)
+function formatBytes(bytes: number): string {
+  if (!bytes || bytes === 0) return '0 Bytes';
+  const k = 1024;
+  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+}
+
 export default function VesselDocumentGenerator({ vesselImo, vesselName }: VesselDocumentGeneratorProps) {
   const { user } = useAuth();
   const [templates, setTemplates] = useState<DocumentTemplate[]>([]);
@@ -571,12 +580,40 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                     <div className="flex items-start gap-3">
                       {getStatusIcon(status?.status || 'idle')}
                       <div className="flex-1 min-w-0">
-                        {/* Template Name - Always show display_name */}
-                        <h4 className="font-medium text-base">{displayName}</h4>
+                        {/* Template Name - Same as CMS: meta.display_name || template.title || template.name */}
+                        <h4 className="font-medium text-base flex items-center gap-2">
+                          <FileText className="h-4 w-4 text-primary" />
+                          {displayName}
+                        </h4>
+                        
+                        {/* File Info - Same as CMS: File size and placeholders count */}
+                        <div className="mt-1 flex items-center gap-3 text-xs text-muted-foreground">
+                          {template.size && (
+                            <span className="flex items-center gap-1">
+                              <FileText className="h-3 w-3" />
+                              {formatBytes(template.size)}
+                            </span>
+                          )}
+                          {template.placeholders && template.placeholders.length > 0 && (
+                            <span className="flex items-center gap-1">
+                              <span>•</span>
+                              <span>{template.placeholders.length} placeholders</span>
+                            </span>
+                          )}
+                        </div>
+                        
+                        {/* Description - Same as CMS: meta.description || template.description || 'No description provided' */}
+                        <div className="mt-2">
+                          <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap">
+                            {displayDescription && displayDescription.trim() 
+                              ? displayDescription 
+                              : 'No description provided'}
+                          </p>
+                        </div>
                         
                         {/* Plan Name - Always show if user is logged in */}
                         {user?.id && (
-                          <div className="mt-1">
+                          <div className="mt-2">
                             {planName ? (
                               <p className="text-sm text-muted-foreground">
                                 <span className="font-medium text-primary">Plan:</span> {planName}
@@ -586,28 +623,6 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                                 <span className="font-medium">Plan:</span> Not available in your plan
                               </p>
                             ) : null}
-                          </div>
-                        )}
-                        
-                        {/* Description - Always show */}
-                        {displayDescription && displayDescription.trim() ? (
-                          <div className="mt-1.5">
-                            <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap">
-                              {displayDescription}
-                            </p>
-                          </div>
-                        ) : (
-                          <div className="mt-1.5">
-                            <p className="text-xs text-muted-foreground/60 italic">
-                              No description available
-                            </p>
-                            {/* Debug: Show why description is not available */}
-                            {process.env.NODE_ENV === 'development' && (
-                              <p className="text-xs text-red-500 mt-1">
-                                Debug: description={String(template.description)}, 
-                                metadata.desc={String(template.metadata?.description)}
-                              </p>
-                            )}
                           </div>
                         )}
                         
