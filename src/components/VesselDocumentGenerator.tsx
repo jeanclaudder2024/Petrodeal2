@@ -21,7 +21,6 @@ interface DocumentTemplate {
   remaining_downloads?: number;
   max_downloads?: number;
   current_downloads?: number;
-  size?: number; // File size in bytes (same as CMS)
   metadata?: {
     description?: string;
     display_name?: string;
@@ -43,15 +42,6 @@ interface VesselDocumentGeneratorProps {
 const API_BASE_URL = process.env.NODE_ENV === 'production' 
   ? 'https://petrodealhub.com/api'  // Production API
   : 'http://localhost:8000'; // Development
-
-// Format bytes to human readable format (same as CMS)
-function formatBytes(bytes: number): string {
-  if (!bytes || bytes === 0) return '0 Bytes';
-  const k = 1024;
-  const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-  const i = Math.floor(Math.log(bytes) / Math.log(k));
-  return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
-}
 
 export default function VesselDocumentGenerator({ vesselImo, vesselName }: VesselDocumentGeneratorProps) {
   const { user } = useAuth();
@@ -204,13 +194,11 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
       
       if (response.ok) {
         const data = await response.json();
-        console.log('📦 Templates data received:', data);
+        console.log('Templates data:', data);
         
         // Filter only active templates
         const templatesList = data.templates || [];
-        console.log('📋 Total templates in response:', templatesList.length);
         const activeTemplates = templatesList.filter((template: DocumentTemplate) => template.is_active !== false);
-        console.log('✅ Active templates:', activeTemplates.length);
         
         // Enrich templates with metadata, description, and plan_name
         const enrichedTemplates = activeTemplates.map((t: DocumentTemplate) => {
@@ -220,9 +208,8 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
           }
           
           // Get display_name - prioritize metadata.display_name, then title, then name
-          // IMPORTANT: title comes from backend and is the display_name
           const displayName = t.metadata?.display_name || 
-                             t.title ||  // Backend sends title as display_name
+                             t.title || 
                              t.name || 
                              (t.file_name ? t.file_name.replace('.docx', '') : '') || 
                              'Unknown Template';
@@ -238,10 +225,10 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
             t.can_download = true;
           }
           
-          // Return enriched template - CRITICAL: name should be displayName, not file_name
+          // Return enriched template
           const enriched = {
             ...t,
-            name: displayName, // Use display_name as primary name (NOT file_name!)
+            name: displayName, // Use display_name as primary name
             description: finalDescription,
             metadata: {
               ...t.metadata,
@@ -251,16 +238,16 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
           };
           
           // Log each template for debugging
-          console.log('📄 Template enriched (fallback):', {
+          console.log('📄 Template loaded (fallback):', {
             id: enriched.id,
-            original_name: t.name,
-            original_title: t.title,
-            original_file_name: t.file_name,
-            enriched_name: enriched.name, // Should be displayName
+            name: enriched.name,
             display_name: enriched.metadata?.display_name,
+            title: enriched.title,
+            file_name: enriched.file_name,
             description: enriched.description,
-            hasDescription: !!enriched.description,
-            metadata: enriched.metadata
+            metadata: enriched.metadata,
+            can_download: enriched.can_download,
+            plan_name: enriched.plan_name
           });
           
           return enriched;
@@ -287,16 +274,14 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
     }
   };
 
-  const processDocument = async (templateName: string, templateDisplayName: string) => {
+  const processDocument = async (template: DocumentTemplate) => {
     let timeoutId: NodeJS.Timeout | undefined;
     
-    // Ensure templateName has .docx extension for consistency
-    const templateKey = templateName?.endsWith('.docx') 
-      ? templateName 
-      : `${templateName}.docx`;
+    // Use template.id as the key for processing status
+    const templateKey = template.id || template.file_name || template.name;
     
     try {
-      console.log('Processing document:', { templateKey, templateDisplayName, vesselImo });
+      console.log('Processing document:', { templateId: template.id, templateName: template.name, vesselImo });
       
       // Set processing status with progress
       setProcessingStatus(prev => ({
@@ -339,13 +324,20 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
         toast.error('Request timeout - server may be busy, please try again');
       }, 30000); // 30 second timeout
 
-      // Use original templateName (without .docx extension) for API request
-      const apiTemplateName = templateName.replace('.docx', '');
-      const requestData = {
-        template_name: apiTemplateName,
+      // Send template_id (preferred) or template_name (fallback for backward compatibility)
+      const requestData: any = {
         vessel_imo: vesselImo,
         user_id: user?.id || null
       };
+      
+      // Prefer template_id if available, otherwise fall back to template_name
+      if (template.id) {
+        requestData.template_id = template.id;
+      } else {
+        // Fallback: use template_name (without .docx extension)
+        const apiTemplateName = (template.file_name || template.name || '').replace('.docx', '');
+        requestData.template_name = apiTemplateName;
+      }
 
       console.log('Sending request to:', `${API_BASE_URL}/generate-document`);
       console.log('Request data:', requestData);
@@ -370,6 +362,8 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
       if (response.ok) {
         // Get filename from Content-Disposition header (backend now sends correct filename)
         const contentDisposition = response.headers.get('Content-Disposition');
+        const templateName = template.file_name || template.name || 'template';
+        const apiTemplateName = templateName.replace('.docx', '');
         let filename = `${apiTemplateName}_${vesselImo}.pdf`; // Fallback without "generated_" prefix
         if (contentDisposition) {
           const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
@@ -522,16 +516,13 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
               // Get plan name - prioritize plan_name, then plan_tier
               const planName = template.plan_name || template.plan_tier || null;
               
-              // Get display name - EXACTLY like CMS: meta.display_name || template.title || template.name
-              // CRITICAL: Check in this exact order to match CMS behavior
-              const displayName = (template.metadata?.display_name) || 
-                (template.title) ||  // Backend sends title as display_name
-                (template.name) ||  // This should already be display_name from enrichedTemplates
+              // Get display name - prioritize metadata.display_name, then title, then name
+              // Note: template.name should already be set to display_name from enrichedTemplates
+              const displayName = template.metadata?.display_name || 
+                template.name ||  // This should already be display_name from enrichedTemplates
+                template.title || 
                 (template.file_name ? template.file_name.replace('.docx', '') : '') || 
                 'Unknown Template';
-              
-              // Force use title if available (CMS behavior)
-              const finalDisplayName = template.metadata?.display_name || template.title || template.name || displayName;
               
               // Get description - check multiple fields in order of priority
               const displayDescription = template.description || 
@@ -539,26 +530,23 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                 (template as any).template_description ||
                 '';
               
-              // Debug: Log template data for this specific template - CRITICAL FOR DEBUGGING
-              console.log(`🎨 Template RENDERING (CMS format):`, {
+              // Debug: Log template data for this specific template
+              console.log(`Template "${displayName}" rendering data:`, {
                 id: template.id,
-                'template.metadata?.display_name': template.metadata?.display_name,
-                'template.title': template.title,
-                'template.name': template.name,
-                'template.file_name': template.file_name,
-                'RESULT finalDisplayName': finalDisplayName,
-                'template.description': template.description,
-                'template.metadata?.description': template.metadata?.description,
-                'RESULT displayDescription': displayDescription,
-                'RESULT planName': planName,
-                'hasDescription': !!displayDescription,
-                'can_download': template.can_download
+                name: template.name,
+                title: template.title,
+                file_name: template.file_name,
+                description: template.description,
+                metadata_description: template.metadata?.description,
+                metadata_display_name: template.metadata?.display_name,
+                displayDescription,
+                plan_name: template.plan_name,
+                plan_tier: template.plan_tier,
+                planName,
+                hasDescription: !!displayDescription,
+                can_download: template.can_download,
+                fullTemplate: template
               });
-              
-              // WARNING: If finalDisplayName is still file_name, log a warning
-              if (finalDisplayName && template.file_name && finalDisplayName === template.file_name.replace('.docx', '')) {
-                console.warn(`⚠️ WARNING: finalDisplayName is still file_name for template ${template.id}. Title: ${template.title}, Name: ${template.name}, Metadata: ${template.metadata?.display_name}`);
-              }
               
               // Get download limits info
               const remainingDownloads = template.remaining_downloads;
@@ -582,40 +570,12 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                     <div className="flex items-start gap-3">
                       {getStatusIcon(status?.status || 'idle')}
                       <div className="flex-1 min-w-0">
-                        {/* Template Name - EXACTLY like CMS: meta.display_name || template.title || template.name */}
-                        <h4 className="font-medium text-base flex items-center gap-2">
-                          <FileText className="h-4 w-4 text-primary" />
-                          {finalDisplayName}
-                        </h4>
-                        
-                        {/* File Info - Same as CMS: File size and placeholders count */}
-                        <div className="mt-1 flex items-center gap-3 text-xs text-muted-foreground">
-                          {template.size && (
-                            <span className="flex items-center gap-1">
-                              <FileText className="h-3 w-3" />
-                              {formatBytes(template.size)}
-                            </span>
-                          )}
-                          {template.placeholders && template.placeholders.length > 0 && (
-                            <span className="flex items-center gap-1">
-                              <span>•</span>
-                              <span>{template.placeholders.length} placeholders</span>
-                            </span>
-                          )}
-                        </div>
-                        
-                        {/* Description - Same as CMS: meta.description || template.description || 'No description provided' */}
-                        <div className="mt-2">
-                          <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap">
-                            {displayDescription && displayDescription.trim() 
-                              ? displayDescription 
-                              : 'No description provided'}
-                          </p>
-                        </div>
+                        {/* Template Name - Always show display_name */}
+                        <h4 className="font-medium text-base">{displayName}</h4>
                         
                         {/* Plan Name - Always show if user is logged in */}
                         {user?.id && (
-                          <div className="mt-2">
+                          <div className="mt-1">
                             {planName ? (
                               <p className="text-sm text-muted-foreground">
                                 <span className="font-medium text-primary">Plan:</span> {planName}
@@ -625,6 +585,28 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                                 <span className="font-medium">Plan:</span> Not available in your plan
                               </p>
                             ) : null}
+                          </div>
+                        )}
+                        
+                        {/* Description - Always show */}
+                        {displayDescription && displayDescription.trim() ? (
+                          <div className="mt-1.5">
+                            <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap">
+                              {displayDescription}
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="mt-1.5">
+                            <p className="text-xs text-muted-foreground/60 italic">
+                              No description available
+                            </p>
+                            {/* Debug: Show why description is not available */}
+                            {process.env.NODE_ENV === 'development' && (
+                              <p className="text-xs text-red-500 mt-1">
+                                Debug: description={String(template.description)}, 
+                                metadata.desc={String(template.metadata?.description)}
+                              </p>
+                            )}
                           </div>
                         )}
                         
@@ -666,11 +648,18 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                         
                         {/* Lock indicator if cannot download */}
                         {!canDownload && (
-                          <div className="flex items-center gap-2 mt-2 text-amber-600 dark:text-amber-400">
-                            <Lock className="h-4 w-4" />
-                            <span className="text-xs font-medium">
-                              This template is not available in your current plan
-                            </span>
+                          <div className="flex items-center gap-2 mt-2 p-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md">
+                            <Lock className="h-4 w-4 text-amber-600 dark:text-amber-400 flex-shrink-0" />
+                            <div className="flex-1">
+                              <span className="text-xs font-medium text-amber-800 dark:text-amber-200 block">
+                                This template is not available in your current plan
+                              </span>
+                              {planName && (
+                                <span className="text-xs text-amber-700 dark:text-amber-300 mt-1 block">
+                                  Upgrade to <strong>{planName}</strong> plan to download this document
+                                </span>
+                              )}
+                            </div>
                           </div>
                         )}
                         
@@ -747,19 +736,14 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                   
                   <div className="flex items-center gap-2">
                     <Button
-                      onClick={() => {
-                        // Use file_name if available, otherwise use name or id
-                        const fileName = template.file_name || template.name || template.id;
-                        const displayName = template.name || template.title || fileName;
-                        processDocument(fileName, displayName);
-                      }}
+                      onClick={() => processDocument(template)}
                       disabled={isProcessing || !canDownload}
                       className={`group relative flex items-center gap-2 transition-all duration-300 ${
                         !canDownload 
                           ? 'bg-gray-400 cursor-not-allowed opacity-60' 
                           : 'hover:scale-105 hover:shadow-xl hover:shadow-blue-500/25 active:scale-95 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600'
                       } text-white border-0`}
-                      title={!canDownload ? 'This template is not available in your current plan' : ''}
+                      title={!canDownload ? (planName ? `Upgrade to ${planName} plan to download this document` : 'This template is not available in your current plan') : ''}
                     >
                       {/* Animated background effect - only if enabled */}
                       {canDownload && (
