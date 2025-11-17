@@ -513,10 +513,11 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
               const planName = template.plan_name || template.plan_tier || null;
               
               // Get display name - prioritize metadata.display_name, then title, then name
-              // Note: template.name should already be set to display_name from enrichedTemplates
+              // CRITICAL: Check title FIRST because backend sends title as display_name
+              // Note: template.name might still be file_name if enrichment didn't run
               const displayName = template.metadata?.display_name || 
-                template.name ||  // This should already be display_name from enrichedTemplates
-                template.title || 
+                template.title ||  // Backend sends title as display_name - CHECK THIS FIRST!
+                template.name ||  // This should already be display_name from enrichedTemplates, but might be file_name
                 (template.file_name ? template.file_name.replace('.docx', '') : '') || 
                 'Unknown Template';
               
@@ -526,23 +527,27 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                 (template as any).template_description ||
                 '';
               
-              // Debug: Log template data for this specific template
-              console.log(`Template "${displayName}" rendering data:`, {
+              // Debug: Log template data for this specific template - CRITICAL FOR DEBUGGING
+              console.log(`🎨 Template "${displayName}" RENDERING:`, {
                 id: template.id,
-                name: template.name,
-                title: template.title,
-                file_name: template.file_name,
-                description: template.description,
-                metadata_description: template.metadata?.description,
-                metadata_display_name: template.metadata?.display_name,
-                displayDescription,
-                plan_name: template.plan_name,
-                plan_tier: template.plan_tier,
-                planName,
-                hasDescription: !!displayDescription,
-                can_download: template.can_download,
-                fullTemplate: template
+                'template.name': template.name,
+                'template.title': template.title,
+                'template.file_name': template.file_name,
+                'template.description': template.description,
+                'template.metadata?.display_name': template.metadata?.display_name,
+                'template.metadata?.description': template.metadata?.description,
+                'RESULT displayName': displayName,
+                'RESULT displayDescription': displayDescription,
+                'RESULT planName': planName,
+                'hasDescription': !!displayDescription,
+                'can_download': template.can_download,
+                'FULL template object': template
               });
+              
+              // WARNING: If displayName is still file_name, log a warning
+              if (displayName && template.file_name && displayName === template.file_name.replace('.docx', '')) {
+                console.warn(`⚠️ WARNING: displayName is still file_name for template ${template.id}. Title: ${template.title}, Name: ${template.name}`);
+              }
               
               // Get download limits info
               const remainingDownloads = template.remaining_downloads;
