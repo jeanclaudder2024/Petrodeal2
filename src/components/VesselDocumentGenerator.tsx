@@ -21,6 +21,7 @@ interface DocumentTemplate {
   remaining_downloads?: number;
   max_downloads?: number;
   current_downloads?: number;
+  size?: number; // File size in bytes (same as CMS)
   metadata?: {
     description?: string;
     display_name?: string;
