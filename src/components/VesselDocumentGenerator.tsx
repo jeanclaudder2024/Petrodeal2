@@ -88,79 +88,63 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
           
           if (data.templates && Array.isArray(data.templates)) {
             // Ensure description, display_name, and plan_name are populated from all possible sources
-            const enrichedTemplates = data.templates.map((t: DocumentTemplate) => {
+            const enrichedTemplates = data.templates.map((t: any) => {
               // Ensure metadata object exists
               if (!t.metadata) {
                 t.metadata = {};
               }
               
-              // Get display_name - prioritize metadata.display_name, then title, then name
-              const displayName = (t as any).display_name || 
+              // Backend returns: name (which is display_name), metadata.display_name, title
+              // Get display_name - prioritize what backend sends
+              const displayName = t.name ||  // Backend sets name to display_name
                                  t.metadata?.display_name || 
+                                 (t as any).display_name ||
                                  t.title || 
-                                 t.name || 
                                  (t.file_name ? t.file_name.replace('.docx', '') : '') || 
                                  'Unknown Template';
               
-              // Set display_name in metadata if not already set
-              if (!t.metadata.display_name && displayName) {
-                t.metadata.display_name = displayName;
-              }
-              
-              // Try to get description from multiple sources
+              // Backend returns: description, metadata.description
+              // Get description - prioritize what backend sends
               const finalDescription = t.description || 
                                        t.metadata?.description || 
                                        (t as any).template_description ||
                                        '';
               
-              // Set description if we found it
-              if (finalDescription && !t.description) {
-                t.description = finalDescription;
-              }
+              // Backend returns: plan_name, plan_tier
+              // Get plan_name - prioritize what backend sends
+              const finalPlanName = t.plan_name || t.plan_tier || null;
               
-              // Fill metadata if available
-              if (finalDescription && !t.metadata.description) {
-                t.metadata.description = finalDescription;
-              }
-              
-              // Ensure plan_name is set
-              if (!t.plan_name && (t as any).plan_name) {
-                t.plan_name = (t as any).plan_name;
-              }
-              
-              // Log each template for debugging
-              console.log('Template loaded:', {
+              // Log raw data from backend
+              console.log('🔍 Raw template from backend:', {
                 id: t.id,
                 name: t.name,
                 title: t.title,
                 file_name: t.file_name,
-                display_name: displayName,
                 description: t.description,
-                metadata_description: t.metadata?.description,
-                metadata_display_name: t.metadata?.display_name,
                 plan_name: t.plan_name,
                 plan_tier: t.plan_tier,
-                can_download: t.can_download,
-                remaining_downloads: t.remaining_downloads,
-                max_downloads: t.max_downloads,
-                fullTemplate: t
+                metadata: t.metadata,
+                can_download: t.can_download
               });
               
-              // Return enriched template with all fields
-              const enrichedTemplate = {
+              // Return enriched template with all fields properly set
+              const enrichedTemplate: DocumentTemplate = {
                 ...t,
+                id: t.id || t.template_id || String(t.id),
                 name: displayName, // Use display_name as the primary name
-                description: finalDescription || t.description || '', // Ensure description is set
-                plan_name: t.plan_name || (t as any).plan_name || null, // Ensure plan_name is set
+                title: t.title || displayName,
+                description: finalDescription, // Always set description
+                plan_name: finalPlanName, // Always set plan_name
+                plan_tier: t.plan_tier || null,
                 metadata: {
-                  ...t.metadata,
                   display_name: displayName,
-                  description: finalDescription || t.metadata?.description || ''
+                  description: finalDescription,
+                  ...t.metadata
                 }
               };
               
               // Log the enriched template to verify
-              console.log('Enriched template:', {
+              console.log('✅ Enriched template:', {
                 id: enrichedTemplate.id,
                 name: enrichedTemplate.name,
                 display_name: enrichedTemplate.metadata?.display_name,
@@ -590,14 +574,18 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                           </div>
                         )}
                         
-                        {/* Description - Always show if available */}
-                        {displayDescription && displayDescription.trim() ? (
-                          <div className="mt-1.5">
+                        {/* Description - Always show if available, even if empty show placeholder */}
+                        <div className="mt-1.5">
+                          {displayDescription && displayDescription.trim() ? (
                             <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap">
                               {displayDescription}
                             </p>
-                          </div>
-                        ) : null}
+                          ) : (
+                            <p className="text-xs text-muted-foreground/60 italic">
+                              No description available
+                            </p>
+                          )}
+                        </div>
                         
                         {/* Download Counter - Show if user is logged in */}
                         {user?.id && (
