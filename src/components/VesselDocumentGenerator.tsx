@@ -323,7 +323,11 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
   }
 
   return (
-    <div data-component-version="v2.0-new-ui">
+    <div data-component-version="v2.0-new-ui" style={{ border: '3px solid red', padding: '10px', margin: '10px' }}>
+      {/* VISIBLE MARKER: If you see this red border, the NEW component is loaded! */}
+      <div style={{ background: 'yellow', padding: '5px', marginBottom: '10px', fontWeight: 'bold' }}>
+        ✅ NEW VERSION v2.0 LOADED - This is the updated component!
+      </div>
         {templates.length === 0 ? (
           <div className="text-center py-8 text-muted-foreground">
             <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
