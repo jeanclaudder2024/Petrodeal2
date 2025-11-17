@@ -49,6 +49,13 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
   const [loading, setLoading] = useState(false);
   const [processingStatus, setProcessingStatus] = useState<Record<string, ProcessingStatus>>({});
 
+  // Debug: Log component mount
+  useEffect(() => {
+    console.log('🆕 VesselDocumentGenerator component mounted/updated - NEW VERSION');
+    console.log('   vesselImo:', vesselImo);
+    console.log('   vesselName:', vesselName);
+  }, []);
+
   useEffect(() => {
     fetchTemplates();
   }, [user?.id]);
