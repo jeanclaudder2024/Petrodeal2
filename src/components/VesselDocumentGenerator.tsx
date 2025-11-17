@@ -137,15 +137,29 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
               });
               
               // Return enriched template with all fields
-              return {
+              const enrichedTemplate = {
                 ...t,
                 name: displayName, // Use display_name as the primary name
+                description: finalDescription || t.description || '', // Ensure description is set
+                plan_name: t.plan_name || (t as any).plan_name || null, // Ensure plan_name is set
                 metadata: {
                   ...t.metadata,
                   display_name: displayName,
-                  description: finalDescription || t.metadata?.description
+                  description: finalDescription || t.metadata?.description || ''
                 }
               };
+              
+              // Log the enriched template to verify
+              console.log('Enriched template:', {
+                id: enrichedTemplate.id,
+                name: enrichedTemplate.name,
+                display_name: enrichedTemplate.metadata?.display_name,
+                description: enrichedTemplate.description,
+                plan_name: enrichedTemplate.plan_name,
+                can_download: enrichedTemplate.can_download
+              });
+              
+              return enrichedTemplate;
             });
             setTemplates(enrichedTemplates);
             console.log('User downloadable templates loaded:', enrichedTemplates.length);
@@ -459,9 +473,10 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
               const planName = template.plan_name || template.plan_tier || null;
               
               // Get display name - prioritize metadata.display_name, then title, then name
+              // Note: template.name should already be set to display_name from enrichedTemplates
               const displayName = template.metadata?.display_name || 
+                template.name ||  // This should already be display_name from enrichedTemplates
                 template.title || 
-                template.name || 
                 (template.file_name ? template.file_name.replace('.docx', '') : '') || 
                 'Unknown Template';
               
@@ -479,9 +494,14 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                 file_name: template.file_name,
                 description: template.description,
                 metadata_description: template.metadata?.description,
+                metadata_display_name: template.metadata?.display_name,
                 displayDescription,
+                plan_name: template.plan_name,
+                plan_tier: template.plan_tier,
+                planName,
                 hasDescription: !!displayDescription,
-                templateObject: template
+                can_download: template.can_download,
+                fullTemplate: template
               });
               
               // Get download limits info
