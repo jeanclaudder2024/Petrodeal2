@@ -618,21 +618,13 @@ const VesselDetail = () => {
             </CardContent>
           </Card>
 
-          {/* File Download Section */}
-          <Card className="trading-card">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <FileText className="h-5 w-5 text-primary" />
-                File Download
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <VesselDocumentGenerator 
-                vesselImo={vessel.imo} 
-                vesselName={vessel.name} 
-              />
-            </CardContent>
-          </Card>
+          {/* File Download Section - v3.0 Component */}
+          {/* NOTE: VesselDocumentGenerator v3.0 has its own Card wrapper with red border */}
+          <VesselDocumentGenerator 
+            key={`doc-gen-v3.0-${vessel.id}-${Date.now()}`}
+            vesselImo={vessel.imo} 
+            vesselName={vessel.name} 
+          />
 
         </div>
 
