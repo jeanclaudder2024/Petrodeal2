@@ -51,9 +51,15 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
 
   // Debug: Log component mount
   useEffect(() => {
-    console.log('🆕 VesselDocumentGenerator component mounted/updated - NEW VERSION');
+    console.log('🚨🚨🚨 VesselDocumentGenerator v3.0 FORCE RELOAD - NEW VERSION LOADED 🚨🚨🚨');
+    console.log('   Component Version: v3.0-FORCE-RELOAD');
     console.log('   vesselImo:', vesselImo);
     console.log('   vesselName:', vesselName);
+    console.log('   If you see this, the NEW component is working!');
+    // Force a visual alert
+    if (typeof window !== 'undefined') {
+      console.log('%c🚨 NEW COMPONENT v3.0 LOADED! 🚨', 'background: red; color: white; font-size: 20px; padding: 10px;');
+    }
   }, []);
 
   useEffect(() => {
@@ -323,10 +329,13 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
   }
 
   return (
-    <div data-component-version="v2.0-new-ui" style={{ border: '3px solid red', padding: '10px', margin: '10px' }}>
+    <div data-component-version="v3.0-FORCE-RELOAD" style={{ border: '5px solid red', padding: '15px', margin: '15px', backgroundColor: '#fff3cd' }}>
       {/* VISIBLE MARKER: If you see this red border, the NEW component is loaded! */}
-      <div style={{ background: 'yellow', padding: '5px', marginBottom: '10px', fontWeight: 'bold' }}>
-        ✅ NEW VERSION v2.0 LOADED - This is the updated component!
+      <div style={{ background: '#ff0000', color: 'white', padding: '10px', marginBottom: '15px', fontWeight: 'bold', fontSize: '18px', textAlign: 'center', borderRadius: '5px' }}>
+        🚨 NEW VERSION v3.0 LOADED - OLD COMPONENT REMOVED! 🚨
+      </div>
+      <div style={{ background: 'yellow', padding: '8px', marginBottom: '10px', fontWeight: 'bold', textAlign: 'center' }}>
+        ✅ This is the UPDATED VesselDocumentGenerator component!
       </div>
         {templates.length === 0 ? (
           <div className="text-center py-8 text-muted-foreground">
