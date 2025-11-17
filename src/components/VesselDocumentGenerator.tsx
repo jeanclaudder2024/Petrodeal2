@@ -556,6 +556,13 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                             <p className="text-xs text-muted-foreground/60 italic">
                               No description available
                             </p>
+                            {/* Debug: Show why description is not available */}
+                            {process.env.NODE_ENV === 'development' && (
+                              <p className="text-xs text-red-500 mt-1">
+                                Debug: description={String(template.description)}, 
+                                metadata.desc={String(template.metadata?.description)}
+                              </p>
+                            )}
                           </div>
                         )}
                         
