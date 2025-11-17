@@ -162,7 +162,8 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
               return enrichedTemplate;
             });
             setTemplates(enrichedTemplates);
-            console.log('User downloadable templates loaded:', enrichedTemplates.length);
+            console.log('✅ User downloadable templates loaded:', enrichedTemplates.length);
+            console.log('📋 Sample enriched template:', enrichedTemplates[0] || 'No templates');
             setLoading(false);
             return;
           }
