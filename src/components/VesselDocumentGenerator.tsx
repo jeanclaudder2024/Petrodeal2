@@ -308,29 +308,15 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
 
   if (loading) {
     return (
-      <Card>
-        <CardContent className="p-6">
-          <div className="flex items-center justify-center">
-            <Loader2 className="h-6 w-6 animate-spin mr-2" />
-            <span>Loading templates...</span>
-          </div>
-        </CardContent>
-      </Card>
+      <div className="flex items-center justify-center p-6">
+        <Loader2 className="h-6 w-6 animate-spin mr-2" />
+        <span>Loading templates...</span>
+      </div>
     );
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Download className="h-5 w-5" />
-          File Download
-        </CardTitle>
-        <p className="text-sm text-muted-foreground">
-          Download files for {vesselName} (IMO: {vesselImo})
-        </p>
-      </CardHeader>
-      <CardContent>
+    <div>
         {templates.length === 0 ? (
           <div className="text-center py-8 text-muted-foreground">
             <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
@@ -515,8 +501,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
             })}
           </div>
         )}
-      </CardContent>
-    </Card>
+    </div>
   );
 }
 
