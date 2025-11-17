@@ -323,7 +323,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
   }
 
   return (
-    <div>
+    <div data-component-version="v2.0-new-ui">
         {templates.length === 0 ? (
           <div className="text-center py-8 text-muted-foreground">
             <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
