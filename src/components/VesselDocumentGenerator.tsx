@@ -77,8 +77,26 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
           console.log('User templates data:', data);
           
           if (data.templates && Array.isArray(data.templates)) {
-            // Ensure description is populated from all possible sources
+            // Ensure description, display_name, and plan_name are populated from all possible sources
             const enrichedTemplates = data.templates.map((t: DocumentTemplate) => {
+              // Ensure metadata object exists
+              if (!t.metadata) {
+                t.metadata = {};
+              }
+              
+              // Get display_name - prioritize metadata.display_name, then title, then name
+              const displayName = (t as any).display_name || 
+                                 t.metadata?.display_name || 
+                                 t.title || 
+                                 t.name || 
+                                 (t.file_name ? t.file_name.replace('.docx', '') : '') || 
+                                 'Unknown Template';
+              
+              // Set display_name in metadata if not already set
+              if (!t.metadata.display_name && displayName) {
+                t.metadata.display_name = displayName;
+              }
+              
               // Try to get description from multiple sources
               const finalDescription = t.description || 
                                        t.metadata?.description || 
@@ -90,14 +108,14 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                 t.description = finalDescription;
               }
               
-              // Ensure metadata object exists
-              if (!t.metadata) {
-                t.metadata = {};
-              }
-              
               // Fill metadata if available
               if (finalDescription && !t.metadata.description) {
                 t.metadata.description = finalDescription;
+              }
+              
+              // Ensure plan_name is set
+              if (!t.plan_name && (t as any).plan_name) {
+                t.plan_name = (t as any).plan_name;
               }
               
               // Log each template for debugging
@@ -106,16 +124,28 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                 name: t.name,
                 title: t.title,
                 file_name: t.file_name,
+                display_name: displayName,
                 description: t.description,
                 metadata_description: t.metadata?.description,
-                finalDescription,
+                metadata_display_name: t.metadata?.display_name,
+                plan_name: t.plan_name,
+                plan_tier: t.plan_tier,
+                can_download: t.can_download,
                 remaining_downloads: t.remaining_downloads,
                 max_downloads: t.max_downloads,
-                can_download: t.can_download,
-                plan_name: t.plan_name,
                 fullTemplate: t
               });
-              return t;
+              
+              // Return enriched template with all fields
+              return {
+                ...t,
+                name: displayName, // Use display_name as the primary name
+                metadata: {
+                  ...t.metadata,
+                  display_name: displayName,
+                  description: finalDescription || t.metadata?.description
+                }
+              };
             });
             setTemplates(enrichedTemplates);
             console.log('User downloadable templates loaded:', enrichedTemplates.length);
