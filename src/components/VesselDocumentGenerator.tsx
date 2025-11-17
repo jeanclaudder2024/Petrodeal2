@@ -57,217 +57,106 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
     try {
       setLoading(true);
       
-      // Debug: Log user state
-      console.log('🔍 fetchTemplates called - User state:', {
-        user: user,
-        userId: user?.id,
-        hasUser: !!user,
-        hasUserId: !!user?.id
-      });
-      
-      // If user is logged in, use user-downloadable-templates endpoint to get templates with plan info
+      // If user is logged in, use user-downloadable-templates endpoint
       if (user?.id) {
-        console.log('✅ User is logged in, fetching from user-downloadable-templates endpoint');
-        console.log('📍 Fetching user downloadable templates from:', `${API_BASE_URL}/user-downloadable-templates`);
-        console.log('📤 Request body:', { user_id: user.id });
-        
-        const response = await fetch(`${API_BASE_URL}/user-downloadable-templates`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          credentials: 'include', // Include cookies for authentication
-          body: JSON.stringify({ user_id: user.id }),
-        });
-        
-        console.log('📥 User templates response status:', response.status);
-        
-        if (response.ok) {
-          const data = await response.json();
-          console.log('✅ User templates data received:', data);
+        try {
+          const response = await fetch(`${API_BASE_URL}/user-downloadable-templates`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            credentials: 'include',
+            body: JSON.stringify({ user_id: user.id }),
+          });
           
-          if (data.templates && Array.isArray(data.templates)) {
-            // Ensure description, display_name, and plan_name are populated from all possible sources
-            const enrichedTemplates = data.templates.map((t: any) => {
-              // Ensure metadata object exists
-              if (!t.metadata) {
-                t.metadata = {};
-              }
-              
-              // Backend returns: name (which is display_name), metadata.display_name, title
-              // Get display_name - prioritize what backend sends
-              const displayName = t.name ||  // Backend sets name to display_name
-                                 t.metadata?.display_name || 
-                                 (t as any).display_name ||
-                                 t.title || 
-                                 (t.file_name ? t.file_name.replace('.docx', '') : '') || 
-                                 'Unknown Template';
-              
-              // Backend returns: description, metadata.description
-              // Get description - prioritize what backend sends
-              const finalDescription = t.description || 
-                                       t.metadata?.description || 
-                                       (t as any).template_description ||
-                                       '';
-              
-              // Backend returns: plan_name, plan_tier
-              // Get plan_name - prioritize what backend sends
-              const finalPlanName = t.plan_name || t.plan_tier || null;
-              
-              // Log raw data from backend
-              console.log('🔍 Raw template from backend:', {
-                id: t.id,
-                name: t.name,
-                title: t.title,
-                file_name: t.file_name,
-                description: t.description,
-                plan_name: t.plan_name,
-                plan_tier: t.plan_tier,
-                metadata: t.metadata,
-                can_download: t.can_download
+          if (response.ok) {
+            const data = await response.json();
+            
+            if (data.templates && Array.isArray(data.templates)) {
+              // Process templates from backend
+              const processedTemplates = data.templates.map((t: any) => {
+                // Backend returns: name (display_name), description, plan_name, metadata
+                const displayName = t.name || 
+                                   t.metadata?.display_name || 
+                                   t.title || 
+                                   (t.file_name ? t.file_name.replace('.docx', '') : '') || 
+                                   'Unknown Template';
+                
+                const description = t.description || 
+                                   t.metadata?.description || 
+                                   '';
+                
+                const planName = t.plan_name || t.plan_tier || null;
+                
+                return {
+                  id: t.id || t.template_id || String(t.id),
+                  name: displayName,
+                  title: t.title || displayName,
+                  description: description,
+                  file_name: t.file_name || '',
+                  placeholders: t.placeholders || [],
+                  is_active: t.is_active !== false,
+                  can_download: t.can_download !== false,
+                  plan_name: planName,
+                  plan_tier: t.plan_tier || null,
+                  remaining_downloads: t.remaining_downloads,
+                  max_downloads: t.max_downloads,
+                  current_downloads: t.current_downloads,
+                  metadata: {
+                    display_name: displayName,
+                    description: description,
+                    ...t.metadata
+                  }
+                } as DocumentTemplate;
               });
               
-              // Return enriched template with all fields properly set
-              const enrichedTemplate: DocumentTemplate = {
-                ...t,
-                id: t.id || t.template_id || String(t.id),
-                name: displayName, // Use display_name as the primary name
-                title: t.title || displayName,
-                description: finalDescription, // Always set description
-                plan_name: finalPlanName, // Always set plan_name
-                plan_tier: t.plan_tier || null,
-                metadata: {
-                  display_name: displayName,
-                  description: finalDescription,
-                  ...t.metadata
-                }
-              };
-              
-              // Log the enriched template to verify
-              console.log('✅ Enriched template:', {
-                id: enrichedTemplate.id,
-                name: enrichedTemplate.name,
-                display_name: enrichedTemplate.metadata?.display_name,
-                description: enrichedTemplate.description,
-                plan_name: enrichedTemplate.plan_name,
-                can_download: enrichedTemplate.can_download
-              });
-              
-              return enrichedTemplate;
-            });
-            setTemplates(enrichedTemplates);
-            console.log('✅ User downloadable templates loaded:', enrichedTemplates.length);
-            console.log('📋 Sample enriched template:', enrichedTemplates[0] || 'No templates');
-            setLoading(false);
-            return;
+              setTemplates(processedTemplates);
+              setLoading(false);
+              return;
+            }
           }
+        } catch (error) {
+          console.error('Error fetching user templates:', error);
         }
       }
       
-      // Fallback: fetch all templates (for non-logged-in users or if user endpoint fails)
-      console.log('Fetching all templates from:', `${API_BASE_URL}/templates`);
-      
+      // Fallback: fetch all templates
       const response = await fetch(`${API_BASE_URL}/templates`, {
         method: 'GET',
         headers: {
           'Content-Type': 'application/json',
         },
-        credentials: 'include', // Include cookies for authentication
+        credentials: 'include',
       });
-      console.log('Templates response status:', response.status);
       
       if (response.ok) {
         const data = await response.json();
-        console.log('Templates data:', data);
-        
-        // Filter only active templates
         const templatesList = data.templates || [];
-        const activeTemplates = templatesList.filter((template: DocumentTemplate) => template.is_active !== false);
-        
-        // Enrich templates with metadata, description, and plan_name
-        const enrichedTemplates = activeTemplates.map((t: DocumentTemplate) => {
-          // Ensure metadata object exists
-          if (!t.metadata) {
-            t.metadata = {};
-          }
-          
-          // Get display_name - prioritize metadata.display_name, then title, then name
-          const displayName = t.metadata?.display_name || 
-                             t.title || 
-                             t.name || 
-                             (t.file_name ? t.file_name.replace('.docx', '') : '') || 
-                             'Unknown Template';
-          
-          // Get description - prioritize description, then metadata.description
-          const finalDescription = t.description || 
-                                  t.metadata?.description || 
-                                  (t as any).template_description ||
-                                  '';
-          
-          // Set can_download to true by default for non-logged-in users
-          if (t.can_download === undefined) {
-            t.can_download = true;
-          }
-          
-          // Return enriched template
-          const enriched = {
+        const activeTemplates = templatesList
+          .filter((t: DocumentTemplate) => t.is_active !== false)
+          .map((t: DocumentTemplate) => ({
             ...t,
-            name: displayName, // Use display_name as primary name
-            description: finalDescription,
-            metadata: {
-              ...t.metadata,
-              display_name: displayName,
-              description: finalDescription
-            }
-          };
-          
-          // Log each template for debugging
-          console.log('📄 Template loaded (fallback):', {
-            id: enriched.id,
-            name: enriched.name,
-            display_name: enriched.metadata?.display_name,
-            title: enriched.title,
-            file_name: enriched.file_name,
-            description: enriched.description,
-            metadata: enriched.metadata,
-            can_download: enriched.can_download,
-            plan_name: enriched.plan_name
-          });
-          
-          return enriched;
-        });
-        setTemplates(enrichedTemplates);
+            can_download: true, // Default for non-logged-in users
+          }));
         
-        console.log('Active templates loaded:', enrichedTemplates.length);
+        setTemplates(activeTemplates);
       } else {
         const errorText = await response.text();
         console.error('Failed to fetch templates:', response.status, errorText);
-        toast.error(`Failed to fetch document templates: ${response.status} ${errorText.substring(0, 100)}`);
+        toast.error(`Failed to fetch templates: ${response.status}`);
       }
     } catch (error: any) {
       console.error('Error fetching templates:', error);
-      const errorMessage = error?.message || 'Unknown error';
-      toast.error(`Error fetching document templates: ${errorMessage}`);
-      
-      // Show more helpful error message
-      if (errorMessage.includes('Failed to fetch') || errorMessage.includes('NetworkError') || errorMessage.includes('CORS')) {
-        toast.error('Cannot connect to API server. Make sure it is running on http://localhost:8000');
-      }
+      toast.error(`Error fetching templates: ${error?.message || 'Unknown error'}`);
     } finally {
       setLoading(false);
     }
   };
 
   const processDocument = async (template: DocumentTemplate) => {
-    let timeoutId: NodeJS.Timeout | undefined;
-    
-    // Use template.id as the key for processing status
     const templateKey = template.id || template.file_name || template.name;
     
     try {
-      console.log('Processing document:', { templateId: template.id, templateName: template.name, vesselImo });
-      
-      // Set processing status with progress
       setProcessingStatus(prev => ({
         ...prev,
         [templateKey]: {
@@ -277,7 +166,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
         }
       }));
 
-      // Simulate progress updates
+      // Simulate progress
       const progressInterval = setInterval(() => {
         setProcessingStatus(prev => {
           const current = prev[templateKey];
@@ -287,7 +176,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
               [templateKey]: {
                 ...current,
                 progress: Math.min(current.progress + 8, 95),
-                message: 'Downloading'  // Always show "Downloading"
+                message: 'Downloading'
               }
             };
           }
@@ -295,70 +184,56 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
         });
       }, 400);
 
-      // Add timeout to prevent stuck progress
-      timeoutId = setTimeout(() => {
+      const timeoutId = setTimeout(() => {
         clearInterval(progressInterval);
         setProcessingStatus(prev => ({
           ...prev,
           [templateKey]: {
             status: 'failed',
-            message: 'Request timeout - server may be busy, please try again'
+            message: 'Request timeout'
           }
         }));
-        toast.error('Request timeout - server may be busy, please try again');
-      }, 30000); // 30 second timeout
+        toast.error('Request timeout - please try again');
+      }, 30000);
 
-      // Send template_id (preferred) or template_name (fallback for backward compatibility)
+      // Send request to backend
       const requestData: any = {
         vessel_imo: vesselImo,
         user_id: user?.id || null
       };
       
-      // Prefer template_id if available, otherwise fall back to template_name
       if (template.id) {
         requestData.template_id = template.id;
       } else {
-        // Fallback: use template_name (without .docx extension)
         const apiTemplateName = (template.file_name || template.name || '').replace('.docx', '');
         requestData.template_name = apiTemplateName;
       }
-
-      console.log('Sending request to:', `${API_BASE_URL}/generate-document`);
-      console.log('Request data:', requestData);
 
       const response = await fetch(`${API_BASE_URL}/generate-document`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        credentials: 'include', // Include cookies for authentication
+        credentials: 'include',
         body: JSON.stringify(requestData),
       });
 
-      console.log('Response received:', response.status, response.statusText);
-
-      // Clear progress interval and timeout
       clearInterval(progressInterval);
       clearTimeout(timeoutId);
 
-      console.log('Process response status:', response.status);
-
       if (response.ok) {
-        // Get filename from Content-Disposition header (backend now sends correct filename)
         const contentDisposition = response.headers.get('Content-Disposition');
         const templateName = template.file_name || template.name || 'template';
         const apiTemplateName = templateName.replace('.docx', '');
-        let filename = `${apiTemplateName}_${vesselImo}.pdf`; // Fallback without "generated_" prefix
+        let filename = `${apiTemplateName}_${vesselImo}.pdf`;
+        
         if (contentDisposition) {
           const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
           if (filenameMatch) {
             filename = filenameMatch[1].replace(/['"]/g, '').trim();
-            console.log('Filename from Content-Disposition:', filename);
           }
         }
-        console.log('Using filename:', filename);
         
-        // Handle file download (PDF or DOCX)
         const blob = await response.blob();
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -381,24 +256,18 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
         toast.success('Document downloaded successfully');
       } else {
         const responseText = await response.text();
-        // Clear timeout
-        clearTimeout(timeoutId);
         setProcessingStatus(prev => ({
           ...prev,
           [templateKey]: {
             status: 'failed',
-            message: `Failed to process (${response.status})`
+            message: `Failed (${response.status})`
           }
         }));
-        toast.error(`Failed to process file (${response.status})`);
+        toast.error(`Failed to process: ${response.status}`);
         console.error('HTTP Error:', response.status, responseText);
       }
     } catch (error) {
       console.error('Error processing document:', error);
-      // Clear timeout if it exists
-      if (typeof timeoutId !== 'undefined') {
-        clearTimeout(timeoutId);
-      }
       setProcessingStatus(prev => ({
         ...prev,
         [templateKey]: {
@@ -478,77 +347,29 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
         ) : (
           <div className="space-y-4">
             {templates.map((template) => {
-              // Use template.file_name as key for processingStatus (ensure it has .docx extension)
-              const templateKey = template.file_name?.endsWith('.docx') 
-                ? template.file_name 
-                : `${template.file_name || template.name || template.id}.docx`;
+              const templateKey = template.id || template.file_name || template.name;
               const status = processingStatus[templateKey];
               const isProcessing = status?.status === 'processing';
-              const isCompleted = status?.status === 'completed';
-              const isFailed = status?.status === 'failed';
-
-              // Determine if user can download this template
-              // Check both can_download flag and remaining downloads
+              
+              // Get display values
+              const displayName = template.metadata?.display_name || 
+                                 template.name || 
+                                 template.title || 
+                                 (template.file_name ? template.file_name.replace('.docx', '') : '') || 
+                                 'Unknown Template';
+              
+              const description = template.description || 
+                                 template.metadata?.description || 
+                                 '';
+              
+              const planName = template.plan_name || template.plan_tier || null;
+              
+              // Check if user can download
               const hasRemainingDownloads = template.remaining_downloads === undefined || 
                                            template.remaining_downloads === null || 
                                            template.remaining_downloads > 0;
               
-              const canDownload = (template.can_download !== false && template.can_download !== undefined 
-                ? template.can_download 
-                : true) && hasRemainingDownloads; // Default to true if not specified, but respect download limits
-              
-              // Get display name - prioritize metadata.display_name, then name, then title
-              // Backend returns: name (display_name), metadata.display_name, title
-              const displayName = template.metadata?.display_name || 
-                template.name ||  // Backend sets this to display_name
-                template.title || 
-                (template.file_name ? template.file_name.replace('.docx', '') : '') || 
-                'Unknown Template';
-              
-              // Get description - backend returns: description, metadata.description
-              const displayDescription = template.description || 
-                template.metadata?.description || 
-                (template as any).template_description ||
-                '';
-              
-              // Get plan name - backend returns: plan_name, plan_tier
-              const finalPlanName = template.plan_name || template.plan_tier || null;
-              
-              // Debug: Log template data for this specific template
-              console.log(`📄 Template "${displayName}" rendering data:`, {
-                id: template.id,
-                name: template.name,
-                title: template.title,
-                file_name: template.file_name,
-                description: template.description,
-                metadata_description: template.metadata?.description,
-                metadata_display_name: template.metadata?.display_name,
-                displayName,
-                displayDescription,
-                plan_name: template.plan_name,
-                plan_tier: template.plan_tier,
-                finalPlanName,
-                hasDescription: !!displayDescription,
-                hasPlanName: !!finalPlanName,
-                can_download: template.can_download,
-                fullTemplate: template
-              });
-              
-              // Get download limits info
-              const remainingDownloads = template.remaining_downloads;
-              const maxDownloads = template.max_downloads;
-              const currentDownloads = template.current_downloads;
-              const hasDownloadLimit = maxDownloads !== undefined && maxDownloads !== null;
-              
-              // Debug: Log download limits
-              if (user?.id) {
-                console.log(`Download limits for "${displayName}":`, {
-                  remainingDownloads,
-                  maxDownloads,
-                  currentDownloads,
-                  hasDownloadLimit
-                });
-              }
+              const canDownload = (template.can_download !== false) && hasRemainingDownloads;
               
               return (
                 <div key={template.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/50 transition-colors">
@@ -556,29 +377,23 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                     <div className="flex items-start gap-3">
                       {getStatusIcon(status?.status || 'idle')}
                       <div className="flex-1 min-w-0">
-                        {/* Template Name - Always show display_name */}
+                        {/* Template Display Name */}
                         <h4 className="font-medium text-base">{displayName}</h4>
                         
-                        {/* Plan Name - Always show if user is logged in */}
-                        {user?.id && (
+                        {/* Plan Information - Show if user is logged in */}
+                        {user?.id && planName && (
                           <div className="mt-1">
-                            {finalPlanName ? (
-                              <p className="text-sm text-muted-foreground">
-                                <span className="font-medium text-primary">Plan:</span> {finalPlanName}
-                              </p>
-                            ) : !canDownload ? (
-                              <p className="text-sm text-amber-600 dark:text-amber-400">
-                                <span className="font-medium">Plan:</span> Not available in your plan
-                              </p>
-                            ) : null}
+                            <p className="text-sm text-muted-foreground">
+                              <span className="font-medium text-primary">Plan:</span> {planName}
+                            </p>
                           </div>
                         )}
                         
-                        {/* Description - Always show if available, even if empty show placeholder */}
+                        {/* Description - Always show */}
                         <div className="mt-1.5">
-                          {displayDescription && displayDescription.trim() ? (
+                          {description && description.trim() ? (
                             <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap">
-                              {displayDescription}
+                              {description}
                             </p>
                           ) : (
                             <p className="text-xs text-muted-foreground/60 italic">
@@ -588,42 +403,36 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                         </div>
                         
                         {/* Download Counter - Show if user is logged in */}
-                        {user?.id && (
+                        {user?.id && template.max_downloads !== undefined && template.max_downloads !== null && (
                           <div className="mt-2">
-                            {hasDownloadLimit ? (
-                              <div className="flex items-center gap-2">
-                                <div className="flex items-center gap-1.5 text-xs">
-                                  <span className="font-medium text-muted-foreground">Downloads:</span>
-                                  <span className={`font-semibold ${
-                                    remainingDownloads !== undefined && remainingDownloads !== null && remainingDownloads > 0 
-                                      ? 'text-green-600 dark:text-green-400' 
-                                      : 'text-red-600 dark:text-red-400'
-                                  }`}>
-                                    {remainingDownloads !== undefined && remainingDownloads !== null ? remainingDownloads : 0}
-                                  </span>
-                                  <span className="text-muted-foreground">/</span>
-                                  <span className="text-muted-foreground">{maxDownloads}</span>
-                                  {currentDownloads !== undefined && currentDownloads !== null && currentDownloads > 0 && (
-                                    <span className="text-muted-foreground">
-                                      ({currentDownloads} used)
-                                    </span>
-                                  )}
-                                </div>
-                                {remainingDownloads !== undefined && remainingDownloads !== null && remainingDownloads === 0 && (
-                                  <Badge variant="destructive" className="text-xs">
-                                    Limit Reached
-                                  </Badge>
-                                )}
+                            <div className="flex items-center gap-2">
+                              <div className="flex items-center gap-1.5 text-xs">
+                                <span className="font-medium text-muted-foreground">Downloads:</span>
+                                <span className={`font-semibold ${
+                                  template.remaining_downloads !== undefined && 
+                                  template.remaining_downloads !== null && 
+                                  template.remaining_downloads > 0 
+                                    ? 'text-green-600 dark:text-green-400' 
+                                    : 'text-red-600 dark:text-red-400'
+                                }`}>
+                                  {template.remaining_downloads !== undefined && 
+                                   template.remaining_downloads !== null 
+                                    ? template.remaining_downloads 
+                                    : 0}
+                                </span>
+                                <span className="text-muted-foreground">/</span>
+                                <span className="text-muted-foreground">{template.max_downloads}</span>
                               </div>
-                            ) : (
-                              <p className="text-xs text-muted-foreground/60 italic">
-                                Download limits not available
-                              </p>
-                            )}
+                              {template.remaining_downloads === 0 && (
+                                <Badge variant="destructive" className="text-xs">
+                                  Limit Reached
+                                </Badge>
+                              )}
+                            </div>
                           </div>
                         )}
                         
-                        {/* Lock indicator if cannot download */}
+                        {/* Lock Message - Show if cannot download */}
                         {!canDownload && (
                           <div className="flex items-center gap-2 mt-2 p-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md">
                             <Lock className="h-4 w-4 text-amber-600 dark:text-amber-400 flex-shrink-0" />
@@ -631,15 +440,16 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                               <span className="text-xs font-medium text-amber-800 dark:text-amber-200 block">
                                 This template is not available in your current plan
                               </span>
-                              {finalPlanName && (
+                              {planName && (
                                 <span className="text-xs text-amber-700 dark:text-amber-300 mt-1 block">
-                                  Upgrade to <strong>{finalPlanName}</strong> plan to download this document
+                                  Upgrade to <strong>{planName}</strong> plan to download this document
                                 </span>
                               )}
                             </div>
                           </div>
                         )}
                         
+                        {/* Processing Status */}
                         {status && (
                           <div className="mt-3">
                             {status.status === 'processing' && status.progress !== undefined && (
@@ -652,47 +462,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                                     {status.progress}%
                                   </span>
                                 </div>
-                                <div className="relative w-full h-3.5 bg-gray-200 dark:bg-gray-700 rounded-full overflow-hidden shadow-inner">
-                                  {/* Animated progress bar with gradient */}
-                                  <div 
-                                    className="absolute inset-0 rounded-full transition-all duration-500 ease-out"
-                                    style={{ 
-                                      width: `${status.progress}%`,
-                                      background: 'linear-gradient(90deg, #3b82f6, #2563eb, #1d4ed8, #2563eb, #3b82f6)',
-                                      backgroundSize: '200% 100%',
-                                      boxShadow: '0 0 10px rgba(59, 130, 246, 0.5), 0 0 20px rgba(59, 130, 246, 0.3)'
-                                    }}
-                                  >
-                                    {/* Shimmer effect overlay */}
-                                    <div 
-                                      className="absolute inset-0 rounded-full"
-                                      style={{
-                                        background: 'linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.4) 50%, transparent 100%)',
-                                        backgroundSize: '200% 100%',
-                                        animation: 'shimmer 2s infinite'
-                                      }}
-                                    ></div>
-                                  </div>
-                                  {/* Pulse glow effect */}
-                                  <div 
-                                    className="absolute inset-0 rounded-full"
-                                    style={{
-                                      width: `${status.progress}%`,
-                                      background: 'radial-gradient(circle at center, rgba(59, 130, 246, 0.6) 0%, rgba(59, 130, 246, 0.2) 50%, transparent 100%)',
-                                      animation: 'pulse-glow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-                                      filter: 'blur(4px)'
-                                    }}
-                                  ></div>
-                                  {/* Animated dots at the end */}
-                                  <div 
-                                    className="absolute top-1/2 -translate-y-1/2 right-0 w-2 h-2 rounded-full bg-white shadow-lg"
-                                    style={{
-                                      right: `${100 - status.progress}%`,
-                                      transform: 'translateY(-50%) translateX(50%)',
-                                      animation: 'pulse 1.5s ease-in-out infinite'
-                                    }}
-                                  ></div>
-                                </div>
+                                <Progress value={status.progress} className="h-2" />
                               </div>
                             )}
                             {status.status !== 'processing' && (
@@ -715,31 +485,29 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                     <Button
                       onClick={() => processDocument(template)}
                       disabled={isProcessing || !canDownload}
-                      className={`group relative flex items-center gap-2 transition-all duration-300 ${
+                      className={`${
                         !canDownload 
                           ? 'bg-gray-400 cursor-not-allowed opacity-60' 
-                          : 'hover:scale-105 hover:shadow-xl hover:shadow-blue-500/25 active:scale-95 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-500 hover:to-blue-600'
-                      } text-white border-0`}
-                      title={!canDownload ? (finalPlanName ? `Upgrade to ${finalPlanName} plan to download this document` : 'This template is not available in your current plan') : ''}
+                          : 'bg-blue-600 hover:bg-blue-700'
+                      } text-white`}
+                      title={!canDownload ? (planName ? `Upgrade to ${planName} plan to download` : 'Not available in your plan') : ''}
                     >
-                      {/* Animated background effect - only if enabled */}
-                      {canDownload && (
-                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/20 to-transparent -translate-x-full group-hover:translate-x-full transition-transform duration-700 ease-out"></div>
+                      {isProcessing ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                          Downloading...
+                        </>
+                      ) : !canDownload ? (
+                        <>
+                          <Lock className="h-4 w-4 mr-2" />
+                          Locked
+                        </>
+                      ) : (
+                        <>
+                          <Download className="h-4 w-4 mr-2" />
+                          Download
+                        </>
                       )}
-                      
-                      {/* Button content */}
-                      <div className="relative flex items-center gap-2">
-                        {isProcessing ? (
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                        ) : !canDownload ? (
-                          <Lock className="h-4 w-4" />
-                        ) : (
-                          <Download className="h-4 w-4 transition-all duration-300 group-hover:animate-bounce group-hover:scale-110" />
-                        )}
-                        <span className="transition-all duration-300 group-hover:font-semibold">
-                          {isProcessing ? 'Downloading...' : !canDownload ? 'Locked' : 'Download'}
-                        </span>
-                      </div>
                     </Button>
                   </div>
                 </div>
@@ -751,3 +519,4 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
     </Card>
   );
 }
+
