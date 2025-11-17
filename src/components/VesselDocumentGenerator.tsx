@@ -57,9 +57,19 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
     try {
       setLoading(true);
       
+      // Debug: Log user state
+      console.log('🔍 fetchTemplates called - User state:', {
+        user: user,
+        userId: user?.id,
+        hasUser: !!user,
+        hasUserId: !!user?.id
+      });
+      
       // If user is logged in, use user-downloadable-templates endpoint to get templates with plan info
       if (user?.id) {
-        console.log('Fetching user downloadable templates from:', `${API_BASE_URL}/user-downloadable-templates`);
+        console.log('✅ User is logged in, fetching from user-downloadable-templates endpoint');
+        console.log('📍 Fetching user downloadable templates from:', `${API_BASE_URL}/user-downloadable-templates`);
+        console.log('📤 Request body:', { user_id: user.id });
         
         const response = await fetch(`${API_BASE_URL}/user-downloadable-templates`, {
           method: 'POST',
@@ -70,11 +80,11 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
           body: JSON.stringify({ user_id: user.id }),
         });
         
-        console.log('User templates response status:', response.status);
+        console.log('📥 User templates response status:', response.status);
         
         if (response.ok) {
           const data = await response.json();
-          console.log('User templates data:', data);
+          console.log('✅ User templates data received:', data);
           
           if (data.templates && Array.isArray(data.templates)) {
             // Ensure description, display_name, and plan_name are populated from all possible sources
@@ -189,32 +199,58 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
         // Filter only active templates
         const templatesList = data.templates || [];
         const activeTemplates = templatesList.filter((template: DocumentTemplate) => template.is_active !== false);
-        // Set can_download to true by default for non-logged-in users
-        // Also ensure plan_name and description are available from metadata
+        
+        // Enrich templates with metadata, description, and plan_name
         const enrichedTemplates = activeTemplates.map((t: DocumentTemplate) => {
+          // Ensure metadata object exists
+          if (!t.metadata) {
+            t.metadata = {};
+          }
+          
+          // Get display_name - prioritize metadata.display_name, then title, then name
+          const displayName = t.metadata?.display_name || 
+                             t.title || 
+                             t.name || 
+                             (t.file_name ? t.file_name.replace('.docx', '') : '') || 
+                             'Unknown Template';
+          
+          // Get description - prioritize description, then metadata.description
+          const finalDescription = t.description || 
+                                  t.metadata?.description || 
+                                  (t as any).template_description ||
+                                  '';
+          
+          // Set can_download to true by default for non-logged-in users
           if (t.can_download === undefined) {
             t.can_download = true;
           }
-          // Use metadata description if available
-          if (!t.description && t.metadata?.description) {
-            t.description = t.metadata.description;
-          }
-          // Use metadata display_name if available
-          if (!t.name && t.metadata?.display_name) {
-            t.name = t.metadata.display_name;
-          }
+          
+          // Return enriched template
+          const enriched = {
+            ...t,
+            name: displayName, // Use display_name as primary name
+            description: finalDescription,
+            metadata: {
+              ...t.metadata,
+              display_name: displayName,
+              description: finalDescription
+            }
+          };
+          
           // Log each template for debugging
-          console.log('Template loaded (fallback):', {
-            name: t.name,
-            file_name: t.file_name,
-            description: t.description,
-            remaining_downloads: t.remaining_downloads,
-            max_downloads: t.max_downloads,
-            can_download: t.can_download,
-            plan_name: t.plan_name,
-            metadata: t.metadata
+          console.log('📄 Template loaded (fallback):', {
+            id: enriched.id,
+            name: enriched.name,
+            display_name: enriched.metadata?.display_name,
+            title: enriched.title,
+            file_name: enriched.file_name,
+            description: enriched.description,
+            metadata: enriched.metadata,
+            can_download: enriched.can_download,
+            plan_name: enriched.plan_name
           });
-          return t;
+          
+          return enriched;
         });
         setTemplates(enrichedTemplates);
         
