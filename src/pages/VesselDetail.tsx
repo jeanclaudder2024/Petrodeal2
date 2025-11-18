@@ -618,10 +618,11 @@ const VesselDetail = () => {
             </CardContent>
           </Card>
 
-          {/* File Download Section - v3.0 Component */}
-          {/* NOTE: VesselDocumentGenerator v3.0 has its own Card wrapper with red border */}
+          {/* File Download Section - v3.1 Component */}
+          {/* NOTE: VesselDocumentGenerator v3.1 has its own Card wrapper with red border */}
+          {/* Force reload with version and timestamp */}
           <VesselDocumentGenerator 
-            key={`doc-gen-v3.0-${vessel.id}-${Date.now()}`}
+            key={`doc-gen-v3.1-${vessel.id}-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`}
             vesselImo={vessel.imo} 
             vesselName={vessel.name} 
           />

@@ -43,22 +43,30 @@ const API_BASE_URL = process.env.NODE_ENV === 'production'
   ? 'https://petrodealhub.com/api'  // Production API
   : 'http://localhost:8000'; // Development
 
+// VERSION: v3.1-FORCE-REBUILD-2025 - This version number forces rebuild
+const COMPONENT_VERSION = 'v3.1-FORCE-REBUILD-2025';
+
 export default function VesselDocumentGenerator({ vesselImo, vesselName }: VesselDocumentGeneratorProps) {
   const { user } = useAuth();
   const [templates, setTemplates] = useState<DocumentTemplate[]>([]);
   const [loading, setLoading] = useState(false);
   const [processingStatus, setProcessingStatus] = useState<Record<string, ProcessingStatus>>({});
 
-  // Debug: Log component mount
+  // Debug: Log component mount - UPDATED VERSION
   useEffect(() => {
-    console.log('🚨🚨🚨 VesselDocumentGenerator v3.0 FORCE RELOAD - NEW VERSION LOADED 🚨🚨🚨');
-    console.log('   Component Version: v3.0-FORCE-RELOAD');
+    console.log('🚨🚨🚨 VesselDocumentGenerator v3.1 FORCE REBUILD - NEW VERSION LOADED 🚨🚨🚨');
+    console.log('   Component Version:', COMPONENT_VERSION);
+    console.log('   Build Date: 2025-01-20');
     console.log('   vesselImo:', vesselImo);
     console.log('   vesselName:', vesselName);
-    console.log('   If you see this, the NEW component is working!');
+    console.log('   ✅ THIS IS THE UPDATED COMPONENT - v3.1!');
     // Force a visual alert
     if (typeof window !== 'undefined') {
-      console.log('%c🚨 NEW COMPONENT v3.0 LOADED! 🚨', 'background: red; color: white; font-size: 20px; padding: 10px;');
+      console.log('%c🚨 NEW COMPONENT v3.1 LOADED! 🚨', 'background: red; color: white; font-size: 20px; padding: 10px;');
+      // Also show alert in browser
+      setTimeout(() => {
+        alert('✅ NEW VERSION v3.1 LOADED! Check console for details.');
+      }, 500);
     }
   }, []);
 
@@ -329,13 +337,13 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
   }
 
   return (
-    <div data-component-version="v3.0-FORCE-RELOAD" style={{ border: '5px solid red', padding: '15px', margin: '15px', backgroundColor: '#fff3cd' }}>
+    <div data-component-version={COMPONENT_VERSION} style={{ border: '5px solid red', padding: '15px', margin: '15px', backgroundColor: '#fff3cd' }}>
       {/* VISIBLE MARKER: If you see this red border, the NEW component is loaded! */}
       <div style={{ background: '#ff0000', color: 'white', padding: '10px', marginBottom: '15px', fontWeight: 'bold', fontSize: '18px', textAlign: 'center', borderRadius: '5px' }}>
-        🚨 NEW VERSION v3.0 LOADED - OLD COMPONENT REMOVED! 🚨
+        🚨 NEW VERSION v3.1 FORCE REBUILD - OLD COMPONENT REMOVED! 🚨
       </div>
       <div style={{ background: 'yellow', padding: '8px', marginBottom: '10px', fontWeight: 'bold', textAlign: 'center' }}>
-        ✅ This is the UPDATED VesselDocumentGenerator component!
+        ✅ This is the UPDATED VesselDocumentGenerator component v3.1 - Build Date: 2025-01-20!
       </div>
         {templates.length === 0 ? (
           <div className="text-center py-8 text-muted-foreground">
