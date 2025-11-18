@@ -156,6 +156,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
       if (response.ok) {
         const data = await response.json();
         const templatesList = data.templates || [];
+        console.log('🚨 v3.1: Fallback endpoint - Raw templates:', templatesList.length);
         const activeTemplates = templatesList
           .filter((t: DocumentTemplate) => t.is_active !== false)
           .map((t: DocumentTemplate) => ({
@@ -163,7 +164,11 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
             can_download: true, // Default for non-logged-in users
           }));
         
+        console.log('🚨 v3.1: Fallback endpoint - Active templates:', activeTemplates.length);
+        console.log('🚨 v3.1: Setting templates state (fallback):', activeTemplates.length, 'templates');
+        console.log('🚨 v3.1: Template names (fallback):', activeTemplates.map(t => t.name || t.id || t.file_name));
         setTemplates(activeTemplates);
+        console.log('🚨 v3.1: Templates set, loading will be false in finally block');
       } else {
         const errorText = await response.text();
         console.error('Failed to fetch templates:', response.status, errorText);
