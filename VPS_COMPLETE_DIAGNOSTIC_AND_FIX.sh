@@ -28,11 +28,9 @@ if [ -n "$(git status --porcelain)" ]; then
     echo -e "${YELLOW}WARNING: You have uncommitted changes${NC}"
     git status --short
     echo ""
-    read -p "Do you want to stash changes and pull latest? (y/n) " -n 1 -r
-    echo
-    if [[ $REPLY =~ ^[Yy]$ ]]; then
-        git stash
-    fi
+    # Auto-stash minor changes (like line endings, submodules) but continue
+    echo "Auto-stashing changes to continue..."
+    git stash save "Auto-stash before diagnostic - $(date +%Y-%m-%d_%H-%M-%S)" || true
 fi
 
 # Fetch and pull latest code
