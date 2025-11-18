@@ -131,8 +131,11 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                 } as DocumentTemplate;
               });
               
+              console.log('🚨 v3.1: Setting templates state:', processedTemplates.length, 'templates');
+              console.log('🚨 v3.1: Template names:', processedTemplates.map(t => t.name || t.id));
               setTemplates(processedTemplates);
               setLoading(false);
+              console.log('🚨 v3.1: Loading set to false, templates should render now');
               return;
             }
           }
@@ -327,11 +330,25 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
     }
   };
 
+  // Debug: Log current state
+  useEffect(() => {
+    console.log('🚨 v3.1: Component render state:', {
+      loading,
+      templatesCount: templates.length,
+      templateNames: templates.map(t => t.name || t.id)
+    });
+  }, [loading, templates]);
+
   if (loading) {
     return (
-      <div className="flex items-center justify-center p-6">
-        <Loader2 className="h-6 w-6 animate-spin mr-2" />
-        <span>Loading templates...</span>
+      <div data-component-version={COMPONENT_VERSION} style={{ border: '5px solid red', padding: '15px', margin: '15px', backgroundColor: '#fff3cd' }}>
+        <div style={{ background: '#ff0000', color: 'white', padding: '10px', marginBottom: '15px', fontWeight: 'bold', fontSize: '18px', textAlign: 'center', borderRadius: '5px' }}>
+          🚨 NEW VERSION v3.1 FORCE REBUILD - OLD COMPONENT REMOVED! 🚨
+        </div>
+        <div className="flex items-center justify-center p-6">
+          <Loader2 className="h-6 w-6 animate-spin mr-2" />
+          <span>Loading templates...</span>
+        </div>
       </div>
     );
   }
@@ -344,6 +361,9 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
       </div>
       <div style={{ background: 'yellow', padding: '8px', marginBottom: '10px', fontWeight: 'bold', textAlign: 'center' }}>
         ✅ This is the UPDATED VesselDocumentGenerator component v3.1 - Build Date: 2025-01-20!
+      </div>
+      <div style={{ background: 'lightblue', padding: '8px', marginBottom: '10px', textAlign: 'center', fontSize: '14px' }}>
+        📊 Debug: Loading={loading ? 'true' : 'false'}, Templates={templates.length}
       </div>
         {templates.length === 0 ? (
           <div className="text-center py-8 text-muted-foreground">
@@ -359,8 +379,16 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
             </Button>
           </div>
         ) : (
-          <div className="space-y-4">
-            {templates.map((template) => {
+          <Card className="mt-4">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <FileText className="h-5 w-5" />
+                Available Document Templates ({templates.length})
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {templates.map((template) => {
               const templateKey = template.id || template.file_name || template.name;
               const status = processingStatus[templateKey];
               const isProcessing = status?.status === 'processing';
@@ -527,7 +555,9 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                 </div>
               );
             })}
-          </div>
+              </div>
+            </CardContent>
+          </Card>
         )}
     </div>
   );
