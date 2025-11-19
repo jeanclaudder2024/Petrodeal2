@@ -245,6 +245,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                     
                     // Debug: log the value we're getting
                     console.log('Plan max_downloads_per_month value:', maxDownloadsValue, 'Type:', typeof maxDownloadsValue);
+                    console.log('Plan details stored:', userPlanDetails);
                     
                     if (maxDownloadsValue === -1 || maxDownloadsValue === '-1') {
                       userMaxDownloads = null; // null means unlimited
