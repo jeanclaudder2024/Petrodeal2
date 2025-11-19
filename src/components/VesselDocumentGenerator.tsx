@@ -275,7 +275,29 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
         
         toast.success('Document downloaded successfully');
       } else {
-        const responseText = await response.text();
+        // Try to get error message from response
+        let errorMessage = `Failed to process (${response.status})`;
+        try {
+          const errorData = await response.json();
+          if (errorData.detail) {
+            errorMessage = errorData.detail;
+          } else if (errorData.message) {
+            errorMessage = errorData.message;
+          } else if (typeof errorData === 'string') {
+            errorMessage = errorData;
+          }
+        } catch (e) {
+          // If response is not JSON, try text
+          try {
+            const errorText = await response.text();
+            if (errorText) {
+              errorMessage = errorText.substring(0, 200); // Limit length
+            }
+          } catch (textError) {
+            // Use default message
+          }
+        }
+        
         setProcessingStatus(prev => ({
           ...prev,
           [templateKey]: {
@@ -283,15 +305,16 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
             message: `Failed (${response.status})`
           }
         }));
-        // Handle different error status codes
+        
+        // Handle different error status codes with actual error message
         if (response.status === 404) {
-          toast.error('Template or vessel not found');
+          toast.error(`Template or vessel not found: ${errorMessage}`);
         } else if (response.status === 403) {
-          toast.error('Permission denied - you may not have access to this template');
+          toast.error(`Permission denied: ${errorMessage}`);
         } else if (response.status === 500) {
-          toast.error('Server error - please try again later');
+          toast.error(`Server error: ${errorMessage}`);
         } else {
-          toast.error(`Failed to process: ${response.status}`);
+          toast.error(errorMessage);
         }
       }
     } catch (error) {
