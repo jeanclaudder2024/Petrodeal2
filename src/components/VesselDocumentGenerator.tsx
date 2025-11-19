@@ -280,9 +280,6 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                     } else {
                       userCurrentDownloads = 0; // Unlimited, so no need to count
                     }
-                    
-                    // Store user plan details for template enrichment
-                    (window as any).__userPlanDetails = userPlanDetails_temp;
                   }
                 }
               }
