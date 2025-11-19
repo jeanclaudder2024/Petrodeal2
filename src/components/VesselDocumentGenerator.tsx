@@ -233,6 +233,13 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                   
                   if (plan) {
                     userPlanId = plan.id;
+                    // Store plan details for later use
+                    userPlanDetails = {
+                      plan_name: plan.plan_name,
+                      plan_tier: plan.plan_tier,
+                      max_downloads_per_month: plan.max_downloads_per_month
+                    };
+                    
                     // Handle unlimited downloads: -1 means unlimited, null/undefined means use default
                     const maxDownloadsValue = plan.max_downloads_per_month;
                     
@@ -273,6 +280,9 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                     } else {
                       userCurrentDownloads = 0; // Unlimited, so no need to count
                     }
+                    
+                    // Store user plan details for template enrichment
+                    (window as any).__userPlanDetails = userPlanDetails_temp;
                   }
                 }
               }
@@ -315,19 +325,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
               }
             }
             
-            // Also get user's plan details if available
-            let userPlanDetails: any = null;
-            if (userPlanId) {
-              const { data: userPlan } = await supabase
-                .from('subscription_plans')
-                .select('id, plan_name, plan_tier, max_downloads_per_month')
-                .eq('id', userPlanId)
-                .single();
-              
-              if (userPlan) {
-                userPlanDetails = userPlan;
-              }
-            }
+            // userPlanDetails is already set above if user is logged in
             
             // Create a map of file_name to template info
             const templateMap = new Map<string, any>();
@@ -353,21 +351,20 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
               let remainingDownloads: number | null = null;
               let maxDownloads: number | null = null;
               
-              // Always use user's plan max_downloads if available (from earlier fetch)
+              // Always use user's plan max_downloads if user is logged in
               // This ensures we show the correct limit even if template doesn't have restrictions
-              if (userPlanId && userMaxDownloads !== undefined) {
-                maxDownloads = userMaxDownloads; // Can be null (unlimited) or a number
-                if (userMaxDownloads !== null) {
-                  remainingDownloads = Math.max(0, userMaxDownloads - userCurrentDownloads);
+              if (userPlanId && userPlanDetails) {
+                // Use userMaxDownloads if set, otherwise default to 10
+                maxDownloads = userMaxDownloads !== undefined ? userMaxDownloads : 10;
+                if (maxDownloads !== null) {
+                  remainingDownloads = Math.max(0, maxDownloads - userCurrentDownloads);
                 } else {
                   remainingDownloads = null; // Unlimited
                 }
                 
-                // Set plan name from user's plan
-                if (userPlanDetails) {
-                  planName = userPlanDetails.plan_name;
-                  planTier = userPlanDetails.plan_tier;
-                }
+                // Always set plan name from user's plan (show user's current plan)
+                planName = userPlanDetails.plan_name;
+                planTier = userPlanDetails.plan_tier;
               }
               
               if (dbTemplate) {
