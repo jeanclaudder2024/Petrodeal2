@@ -131,15 +131,19 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
               // ensure max_downloads is set from user's plan if not already set
               if (user?.id && processedTemplates.length > 0) {
                 try {
-                  const { data: subscriber } = await supabase
+                  const { data: subscriber, error: subscriberError } = await supabase
                     .from('subscribers')
-                    .select('subscription_tier, subscription_plan')
+                    .select('subscription_tier')
                     .eq('user_id', user.id)
                     .limit(1)
-                    .single();
+                    .maybeSingle(); // Use maybeSingle() to handle no results gracefully
+                  
+                  if (subscriberError) {
+                    console.warn('Error fetching subscriber for template enrichment:', subscriberError);
+                  }
                   
                   if (subscriber) {
-                    const userPlanTier = subscriber.subscription_tier || subscriber.subscription_plan || null;
+                    const userPlanTier = subscriber.subscription_tier || null;
                     if (userPlanTier) {
                       const { data: plan } = await supabase
                         .from('subscription_plans')
@@ -203,69 +207,77 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
           let userCurrentDownloads: number = 0;
           
           if (user?.id) {
-            const { data: subscriber } = await supabase
-              .from('subscribers')
-              .select('subscription_tier, subscription_plan')
-              .eq('user_id', user.id)
-              .limit(1)
-              .single();
-            
-            if (subscriber) {
-              userPlanTier = subscriber.subscription_tier || subscriber.subscription_plan || null;
+            try {
+              const { data: subscriber, error: subscriberError } = await supabase
+                .from('subscribers')
+                .select('subscription_tier')
+                .eq('user_id', user.id)
+                .limit(1)
+                .maybeSingle(); // Use maybeSingle() instead of single() to handle no results gracefully
               
-              // Get plan details including max downloads
-              if (userPlanTier) {
-                const { data: plan } = await supabase
-                  .from('subscription_plans')
-                  .select('id, plan_name, plan_tier, max_downloads_per_month')
-                  .eq('plan_tier', userPlanTier)
-                  .limit(1)
-                  .single();
+              if (subscriberError) {
+                console.warn('Error fetching subscriber:', subscriberError);
+              }
+              
+              if (subscriber) {
+                userPlanTier = subscriber.subscription_tier || null;
                 
-                if (plan) {
-                  userPlanId = plan.id;
-                  // Handle unlimited downloads: -1 means unlimited, null/undefined means use default
-                  const maxDownloadsValue = plan.max_downloads_per_month;
+                // Get plan details including max downloads
+                if (userPlanTier) {
+                  const { data: plan } = await supabase
+                    .from('subscription_plans')
+                    .select('id, plan_name, plan_tier, max_downloads_per_month')
+                    .eq('plan_tier', userPlanTier)
+                    .limit(1)
+                    .single();
                   
-                  // Debug: log the value we're getting
-                  console.log('Plan max_downloads_per_month value:', maxDownloadsValue, 'Type:', typeof maxDownloadsValue);
-                  
-                  if (maxDownloadsValue === -1 || maxDownloadsValue === '-1') {
-                    userMaxDownloads = null; // null means unlimited
-                  } else if (maxDownloadsValue === null || maxDownloadsValue === undefined || maxDownloadsValue === '') {
-                    // If not set, default to 10 (not unlimited!)
-                    userMaxDownloads = 10;
-                    console.log('max_downloads_per_month not set, using default:', userMaxDownloads);
-                  } else {
-                    // Convert to number if it's a string
-                    const numValue = typeof maxDownloadsValue === 'string' ? parseInt(maxDownloadsValue, 10) : maxDownloadsValue;
-                    if (isNaN(numValue) || numValue < 0) {
-                      userMaxDownloads = 10; // Invalid value, use default
-                      console.log('Invalid max_downloads_per_month value, using default:', userMaxDownloads);
+                  if (plan) {
+                    userPlanId = plan.id;
+                    // Handle unlimited downloads: -1 means unlimited, null/undefined means use default
+                    const maxDownloadsValue = plan.max_downloads_per_month;
+                    
+                    // Debug: log the value we're getting
+                    console.log('Plan max_downloads_per_month value:', maxDownloadsValue, 'Type:', typeof maxDownloadsValue);
+                    
+                    if (maxDownloadsValue === -1 || maxDownloadsValue === '-1') {
+                      userMaxDownloads = null; // null means unlimited
+                    } else if (maxDownloadsValue === null || maxDownloadsValue === undefined || maxDownloadsValue === '') {
+                      // If not set, default to 10 (not unlimited!)
+                      userMaxDownloads = 10;
+                      console.log('max_downloads_per_month not set, using default:', userMaxDownloads);
                     } else {
-                      userMaxDownloads = numValue;
-                      console.log('Using max_downloads_per_month from plan:', userMaxDownloads);
+                      // Convert to number if it's a string
+                      const numValue = typeof maxDownloadsValue === 'string' ? parseInt(maxDownloadsValue, 10) : maxDownloadsValue;
+                      if (isNaN(numValue) || numValue < 0) {
+                        userMaxDownloads = 10; // Invalid value, use default
+                        console.log('Invalid max_downloads_per_month value, using default:', userMaxDownloads);
+                      } else {
+                        userMaxDownloads = numValue;
+                        console.log('Using max_downloads_per_month from plan:', userMaxDownloads);
+                      }
                     }
-                  }
-                  
-                  // Get current month's download count for user (only if not unlimited)
-                  if (userMaxDownloads !== null) {
-                    const startOfMonth = new Date();
-                    startOfMonth.setDate(1);
-                    startOfMonth.setHours(0, 0, 0, 0);
                     
-                    const { count } = await supabase
-                      .from('processed_documents')
-                      .select('*', { count: 'exact', head: true })
-                      .eq('created_by', user.id)
-                      .gte('created_at', startOfMonth.toISOString());
-                    
-                    userCurrentDownloads = count || 0;
-                  } else {
-                    userCurrentDownloads = 0; // Unlimited, so no need to count
+                    // Get current month's download count for user (only if not unlimited)
+                    if (userMaxDownloads !== null) {
+                      const startOfMonth = new Date();
+                      startOfMonth.setDate(1);
+                      startOfMonth.setHours(0, 0, 0, 0);
+                      
+                      const { count } = await supabase
+                        .from('processed_documents')
+                        .select('*', { count: 'exact', head: true })
+                        .eq('created_by', user.id)
+                        .gte('created_at', startOfMonth.toISOString());
+                      
+                      userCurrentDownloads = count || 0;
+                    } else {
+                      userCurrentDownloads = 0; // Unlimited, so no need to count
+                    }
                   }
                 }
               }
+            } catch (planError) {
+              console.warn('Error fetching user plan information:', planError);
             }
           }
           
