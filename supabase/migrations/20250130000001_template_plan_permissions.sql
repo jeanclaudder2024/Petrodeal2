@@ -259,11 +259,18 @@ BEGIN
   SELECT 
     dt.id AS template_id,
     dt.title AS template_name,
-    -- If template has NO plan permissions (ptp IS NULL), it's available to ALL users (true)
-    -- If template HAS plan permissions, use the explicit can_download value
+    -- Check if template has ANY plan permissions at all
+    -- If NO permissions exist for this template, it's available to ALL users (true)
+    -- If permissions exist, check if user's plan has permission
     CASE 
-      WHEN ptp.id IS NULL THEN true  -- No plan permissions = available to all
-      ELSE COALESCE(ptp.can_download, false)  -- Has permissions = use explicit value
+      -- First check: Does template have ANY plan permissions?
+      WHEN NOT EXISTS (
+        SELECT 1 FROM public.plan_template_permissions 
+        WHERE template_id = dt.id
+      ) THEN true  -- Template has NO plan permissions = available to ALL users
+      -- Second check: Does user's plan have permission for this template?
+      WHEN ptp.id IS NOT NULL AND ptp.can_download = true THEN true  -- User's plan has permission
+      ELSE false  -- Template has permissions but user's plan doesn't have access
     END AS can_download,
     COALESCE(v_max_downloads_val, 10) AS max_downloads,
     COALESCE(
