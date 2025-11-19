@@ -111,7 +111,12 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                   plan_tier: t.plan_tier || null,
                   remaining_downloads: t.remaining_downloads,
                   // Handle unlimited: -1 means unlimited, convert to null
-                  max_downloads: (t.max_downloads === -1 || t.max_downloads === null || t.max_downloads === undefined) ? null : t.max_downloads,
+                  // But if it's a valid number, use it (don't default to unlimited!)
+                  max_downloads: (t.max_downloads === -1 || t.max_downloads === '-1') 
+                    ? null 
+                    : (t.max_downloads === null || t.max_downloads === undefined || t.max_downloads === '')
+                      ? 10 // Default to 10 if not set (not unlimited!)
+                      : (typeof t.max_downloads === 'string' ? parseInt(t.max_downloads, 10) : t.max_downloads),
                   current_downloads: t.current_downloads,
                   metadata: {
                     display_name: displayName,
@@ -184,14 +189,28 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                 
                 if (plan) {
                   userPlanId = plan.id;
-                  // Handle unlimited downloads: -1 means unlimited, null means use default
+                  // Handle unlimited downloads: -1 means unlimited, null/undefined means use default
                   const maxDownloadsValue = plan.max_downloads_per_month;
-                  if (maxDownloadsValue === -1) {
+                  
+                  // Debug: log the value we're getting
+                  console.log('Plan max_downloads_per_month value:', maxDownloadsValue, 'Type:', typeof maxDownloadsValue);
+                  
+                  if (maxDownloadsValue === -1 || maxDownloadsValue === '-1') {
                     userMaxDownloads = null; // null means unlimited
-                  } else if (maxDownloadsValue === null || maxDownloadsValue === undefined) {
-                    userMaxDownloads = 10; // Default limit
+                  } else if (maxDownloadsValue === null || maxDownloadsValue === undefined || maxDownloadsValue === '') {
+                    // If not set, default to 10 (not unlimited!)
+                    userMaxDownloads = 10;
+                    console.log('max_downloads_per_month not set, using default:', userMaxDownloads);
                   } else {
-                    userMaxDownloads = maxDownloadsValue;
+                    // Convert to number if it's a string
+                    const numValue = typeof maxDownloadsValue === 'string' ? parseInt(maxDownloadsValue, 10) : maxDownloadsValue;
+                    if (isNaN(numValue) || numValue < 0) {
+                      userMaxDownloads = 10; // Invalid value, use default
+                      console.log('Invalid max_downloads_per_month value, using default:', userMaxDownloads);
+                    } else {
+                      userMaxDownloads = numValue;
+                      console.log('Using max_downloads_per_month from plan:', userMaxDownloads);
+                    }
                   }
                   
                   // Get current month's download count for user (only if not unlimited)
@@ -712,7 +731,12 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                         {/* Download Counter - Always show if user is logged in */}
                         {user?.id && (
                           <div className="mt-2">
-                            {template.max_downloads !== undefined && template.max_downloads !== null ? (
+                            {/* Only show unlimited if max_downloads is explicitly null (which means -1 from database) */}
+                            {template.max_downloads === null ? (
+                              <div className="text-xs text-muted-foreground">
+                                <span className="font-medium">Downloads:</span> <span className="text-blue-600 dark:text-blue-400 font-semibold">Unlimited</span>
+                              </div>
+                            ) : (
                               <div className="flex items-center gap-2">
                                 <div className="flex items-center gap-1.5 text-xs">
                                   <span className="font-medium text-muted-foreground">Downloads:</span>
@@ -723,15 +747,15 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                                       ? 'text-green-600 dark:text-green-400' 
                                       : template.remaining_downloads === 0
                                       ? 'text-red-600 dark:text-red-400'
-                                      : 'text-blue-600 dark:text-blue-400'
+                                      : 'text-gray-600 dark:text-gray-400'
                                   }`}>
                                     {template.remaining_downloads !== undefined && 
                                      template.remaining_downloads !== null 
                                       ? template.remaining_downloads 
-                                      : '∞'}
+                                      : (template.max_downloads || 0)}
                                   </span>
                                   <span className="text-muted-foreground">/</span>
-                                  <span className="text-muted-foreground">{template.max_downloads}</span>
+                                  <span className="text-muted-foreground">{template.max_downloads || 10}</span>
                                   <span className="text-muted-foreground text-xs">per month</span>
                                 </div>
                                 {template.remaining_downloads !== undefined && 
@@ -741,10 +765,6 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                                     Limit Reached
                                   </Badge>
                                 )}
-                              </div>
-                            ) : (
-                              <div className="text-xs text-muted-foreground">
-                                <span className="font-medium">Downloads:</span> <span className="text-blue-600 dark:text-blue-400 font-semibold">Unlimited</span>
                               </div>
                             )}
                           </div>
