@@ -6,6 +6,7 @@ import { Progress } from '@/components/ui/progress';
 import { Download, FileText, Loader2, CheckCircle, XCircle, Lock } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
+import { supabase } from '@/integrations/supabase/client';
 
 interface DocumentTemplate {
   id: string;
@@ -145,12 +146,88 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
       if (response.ok) {
         const data = await response.json();
         const templatesList = data.templates || [];
-        const activeTemplates = templatesList
+        let activeTemplates = templatesList
           .filter((t: DocumentTemplate) => t.is_active !== false)
           .map((t: DocumentTemplate) => ({
             ...t,
             can_download: true, // Default for non-logged-in users
           }));
+        
+        // Enrich templates with plan information from database
+        try {
+          // Get all templates from database to match by file_name
+          const { data: dbTemplates } = await supabase
+            .from('document_templates')
+            .select('id, file_name, title, description')
+            .eq('is_active', true);
+          
+          if (dbTemplates) {
+            // Get plan permissions for templates
+            const templateIds = dbTemplates.map(t => t.id);
+            const { data: permissions } = await supabase
+              .from('plan_template_permissions')
+              .select('template_id, plan_id, can_download')
+              .in('template_id', templateIds)
+              .eq('can_download', true);
+            
+            // Get plan details
+            let planDetails: Record<string, any> = {};
+            if (permissions && permissions.length > 0) {
+              const planIds = [...new Set(permissions.map(p => p.plan_id))];
+              const { data: plans } = await supabase
+                .from('subscription_plans')
+                .select('id, plan_name, plan_tier')
+                .in('id', planIds);
+              
+              if (plans) {
+                planDetails = Object.fromEntries(
+                  plans.map(p => [p.id, { plan_name: p.plan_name, plan_tier: p.plan_tier }])
+                );
+              }
+            }
+            
+            // Create a map of file_name to template info
+            const templateMap = new Map<string, any>();
+            dbTemplates.forEach(t => {
+              const fileName = t.file_name?.replace('.docx', '').toLowerCase() || '';
+              if (fileName) {
+                templateMap.set(fileName, {
+                  id: t.id,
+                  title: t.title,
+                  description: t.description
+                });
+              }
+            });
+            
+            // Enrich activeTemplates with plan information
+            activeTemplates = activeTemplates.map(t => {
+              const fileName = (t.file_name || t.name || '').replace('.docx', '').toLowerCase();
+              const dbTemplate = templateMap.get(fileName);
+              
+              if (dbTemplate && permissions) {
+                // Find plan permission for this template
+                const templatePerm = permissions.find(p => p.template_id === dbTemplate.id);
+                if (templatePerm && planDetails[templatePerm.plan_id]) {
+                  const plan = planDetails[templatePerm.plan_id];
+                  return {
+                    ...t,
+                    id: dbTemplate.id || t.id,
+                    plan_name: plan.plan_name,
+                    plan_tier: plan.plan_tier,
+                    // Keep can_download as true for fallback (public templates)
+                    can_download: t.can_download
+                  };
+                }
+              }
+              
+              return t;
+            });
+          }
+        } catch (planError) {
+          // If plan enrichment fails, just use templates without plan info
+          // This is expected if database is not available or user doesn't have access
+          console.debug('Could not enrich templates with plan info:', planError);
+        }
         
         setTemplates(activeTemplates);
       } else {

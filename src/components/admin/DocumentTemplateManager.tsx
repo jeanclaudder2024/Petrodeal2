@@ -7,6 +7,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Upload, FileText, Download, Trash2, Plus, Eye, Loader2 } from 'lucide-react';
 import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
 
 interface DocumentTemplate {
   id: string;
@@ -19,6 +20,8 @@ interface DocumentTemplate {
   file_name?: string;
   file_size?: number;
   mime_type?: string;
+  plan_name?: string;
+  plan_tier?: string;
 }
 
 interface VesselInfo {
@@ -55,7 +58,82 @@ export default function DocumentTemplateManager() {
       const response = await fetch(`${API_BASE_URL}/templates`);
       if (response.ok) {
         const data = await response.json();
-        setTemplates(data.templates || []);
+        let templatesList = data.templates || [];
+        
+        // Enrich templates with plan information from database
+        try {
+          // Get all templates from database to match by file_name
+          const { data: dbTemplates } = await supabase
+            .from('document_templates')
+            .select('id, file_name, title, description')
+            .eq('is_active', true);
+          
+          if (dbTemplates) {
+            // Get plan permissions for templates
+            const templateIds = dbTemplates.map(t => t.id);
+            const { data: permissions } = await supabase
+              .from('plan_template_permissions')
+              .select('template_id, plan_id, can_download')
+              .in('template_id', templateIds)
+              .eq('can_download', true);
+            
+            // Get plan details
+            let planDetails: Record<string, any> = {};
+            if (permissions && permissions.length > 0) {
+              const planIds = [...new Set(permissions.map(p => p.plan_id))];
+              const { data: plans } = await supabase
+                .from('subscription_plans')
+                .select('id, plan_name, plan_tier')
+                .in('id', planIds);
+              
+              if (plans) {
+                planDetails = Object.fromEntries(
+                  plans.map(p => [p.id, { plan_name: p.plan_name, plan_tier: p.plan_tier }])
+                );
+              }
+            }
+            
+            // Create a map of file_name to template info
+            const templateMap = new Map<string, any>();
+            dbTemplates.forEach(t => {
+              const fileName = t.file_name?.replace('.docx', '').toLowerCase() || '';
+              if (fileName) {
+                templateMap.set(fileName, {
+                  id: t.id,
+                  title: t.title,
+                  description: t.description
+                });
+              }
+            });
+            
+            // Enrich templates with plan information
+            templatesList = templatesList.map((t: DocumentTemplate) => {
+              const fileName = (t.file_name || t.name || '').replace('.docx', '').toLowerCase();
+              const dbTemplate = templateMap.get(fileName);
+              
+              if (dbTemplate && permissions) {
+                // Find plan permission for this template
+                const templatePerm = permissions.find(p => p.template_id === dbTemplate.id);
+                if (templatePerm && planDetails[templatePerm.plan_id]) {
+                  const plan = planDetails[templatePerm.plan_id];
+                  return {
+                    ...t,
+                    id: dbTemplate.id || t.id,
+                    plan_name: plan.plan_name,
+                    plan_tier: plan.plan_tier
+                  };
+                }
+              }
+              
+              return t;
+            });
+          }
+        } catch (planError) {
+          // If plan enrichment fails, just use templates without plan info
+          console.debug('Could not enrich templates with plan info:', planError);
+        }
+        
+        setTemplates(templatesList);
       } else {
         toast.error('Failed to fetch templates');
       }
@@ -377,6 +455,13 @@ export default function DocumentTemplateManager() {
                             <p className="text-muted-foreground">{template.placeholders?.length || 0}</p>
                           </div>
                         </div>
+                        {template.plan_name && (
+                          <div className="mt-2">
+                            <Badge variant="outline" className="text-xs">
+                              Plan: {template.plan_name}
+                            </Badge>
+                          </div>
+                        )}
                         
                         {template.placeholders && template.placeholders.length > 0 && (
                           <div className="mt-3">
