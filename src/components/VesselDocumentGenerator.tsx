@@ -209,101 +209,12 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
         toast.error('Request timeout - please try again');
       }, 30000);
 
-      // Send request to backend
-      const requestData: any = {
-        vessel_imo: vesselImo,
-        user_id: user?.id || null
-      };
+      // Send request to backend - EXACTLY like CMS does (which works perfectly!)
+      // CMS sends ONLY: template_name and vessel_imo (no template_id, no user_id)
       
-      // Ensure we always send either template_id or template_name (not both, and not None)
-      // Validate template object has required fields
-      if (!template || (!template.id && !template.file_name && !template.name)) {
-        toast.error('Invalid template data. Please refresh and try again.');
-        setProcessingStatus(prev => ({
-          ...prev,
-          [templateKey]: {
-            status: 'failed',
-            message: 'Invalid template data'
-          }
-        }));
-        return;
-      }
-      
-      // Check if template.id exists and is valid (could be string or number)
-      const templateId = template.id;
-      if (templateId !== null && templateId !== undefined && templateId !== '') {
-        // Use template_id if available and valid
-        const idString = String(templateId).trim();
-        if (idString !== '' && idString !== 'null' && idString !== 'undefined') {
-          requestData.template_id = idString;
-        } else {
-          // template.id is invalid, use template_name instead
-          const templateFileName = (template.file_name || template.name || '').toString().trim();
-          if (!templateFileName || templateFileName === 'null' || templateFileName === 'undefined') {
-            toast.error('Template name is missing. Please refresh and try again.');
-            setProcessingStatus(prev => ({
-              ...prev,
-              [templateKey]: {
-                status: 'failed',
-                message: 'Template name missing'
-              }
-            }));
-            return;
-          }
-          // Remove .docx extension if present
-          let apiTemplateName = templateFileName;
-          if (apiTemplateName.toLowerCase().endsWith('.docx')) {
-            apiTemplateName = apiTemplateName.slice(0, -5);
-          }
-          if (!apiTemplateName || apiTemplateName.trim() === '') {
-            toast.error('Invalid template name. Please refresh and try again.');
-            setProcessingStatus(prev => ({
-              ...prev,
-              [templateKey]: {
-                status: 'failed',
-                message: 'Invalid template name'
-              }
-            }));
-            return;
-          }
-          requestData.template_name = apiTemplateName.trim();
-        }
-      } else {
-        // Get template name - ensure it's not empty or None
-        const templateFileName = (template.file_name || template.name || '').toString().trim();
-        if (!templateFileName || templateFileName === 'null' || templateFileName === 'undefined') {
-          toast.error('Template name is missing. Please refresh and try again.');
-          setProcessingStatus(prev => ({
-            ...prev,
-            [templateKey]: {
-              status: 'failed',
-              message: 'Template name missing'
-            }
-          }));
-          return;
-        }
-        // Remove .docx extension if present (case insensitive)
-        let apiTemplateName = templateFileName;
-        if (apiTemplateName.toLowerCase().endsWith('.docx')) {
-          apiTemplateName = apiTemplateName.slice(0, -5); // Remove .docx
-        }
-        
-        if (!apiTemplateName || apiTemplateName.trim() === '') {
-          toast.error('Invalid template name. Please refresh and try again.');
-          setProcessingStatus(prev => ({
-            ...prev,
-            [templateKey]: {
-              status: 'failed',
-              message: 'Invalid template name'
-            }
-          }));
-          return;
-        }
-        requestData.template_name = apiTemplateName.trim();
-      }
-      
-      // Validate vessel_imo is not empty
-      if (!vesselImo || !vesselImo.trim()) {
+      // Validate vessel_imo first
+      const vesselImoTrimmed = String(vesselImo || '').trim();
+      if (!vesselImoTrimmed || vesselImoTrimmed === '') {
         toast.error('Vessel IMO is missing. Please try again.');
         setProcessingStatus(prev => ({
           ...prev,
@@ -315,44 +226,50 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
         return;
       }
 
-      // Debug: Log what we're sending (remove in production if needed)
-      // console.log('Sending request data:', JSON.stringify(requestData, null, 2));
-      
-      // Final validation - ensure requestData is valid
-      if (!requestData.vessel_imo || !requestData.vessel_imo.trim()) {
-        toast.error('Vessel IMO is required');
+      // Get template_name from template (like CMS does)
+      // CMS uses templateName directly, we need to get it from template.file_name or template.name
+      let templateName = '';
+      if (template.file_name) {
+        templateName = String(template.file_name).trim();
+      } else if (template.name) {
+        templateName = String(template.name).trim();
+      } else {
+        toast.error('Template name is missing. Please refresh and try again.');
         setProcessingStatus(prev => ({
           ...prev,
           [templateKey]: {
             status: 'failed',
-            message: 'Vessel IMO missing'
+            message: 'Template name missing'
           }
         }));
         return;
       }
-      
-      // Ensure we have either template_id or template_name (not both, not neither)
-      if (!requestData.template_id && !requestData.template_name) {
-        toast.error('Template information is missing');
+
+      // Remove .docx extension if present (CMS sends it without extension)
+      if (templateName.toLowerCase().endsWith('.docx')) {
+        templateName = templateName.slice(0, -5);
+      }
+
+      // Final validation
+      if (!templateName || templateName === '' || templateName === 'null' || templateName === 'undefined') {
+        toast.error('Invalid template name. Please refresh and try again.');
         setProcessingStatus(prev => ({
           ...prev,
           [templateKey]: {
             status: 'failed',
-            message: 'Template info missing'
+            message: 'Invalid template name'
           }
         }));
         return;
       }
+
+      // Build request data - CMS style (simple and works!)
+      const requestData: any = {
+        template_name: templateName,
+        vessel_imo: vesselImoTrimmed
+      };
       
-      // Ensure template_name is not null/undefined if it exists
-      if (requestData.template_name === null || requestData.template_name === undefined) {
-        delete requestData.template_name;
-      }
-      
-      // Ensure template_id is not null/undefined if it exists
-      if (requestData.template_id === null || requestData.template_id === undefined) {
-        delete requestData.template_id;
-      }
+      // DO NOT send template_id or user_id - CMS doesn't send them and it works!
 
       let response;
       try {
