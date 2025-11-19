@@ -311,6 +311,7 @@ END;
 $$;
 
 -- 7. Set default max_downloads_per_month for existing plans
+-- Update ALL plans to ensure correct values based on plan_tier
 UPDATE public.subscription_plans
 SET max_downloads_per_month = CASE
   WHEN plan_tier = 'basic' THEN 10
@@ -318,5 +319,7 @@ SET max_downloads_per_month = CASE
   WHEN plan_tier = 'enterprise' THEN 999
   ELSE 10
 END
-WHERE max_downloads_per_month IS NULL;
+WHERE max_downloads_per_month IS NULL 
+   OR (plan_tier = 'enterprise' AND max_downloads_per_month < 999)  -- Fix Enterprise if incorrectly set
+   OR (plan_tier = 'professional' AND max_downloads_per_month < 50);  -- Fix Professional if incorrectly set
 
