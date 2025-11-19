@@ -276,9 +276,12 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
         toast.success('Document downloaded successfully');
       } else {
         // Try to get error message from response
+        // Note: response body can only be read once, so we clone it
         let errorMessage = `Failed to process (${response.status})`;
         try {
-          const errorData = await response.json();
+          // Clone response to read it without consuming the original
+          const responseClone = response.clone();
+          const errorData = await responseClone.json();
           if (errorData.detail) {
             errorMessage = errorData.detail;
           } else if (errorData.message) {
@@ -289,7 +292,8 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
         } catch (e) {
           // If response is not JSON, try text
           try {
-            const errorText = await response.text();
+            const responseClone = response.clone();
+            const errorText = await responseClone.text();
             if (errorText) {
               errorMessage = errorText.substring(0, 200); // Limit length
             }
