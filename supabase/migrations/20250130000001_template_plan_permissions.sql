@@ -1,6 +1,14 @@
 -- Migration: Template-Plan Permissions and Download Tracking
 -- This migration creates the necessary tables to manage template download permissions per plan
 -- and tracks user downloads to enforce monthly limits
+--
+-- NOTE: If you encounter errors about existing objects, run this cleanup first:
+-- DROP TRIGGER IF EXISTS update_plan_template_permissions_updated_at ON public.plan_template_permissions;
+-- DROP POLICY IF EXISTS "Anyone can view plan template permissions" ON public.plan_template_permissions;
+-- DROP POLICY IF EXISTS "Admins can manage plan template permissions" ON public.plan_template_permissions;
+-- DROP POLICY IF EXISTS "Users can view their own downloads" ON public.user_document_downloads;
+-- DROP POLICY IF EXISTS "Users can insert their own downloads" ON public.user_document_downloads;
+-- DROP POLICY IF EXISTS "Admins can view all downloads" ON public.user_document_downloads;
 
 -- 1. Add max_downloads_per_month column to subscription_plans
 ALTER TABLE public.subscription_plans 
