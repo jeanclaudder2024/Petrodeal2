@@ -208,11 +208,50 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
         user_id: user?.id || null
       };
       
+      // Ensure we always send either template_id or template_name (not both, and not None)
       if (template.id) {
         requestData.template_id = template.id;
       } else {
-        const apiTemplateName = (template.file_name || template.name || '').replace('.docx', '');
+        // Get template name - ensure it's not empty
+        const templateFileName = template.file_name || template.name || '';
+        if (!templateFileName) {
+          toast.error('Template name is missing. Please try again.');
+          setProcessingStatus(prev => ({
+            ...prev,
+            [templateKey]: {
+              status: 'failed',
+              message: 'Template name missing'
+            }
+          }));
+          return;
+        }
+        // Remove .docx extension if present
+        const apiTemplateName = templateFileName.replace(/\.docx$/i, '');
+        if (!apiTemplateName) {
+          toast.error('Invalid template name. Please try again.');
+          setProcessingStatus(prev => ({
+            ...prev,
+            [templateKey]: {
+              status: 'failed',
+              message: 'Invalid template name'
+            }
+          }));
+          return;
+        }
         requestData.template_name = apiTemplateName;
+      }
+      
+      // Validate vessel_imo is not empty
+      if (!vesselImo || !vesselImo.trim()) {
+        toast.error('Vessel IMO is missing. Please try again.');
+        setProcessingStatus(prev => ({
+          ...prev,
+          [templateKey]: {
+            status: 'failed',
+            message: 'Vessel IMO missing'
+          }
+        }));
+        return;
       }
 
       let response;
