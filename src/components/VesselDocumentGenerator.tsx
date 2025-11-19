@@ -153,8 +153,55 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
             can_download: true, // Default for non-logged-in users
           }));
         
-        // Enrich templates with plan information from database
+        // Enrich templates with plan information and check user permissions
         try {
+          // Get user's plan information
+          let userPlanTier: string | null = null;
+          let userPlanId: string | null = null;
+          let userMaxDownloads: number | null = null;
+          let userCurrentDownloads: number = 0;
+          
+          if (user?.id) {
+            const { data: subscriber } = await supabase
+              .from('subscribers')
+              .select('subscription_tier, subscription_plan')
+              .eq('user_id', user.id)
+              .limit(1)
+              .single();
+            
+            if (subscriber) {
+              userPlanTier = subscriber.subscription_tier || subscriber.subscription_plan || null;
+              
+              // Get plan details including max downloads
+              if (userPlanTier) {
+                const { data: plan } = await supabase
+                  .from('subscription_plans')
+                  .select('id, plan_name, plan_tier, max_downloads_per_month')
+                  .eq('plan_tier', userPlanTier)
+                  .limit(1)
+                  .single();
+                
+                if (plan) {
+                  userPlanId = plan.id;
+                  userMaxDownloads = plan.max_downloads_per_month;
+                  
+                  // Get current month's download count for user
+                  const startOfMonth = new Date();
+                  startOfMonth.setDate(1);
+                  startOfMonth.setHours(0, 0, 0, 0);
+                  
+                  const { count } = await supabase
+                    .from('processed_documents')
+                    .select('*', { count: 'exact', head: true })
+                    .eq('created_by', user.id)
+                    .gte('created_at', startOfMonth.toISOString());
+                  
+                  userCurrentDownloads = count || 0;
+                }
+              }
+            }
+          }
+          
           // Get all templates from database to match by file_name
           const { data: dbTemplates } = await supabase
             .from('document_templates')
@@ -199,28 +246,66 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
               }
             });
             
-            // Enrich activeTemplates with plan information
+            // Enrich activeTemplates with plan information and check permissions
             activeTemplates = activeTemplates.map(t => {
               const fileName = (t.file_name || t.name || '').replace('.docx', '').toLowerCase();
               const dbTemplate = templateMap.get(fileName);
+              
+              let canDownload = true; // Default for non-logged-in users
+              let planName: string | null = null;
+              let planTier: string | null = null;
+              let remainingDownloads: number | null = null;
+              let maxDownloads: number | null = null;
               
               if (dbTemplate && permissions) {
                 // Find plan permission for this template
                 const templatePerm = permissions.find(p => p.template_id === dbTemplate.id);
                 if (templatePerm && planDetails[templatePerm.plan_id]) {
                   const plan = planDetails[templatePerm.plan_id];
-                  return {
-                    ...t,
-                    id: dbTemplate.id || t.id,
-                    plan_name: plan.plan_name,
-                    plan_tier: plan.plan_tier,
-                    // Keep can_download as true for fallback (public templates)
-                    can_download: t.can_download
-                  };
+                  planName = plan.plan_name;
+                  planTier = plan.plan_tier;
+                  
+                  // Check if user's plan has permission to download this template
+                  if (userPlanId) {
+                    // User is logged in - check if their plan allows this template
+                    canDownload = templatePerm.plan_id === userPlanId;
+                    
+                    // Set download limits if user has a plan
+                    if (userMaxDownloads !== null) {
+                      maxDownloads = userMaxDownloads;
+                      remainingDownloads = Math.max(0, userMaxDownloads - userCurrentDownloads);
+                    }
+                  } else {
+                    // User not logged in - template requires a plan
+                    canDownload = false;
+                  }
+                } else if (userPlanId) {
+                  // Template has no plan restrictions, but user is logged in
+                  // Allow download but check download limits
+                  if (userMaxDownloads !== null) {
+                    maxDownloads = userMaxDownloads;
+                    remainingDownloads = Math.max(0, userMaxDownloads - userCurrentDownloads);
+                  }
+                }
+              } else if (userPlanId) {
+                // Template not in database, but user is logged in
+                // Allow download but check download limits
+                if (userMaxDownloads !== null) {
+                  maxDownloads = userMaxDownloads;
+                  remainingDownloads = Math.max(0, userMaxDownloads - userCurrentDownloads);
                 }
               }
               
-              return t;
+              return {
+                ...t,
+                id: dbTemplate?.id || t.id,
+                plan_name: planName,
+                plan_tier: planTier,
+                can_download: canDownload,
+                max_downloads: maxDownloads,
+                remaining_downloads: remainingDownloads,
+                current_downloads: userCurrentDownloads
+              };
             });
           }
         } catch (planError) {
@@ -245,6 +330,24 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
 
   const processDocument = async (template: DocumentTemplate) => {
     const templateKey = template.id || template.file_name || template.name;
+    
+    // Check if user can download this template
+    const hasRemainingDownloads = template.remaining_downloads === undefined || 
+                                 template.remaining_downloads === null || 
+                                 template.remaining_downloads > 0;
+    
+    const canDownload = (template.can_download !== false) && hasRemainingDownloads;
+    
+    if (!canDownload) {
+      if (template.can_download === false) {
+        toast.error('This template is not available in your current plan. Please upgrade to access this template.');
+      } else if (template.remaining_downloads !== undefined && template.remaining_downloads !== null && template.remaining_downloads <= 0) {
+        toast.error(`You have reached your download limit (${template.max_downloads} downloads per month). Please upgrade your plan for more downloads.`);
+      } else {
+        toast.error('You do not have permission to download this template.');
+      }
+      return;
+    }
     
     try {
       setProcessingStatus(prev => ({
@@ -584,33 +687,42 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                           )}
                         </div>
                         
-                        {/* Download Counter - Show if user is logged in */}
-                        {user?.id && template.max_downloads !== undefined && template.max_downloads !== null && (
+                        {/* Download Counter - Always show if user is logged in and has limits */}
+                        {user?.id && (
                           <div className="mt-2">
-                            <div className="flex items-center gap-2">
-                              <div className="flex items-center gap-1.5 text-xs">
-                                <span className="font-medium text-muted-foreground">Downloads:</span>
-                                <span className={`font-semibold ${
-                                  template.remaining_downloads !== undefined && 
-                                  template.remaining_downloads !== null && 
-                                  template.remaining_downloads > 0 
-                                    ? 'text-green-600 dark:text-green-400' 
-                                    : 'text-red-600 dark:text-red-400'
-                                }`}>
-                                  {template.remaining_downloads !== undefined && 
-                                   template.remaining_downloads !== null 
-                                    ? template.remaining_downloads 
-                                    : 0}
-                                </span>
-                                <span className="text-muted-foreground">/</span>
-                                <span className="text-muted-foreground">{template.max_downloads}</span>
+                            {template.max_downloads !== undefined && template.max_downloads !== null ? (
+                              <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-1.5 text-xs">
+                                  <span className="font-medium text-muted-foreground">Downloads:</span>
+                                  <span className={`font-semibold ${
+                                    template.remaining_downloads !== undefined && 
+                                    template.remaining_downloads !== null && 
+                                    template.remaining_downloads > 0 
+                                      ? 'text-green-600 dark:text-green-400' 
+                                      : 'text-red-600 dark:text-red-400'
+                                  }`}>
+                                    {template.remaining_downloads !== undefined && 
+                                     template.remaining_downloads !== null 
+                                      ? template.remaining_downloads 
+                                      : 0}
+                                  </span>
+                                  <span className="text-muted-foreground">/</span>
+                                  <span className="text-muted-foreground">{template.max_downloads}</span>
+                                  <span className="text-muted-foreground text-xs">per month</span>
+                                </div>
+                                {template.remaining_downloads !== undefined && 
+                                 template.remaining_downloads !== null && 
+                                 template.remaining_downloads === 0 && (
+                                  <Badge variant="destructive" className="text-xs">
+                                    Limit Reached
+                                  </Badge>
+                                )}
                               </div>
-                              {template.remaining_downloads === 0 && (
-                                <Badge variant="destructive" className="text-xs">
-                                  Limit Reached
-                                </Badge>
-                              )}
-                            </div>
+                            ) : (
+                              <div className="text-xs text-muted-foreground">
+                                Unlimited downloads
+                              </div>
+                            )}
                           </div>
                         )}
                         
