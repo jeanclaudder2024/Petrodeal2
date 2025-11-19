@@ -43,32 +43,11 @@ const API_BASE_URL = process.env.NODE_ENV === 'production'
   ? 'https://petrodealhub.com/api'  // Production API
   : 'http://localhost:8000'; // Development
 
-// VERSION: v3.1-FORCE-REBUILD-2025 - This version number forces rebuild
-const COMPONENT_VERSION = 'v3.1-FORCE-REBUILD-2025';
-
 export default function VesselDocumentGenerator({ vesselImo, vesselName }: VesselDocumentGeneratorProps) {
   const { user } = useAuth();
   const [templates, setTemplates] = useState<DocumentTemplate[]>([]);
   const [loading, setLoading] = useState(false);
   const [processingStatus, setProcessingStatus] = useState<Record<string, ProcessingStatus>>({});
-
-  // Debug: Log component mount - UPDATED VERSION
-  useEffect(() => {
-    console.log('🚨🚨🚨 VesselDocumentGenerator v3.1 FORCE REBUILD - NEW VERSION LOADED 🚨🚨🚨');
-    console.log('   Component Version:', COMPONENT_VERSION);
-    console.log('   Build Date: 2025-01-20');
-    console.log('   vesselImo:', vesselImo);
-    console.log('   vesselName:', vesselName);
-    console.log('   ✅ THIS IS THE UPDATED COMPONENT - v3.1!');
-    // Force a visual alert
-    if (typeof window !== 'undefined') {
-      console.log('%c🚨 NEW COMPONENT v3.1 LOADED! 🚨', 'background: red; color: white; font-size: 20px; padding: 10px;');
-      // Also show alert in browser
-      setTimeout(() => {
-        alert('✅ NEW VERSION v3.1 LOADED! Check console for details.');
-      }, 500);
-    }
-  }, []);
 
   useEffect(() => {
     fetchTemplates();
@@ -131,16 +110,13 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                 } as DocumentTemplate;
               });
               
-              console.log('🚨 v3.1: Setting templates state:', processedTemplates.length, 'templates');
-              console.log('🚨 v3.1: Template names:', processedTemplates.map(t => t.name || t.id));
               setTemplates(processedTemplates);
               setLoading(false);
-              console.log('🚨 v3.1: Loading set to false, templates should render now');
               return;
             }
           }
         } catch (error) {
-          console.error('Error fetching user templates:', error);
+          // Error fetching user templates - will fallback to public templates
         }
       }
       
@@ -156,7 +132,6 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
       if (response.ok) {
         const data = await response.json();
         const templatesList = data.templates || [];
-        console.log('🚨 v3.1: Fallback endpoint - Raw templates:', templatesList.length);
         const activeTemplates = templatesList
           .filter((t: DocumentTemplate) => t.is_active !== false)
           .map((t: DocumentTemplate) => ({
@@ -164,18 +139,14 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
             can_download: true, // Default for non-logged-in users
           }));
         
-        console.log('🚨 v3.1: Fallback endpoint - Active templates:', activeTemplates.length);
-        console.log('🚨 v3.1: Setting templates state (fallback):', activeTemplates.length, 'templates');
-        console.log('🚨 v3.1: Template names (fallback):', activeTemplates.map(t => t.name || t.id || t.file_name));
         setTemplates(activeTemplates);
-        console.log('🚨 v3.1: Templates set, loading will be false in finally block');
       } else {
         const errorText = await response.text();
-        console.error('Failed to fetch templates:', response.status, errorText);
+        // Failed to fetch templates
         toast.error(`Failed to fetch templates: ${response.status}`);
       }
     } catch (error: any) {
-      console.error('Error fetching templates:', error);
+      // Error fetching templates
       toast.error(`Error fetching templates: ${error?.message || 'Unknown error'}`);
     } finally {
       setLoading(false);
@@ -293,10 +264,10 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
           }
         }));
         toast.error(`Failed to process: ${response.status}`);
-        console.error('HTTP Error:', response.status, responseText);
+        // HTTP Error
       }
     } catch (error) {
-      console.error('Error processing document:', error);
+      // Error processing document
       setProcessingStatus(prev => ({
         ...prev,
         [templateKey]: {
@@ -335,41 +306,17 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
     }
   };
 
-  // Debug: Log current state
-  useEffect(() => {
-    console.log('🚨 v3.1: Component render state:', {
-      loading,
-      templatesCount: templates.length,
-      templateNames: templates.map(t => t.name || t.id)
-    });
-  }, [loading, templates]);
-
   if (loading) {
     return (
-      <div data-component-version={COMPONENT_VERSION} style={{ border: '5px solid red', padding: '15px', margin: '15px', backgroundColor: '#fff3cd' }}>
-        <div style={{ background: '#ff0000', color: 'white', padding: '10px', marginBottom: '15px', fontWeight: 'bold', fontSize: '18px', textAlign: 'center', borderRadius: '5px' }}>
-          🚨 NEW VERSION v3.1 FORCE REBUILD - OLD COMPONENT REMOVED! 🚨
-        </div>
-        <div className="flex items-center justify-center p-6">
-          <Loader2 className="h-6 w-6 animate-spin mr-2" />
-          <span>Loading templates...</span>
-        </div>
+      <div className="flex items-center justify-center p-6">
+        <Loader2 className="h-6 w-6 animate-spin mr-2" />
+        <span>Loading templates...</span>
       </div>
     );
   }
 
   return (
-    <div data-component-version={COMPONENT_VERSION} style={{ border: '5px solid red', padding: '15px', margin: '15px', backgroundColor: '#fff3cd' }}>
-      {/* VISIBLE MARKER: If you see this red border, the NEW component is loaded! */}
-      <div style={{ background: '#ff0000', color: 'white', padding: '10px', marginBottom: '15px', fontWeight: 'bold', fontSize: '18px', textAlign: 'center', borderRadius: '5px' }}>
-        🚨 NEW VERSION v3.1 FORCE REBUILD - OLD COMPONENT REMOVED! 🚨
-      </div>
-      <div style={{ background: 'yellow', padding: '8px', marginBottom: '10px', fontWeight: 'bold', textAlign: 'center' }}>
-        ✅ This is the UPDATED VesselDocumentGenerator component v3.1 - Build Date: 2025-01-20!
-      </div>
-      <div style={{ background: 'lightblue', padding: '8px', marginBottom: '10px', textAlign: 'center', fontSize: '14px' }}>
-        📊 Debug: Loading={loading ? 'true' : 'false'}, Templates={templates.length}
-      </div>
+    <div>
         {templates.length === 0 ? (
           <div className="text-center py-8 text-muted-foreground">
             <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />

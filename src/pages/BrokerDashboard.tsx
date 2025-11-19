@@ -143,7 +143,6 @@ const BrokerDashboard = () => {
       
       // If no broker profile found, user is not a broker
       if (!profileData) {
-        console.log('No broker profile found for user');
         setLoading(false);
         return;
       }
@@ -184,7 +183,11 @@ const BrokerDashboard = () => {
         await loadChatMessages(profileData.id);
       }
     } catch (error) {
-      console.error('Failed to fetch broker data:', error);
+      toast({
+        title: 'Error',
+        description: 'Failed to load broker data. Please try again.',
+        variant: 'destructive',
+      });
     } finally {
       setLoading(false);
     }
@@ -209,7 +212,7 @@ const BrokerDashboard = () => {
         .eq('sender_type', 'admin');
 
     } catch (error) {
-      console.error('Error loading chat messages:', error);
+      // Error loading chat messages
     }
   };
 
@@ -241,7 +244,7 @@ const BrokerDashboard = () => {
         description: "Your message has been sent to the support team."
       });
     } catch (error) {
-      console.error('Error sending message:', error);
+      // Error sending message
       toast({
         title: "Error",
         description: "Failed to send message. Please try again.",
