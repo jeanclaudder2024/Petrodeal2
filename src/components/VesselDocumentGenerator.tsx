@@ -110,12 +110,13 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                   plan_name: planName,
                   plan_tier: t.plan_tier || null,
                   remaining_downloads: t.remaining_downloads,
-                  // Handle unlimited: -1 means unlimited, convert to null
-                  // But if it's a valid number, use it (don't default to unlimited!)
+                  // Use the actual value from backend RPC function
+                  // The RPC function returns max_downloads from max_downloads_per_month
+                  // -1 means unlimited, any other number is the limit
                   max_downloads: (t.max_downloads === -1 || t.max_downloads === '-1') 
                     ? null 
                     : (t.max_downloads === null || t.max_downloads === undefined || t.max_downloads === '')
-                      ? 10 // Default to 10 if not set (not unlimited!)
+                      ? undefined // Keep undefined so we can fetch from user's plan
                       : (typeof t.max_downloads === 'string' ? parseInt(t.max_downloads, 10) : t.max_downloads),
                   current_downloads: t.current_downloads,
                   metadata: {
@@ -125,6 +126,43 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                   }
                 } as DocumentTemplate;
               });
+              
+              // After processing templates from /user-downloadable-templates,
+              // ensure max_downloads is set from user's plan if not already set
+              if (user?.id && processedTemplates.length > 0) {
+                try {
+                  const { data: subscriber } = await supabase
+                    .from('subscribers')
+                    .select('subscription_tier, subscription_plan')
+                    .eq('user_id', user.id)
+                    .limit(1)
+                    .single();
+                  
+                  if (subscriber) {
+                    const userPlanTier = subscriber.subscription_tier || subscriber.subscription_plan || null;
+                    if (userPlanTier) {
+                      const { data: plan } = await supabase
+                        .from('subscription_plans')
+                        .select('id, plan_name, plan_tier, max_downloads_per_month')
+                        .eq('plan_tier', userPlanTier)
+                        .limit(1)
+                        .single();
+                      
+                      if (plan && plan.max_downloads_per_month !== undefined && plan.max_downloads_per_month !== null) {
+                        const planMaxDownloads = plan.max_downloads_per_month === -1 ? null : plan.max_downloads_per_month;
+                        
+                        // Update templates that don't have max_downloads set or have undefined
+                        processedTemplates = processedTemplates.map(t => ({
+                          ...t,
+                          max_downloads: (t.max_downloads === undefined || t.max_downloads === null) ? planMaxDownloads : t.max_downloads
+                        }));
+                      }
+                    }
+                  }
+                } catch (planError) {
+                  console.debug('Could not enrich templates with plan max_downloads:', planError);
+                }
+              }
               
               setTemplates(processedTemplates);
               setLoading(false);
@@ -152,12 +190,9 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
       if (response.ok) {
         const data = await response.json();
         const templatesList = data.templates || [];
+        // Don't set can_download here - it will be determined by plan permissions below
         let activeTemplates = templatesList
-          .filter((t: DocumentTemplate) => t.is_active !== false)
-          .map((t: DocumentTemplate) => ({
-            ...t,
-            can_download: true, // Default for non-logged-in users
-          }));
+          .filter((t: DocumentTemplate) => t.is_active !== false);
         
         // Enrich templates with plan information and check user permissions
         try {
@@ -283,56 +318,71 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
               const fileName = (t.file_name || t.name || '').replace('.docx', '').toLowerCase();
               const dbTemplate = templateMap.get(fileName);
               
-              let canDownload = true; // Default for non-logged-in users
+              let canDownload = false; // Default to false - must have explicit permission
               let planName: string | null = null;
               let planTier: string | null = null;
               let remainingDownloads: number | null = null;
               let maxDownloads: number | null = null;
               
-              if (dbTemplate && permissions) {
+              if (dbTemplate) {
                 // Find plan permission for this template
-                const templatePerm = permissions.find(p => p.template_id === dbTemplate.id);
-                if (templatePerm && planDetails[templatePerm.plan_id]) {
-                  const plan = planDetails[templatePerm.plan_id];
-                  planName = plan.plan_name;
-                  planTier = plan.plan_tier;
-                  
-                  // Check if user's plan has permission to download this template
-                  if (userPlanId) {
-                    // User is logged in - check if their plan allows this template
+                const templatePerm = permissions?.find(p => p.template_id === dbTemplate.id);
+                
+                if (userPlanId) {
+                  // User is logged in - check if their plan allows this template
+                  if (templatePerm) {
+                    // Template has plan restrictions - check if user's plan matches
                     canDownload = templatePerm.plan_id === userPlanId;
-                    
-                    // Set download limits if user has a plan
-                    // null means unlimited, otherwise use the limit
-                    maxDownloads = userMaxDownloads; // Can be null (unlimited) or a number
-                    if (userMaxDownloads !== null) {
-                      remainingDownloads = Math.max(0, userMaxDownloads - userCurrentDownloads);
-                    } else {
-                      remainingDownloads = null; // Unlimited
+                    if (canDownload && planDetails[templatePerm.plan_id]) {
+                      const plan = planDetails[templatePerm.plan_id];
+                      planName = plan.plan_name;
+                      planTier = plan.plan_tier;
+                    } else if (!canDownload && planDetails[templatePerm.plan_id]) {
+                      // User doesn't have access - show which plan is required
+                      const plan = planDetails[templatePerm.plan_id];
+                      planName = plan.plan_name;
+                      planTier = plan.plan_tier;
                     }
                   } else {
-                    // User not logged in - template requires a plan
-                    canDownload = false;
+                    // Template has NO plan restrictions in database - allow download for logged-in users
+                    canDownload = true;
                   }
-                } else if (userPlanId) {
-                  // Template has no plan restrictions, but user is logged in
-                  // Allow download but check download limits
+                  
+                  // Set download limits from user's plan
                   maxDownloads = userMaxDownloads; // Can be null (unlimited) or a number
                   if (userMaxDownloads !== null) {
                     remainingDownloads = Math.max(0, userMaxDownloads - userCurrentDownloads);
                   } else {
                     remainingDownloads = null; // Unlimited
                   }
+                } else {
+                  // User not logged in
+                  if (templatePerm) {
+                    // Template requires a plan - show which plan
+                    if (planDetails[templatePerm.plan_id]) {
+                      const plan = planDetails[templatePerm.plan_id];
+                      planName = plan.plan_name;
+                      planTier = plan.plan_tier;
+                    }
+                    canDownload = false; // Must be logged in with correct plan
+                  } else {
+                    // Template has no plan restrictions - allow for non-logged-in users
+                    canDownload = true;
+                  }
                 }
               } else if (userPlanId) {
                 // Template not in database, but user is logged in
                 // Allow download but check download limits
+                canDownload = true;
                 maxDownloads = userMaxDownloads; // Can be null (unlimited) or a number
                 if (userMaxDownloads !== null) {
                   remainingDownloads = Math.max(0, userMaxDownloads - userCurrentDownloads);
                 } else {
                   remainingDownloads = null; // Unlimited
                 }
+              } else {
+                // Template not in database and user not logged in - allow (public template)
+                canDownload = true;
               }
               
               return {
@@ -736,7 +786,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                               <div className="text-xs text-muted-foreground">
                                 <span className="font-medium">Downloads:</span> <span className="text-blue-600 dark:text-blue-400 font-semibold">Unlimited</span>
                               </div>
-                            ) : (
+                            ) : template.max_downloads !== undefined && template.max_downloads !== null ? (
                               <div className="flex items-center gap-2">
                                 <div className="flex items-center gap-1.5 text-xs">
                                   <span className="font-medium text-muted-foreground">Downloads:</span>
@@ -752,10 +802,10 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                                     {template.remaining_downloads !== undefined && 
                                      template.remaining_downloads !== null 
                                       ? template.remaining_downloads 
-                                      : (template.max_downloads || 0)}
+                                      : template.max_downloads}
                                   </span>
                                   <span className="text-muted-foreground">/</span>
-                                  <span className="text-muted-foreground">{template.max_downloads || 10}</span>
+                                  <span className="text-muted-foreground">{template.max_downloads}</span>
                                   <span className="text-muted-foreground text-xs">per month</span>
                                 </div>
                                 {template.remaining_downloads !== undefined && 
@@ -765,6 +815,10 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                                     Limit Reached
                                   </Badge>
                                 )}
+                              </div>
+                            ) : (
+                              <div className="text-xs text-muted-foreground">
+                                <span className="font-medium">Downloads:</span> <span className="text-gray-500">Loading limit...</span>
                               </div>
                             )}
                           </div>
