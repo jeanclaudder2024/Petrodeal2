@@ -203,7 +203,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
           // Get user's plan information
           let userPlanTier: string | null = null;
           let userPlanId: string | null = null;
-          let userMaxDownloads: number | null = null;
+          let userMaxDownloads: number | null | undefined = undefined; // undefined = not fetched yet, null = unlimited, number = limit
           let userCurrentDownloads: number = 0;
           let userPlanDetails: { plan_name: string; plan_tier: string; max_downloads_per_month: number | null } | null = null;
           
@@ -356,12 +356,29 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
               // Always use user's plan max_downloads if user is logged in
               // This ensures we show the correct limit even if template doesn't have restrictions
               if (userPlanId && userPlanDetails) {
-                // Use userMaxDownloads if set, otherwise default to 10
-                maxDownloads = userMaxDownloads !== undefined ? userMaxDownloads : 10;
-                if (maxDownloads !== null) {
-                  remainingDownloads = Math.max(0, maxDownloads - userCurrentDownloads);
+                // Use userMaxDownloads - it's already set from the plan fetch above
+                // userMaxDownloads can be: null (unlimited), a number, or undefined (if not set yet)
+                // If undefined, we haven't fetched the plan yet, so don't set a default here
+                if (userMaxDownloads !== undefined) {
+                  maxDownloads = userMaxDownloads; // Can be null (unlimited) or a number
+                  if (maxDownloads !== null) {
+                    remainingDownloads = Math.max(0, maxDownloads - userCurrentDownloads);
+                  } else {
+                    remainingDownloads = null; // Unlimited
+                  }
                 } else {
-                  remainingDownloads = null; // Unlimited
+                  // Plan fetch might have failed - try to get from userPlanDetails
+                  const planMaxValue = userPlanDetails.max_downloads_per_month;
+                  if (planMaxValue === -1 || planMaxValue === '-1') {
+                    maxDownloads = null; // Unlimited
+                    remainingDownloads = null;
+                  } else if (planMaxValue !== null && planMaxValue !== undefined && planMaxValue !== '') {
+                    const numValue = typeof planMaxValue === 'string' ? parseInt(planMaxValue, 10) : planMaxValue;
+                    if (!isNaN(numValue) && numValue >= 0) {
+                      maxDownloads = numValue;
+                      remainingDownloads = Math.max(0, numValue - userCurrentDownloads);
+                    }
+                  }
                 }
                 
                 // Always set plan name from user's plan (show user's current plan)
