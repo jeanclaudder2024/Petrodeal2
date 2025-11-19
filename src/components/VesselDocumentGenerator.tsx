@@ -205,6 +205,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
           let userPlanId: string | null = null;
           let userMaxDownloads: number | null = null;
           let userCurrentDownloads: number = 0;
+          let userPlanDetails: { plan_name: string; plan_tier: string; max_downloads_per_month: number | null } | null = null;
           
           if (user?.id) {
             try {
