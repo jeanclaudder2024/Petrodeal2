@@ -58,6 +58,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
       setLoading(true);
       
       // If user is logged in, try user-downloadable-templates endpoint
+      // But if it fails (500 error), silently fallback to public templates
       if (user?.id) {
         try {
           const response = await fetch(`${API_BASE_URL}/user-downloadable-templates`, {
@@ -69,6 +70,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
             body: JSON.stringify({ user_id: user.id }),
           });
           
+          // Only process if response is successful (200-299)
           if (response.ok) {
             const data = await response.json();
             
@@ -114,13 +116,13 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
               setLoading(false);
               return;
             }
-          } else {
-            // If endpoint returns error (500, 404, etc.), silently fallback to public templates
-            // Don't show error to user - just use public templates
           }
+          // If response is not ok (500, 404, etc.), silently continue to fallback
+          // Don't log or show error - just use public templates
         } catch (error) {
-          // Network error or other exception - silently fallback to public templates
-          // This is expected if the endpoint doesn't exist yet
+          // Network error or other exception - silently continue to fallback
+          // This is expected if the endpoint doesn't exist or has issues
+          // No need to log or show error to user
         }
       }
       
@@ -213,14 +215,28 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
         requestData.template_name = apiTemplateName;
       }
 
-      const response = await fetch(`${API_BASE_URL}/generate-document`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include',
-        body: JSON.stringify(requestData),
-      });
+      let response;
+      try {
+        response = await fetch(`${API_BASE_URL}/generate-document`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          credentials: 'include',
+          body: JSON.stringify(requestData),
+        });
+      } catch (fetchError) {
+        // Network error
+        setProcessingStatus(prev => ({
+          ...prev,
+          [templateKey]: {
+            status: 'failed',
+            message: 'Network error - please check your connection'
+          }
+        }));
+        toast.error('Network error. Please try again.');
+        return;
+      }
 
       clearInterval(progressInterval);
       clearTimeout(timeoutId);
@@ -267,8 +283,16 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
             message: `Failed (${response.status})`
           }
         }));
-        toast.error(`Failed to process: ${response.status}`);
-        // HTTP Error
+        // Handle different error status codes
+        if (response.status === 404) {
+          toast.error('Template or vessel not found');
+        } else if (response.status === 403) {
+          toast.error('Permission denied - you may not have access to this template');
+        } else if (response.status === 500) {
+          toast.error('Server error - please try again later');
+        } else {
+          toast.error(`Failed to process: ${response.status}`);
+        }
       }
     } catch (error) {
       // Error processing document
