@@ -209,13 +209,27 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
       };
       
       // Ensure we always send either template_id or template_name (not both, and not None)
-      if (template.id) {
-        requestData.template_id = template.id;
+      // Validate template object has required fields
+      if (!template || (!template.id && !template.file_name && !template.name)) {
+        toast.error('Invalid template data. Please refresh and try again.');
+        setProcessingStatus(prev => ({
+          ...prev,
+          [templateKey]: {
+            status: 'failed',
+            message: 'Invalid template data'
+          }
+        }));
+        return;
+      }
+      
+      if (template.id && template.id.trim && template.id.trim() !== '') {
+        // Use template_id if available and valid
+        requestData.template_id = String(template.id).trim();
       } else {
-        // Get template name - ensure it's not empty
-        const templateFileName = template.file_name || template.name || '';
-        if (!templateFileName) {
-          toast.error('Template name is missing. Please try again.');
+        // Get template name - ensure it's not empty or None
+        const templateFileName = (template.file_name || template.name || '').toString().trim();
+        if (!templateFileName || templateFileName === 'null' || templateFileName === 'undefined') {
+          toast.error('Template name is missing. Please refresh and try again.');
           setProcessingStatus(prev => ({
             ...prev,
             [templateKey]: {
@@ -225,10 +239,18 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
           }));
           return;
         }
-        // Remove .docx extension if present
-        const apiTemplateName = templateFileName.replace(/\.docx$/i, '');
-        if (!apiTemplateName) {
-          toast.error('Invalid template name. Please try again.');
+        // Remove .docx extension if present (case insensitive)
+        let apiTemplateName = templateFileName;
+        if (apiTemplateName.toLowerCase().endsWith('.docx')) {
+          apiTemplateName = apiTemplateName.slice(0, -5); // Remove .docx
+        }
+        // Also handle .DOCX
+        if (apiTemplateName.toLowerCase().endsWith('.docx')) {
+          apiTemplateName = apiTemplateName.slice(0, -5);
+        }
+        
+        if (!apiTemplateName || apiTemplateName.trim() === '') {
+          toast.error('Invalid template name. Please refresh and try again.');
           setProcessingStatus(prev => ({
             ...prev,
             [templateKey]: {
@@ -238,7 +260,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
           }));
           return;
         }
-        requestData.template_name = apiTemplateName;
+        requestData.template_name = apiTemplateName.trim();
       }
       
       // Validate vessel_imo is not empty
