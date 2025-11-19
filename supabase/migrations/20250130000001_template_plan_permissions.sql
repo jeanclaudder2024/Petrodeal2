@@ -99,6 +99,8 @@ FOR SELECT
 USING (has_role(auth.uid(), 'admin'::app_role));
 
 -- 4. Create trigger for updated_at on plan_template_permissions
+-- Drop existing trigger if it exists to avoid conflicts
+DROP TRIGGER IF EXISTS update_plan_template_permissions_updated_at ON public.plan_template_permissions;
 CREATE TRIGGER update_plan_template_permissions_updated_at
 BEFORE UPDATE ON public.plan_template_permissions
 FOR EACH ROW
