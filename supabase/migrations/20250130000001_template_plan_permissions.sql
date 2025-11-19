@@ -145,9 +145,10 @@ BEGIN
   WHERE plan_id = v_plan_id
   AND template_id = p_template_id;
   
-  -- If no explicit permission record, default to false (must be explicitly allowed)
+  -- CRITICAL: If no explicit permission record, template is available to ALL users (default to true)
+  -- Only templates WITH explicit plan permissions should be restricted
   IF v_can_download IS NULL THEN
-    v_can_download := false;
+    v_can_download := true;  -- No plan permissions = available to all users
   END IF;
   
   -- Get max downloads per month for the plan
@@ -232,11 +233,18 @@ BEGIN
   END IF;
   
   -- Return all templates with their download status
+  -- CRITICAL: Templates WITHOUT plan permissions should be available to ALL users (can_download = true)
+  -- Only templates WITH explicit plan permissions should be restricted
   RETURN QUERY
   SELECT 
     dt.id AS template_id,
     dt.title AS template_name,
-    COALESCE(ptp.can_download, false) AS can_download,
+    -- If template has NO plan permissions (ptp IS NULL), it's available to ALL users (true)
+    -- If template HAS plan permissions, use the explicit can_download value
+    CASE 
+      WHEN ptp.id IS NULL THEN true  -- No plan permissions = available to all
+      ELSE COALESCE(ptp.can_download, false)  -- Has permissions = use explicit value
+    END AS can_download,
     COALESCE(v_max_downloads_val, 10) AS max_downloads,
     COALESCE(
       (SELECT COUNT(*) 
