@@ -29,12 +29,16 @@ ON public.plan_template_permissions(template_id);
 ALTER TABLE public.plan_template_permissions ENABLE ROW LEVEL SECURITY;
 
 -- Policy: Anyone can view active permissions (for checking what they can download)
+-- Drop existing policy if it exists to avoid conflicts
+DROP POLICY IF EXISTS "Anyone can view plan template permissions" ON public.plan_template_permissions;
 CREATE POLICY "Anyone can view plan template permissions" 
 ON public.plan_template_permissions 
 FOR SELECT 
 USING (true);
 
 -- Policy: Admins can manage all permissions
+-- Drop existing policy if it exists to avoid conflicts
+DROP POLICY IF EXISTS "Admins can manage plan template permissions" ON public.plan_template_permissions;
 CREATE POLICY "Admins can manage plan template permissions" 
 ON public.plan_template_permissions 
 FOR ALL 
@@ -71,18 +75,24 @@ ON public.user_document_downloads(user_id, created_at);
 ALTER TABLE public.user_document_downloads ENABLE ROW LEVEL SECURITY;
 
 -- Policy: Users can view their own downloads
+-- Drop existing policy if it exists to avoid conflicts
+DROP POLICY IF EXISTS "Users can view their own downloads" ON public.user_document_downloads;
 CREATE POLICY "Users can view their own downloads" 
 ON public.user_document_downloads 
 FOR SELECT 
 USING (auth.uid() = user_id);
 
 -- Policy: Users can insert their own downloads
+-- Drop existing policy if it exists to avoid conflicts
+DROP POLICY IF EXISTS "Users can insert their own downloads" ON public.user_document_downloads;
 CREATE POLICY "Users can insert their own downloads" 
 ON public.user_document_downloads 
 FOR INSERT 
 WITH CHECK (auth.uid() = user_id);
 
 -- Policy: Admins can view all downloads
+-- Drop existing policy if it exists to avoid conflicts
+DROP POLICY IF EXISTS "Admins can view all downloads" ON public.user_document_downloads;
 CREATE POLICY "Admins can view all downloads" 
 ON public.user_document_downloads 
 FOR SELECT 
