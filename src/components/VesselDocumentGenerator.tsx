@@ -244,10 +244,6 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
         if (apiTemplateName.toLowerCase().endsWith('.docx')) {
           apiTemplateName = apiTemplateName.slice(0, -5); // Remove .docx
         }
-        // Also handle .DOCX
-        if (apiTemplateName.toLowerCase().endsWith('.docx')) {
-          apiTemplateName = apiTemplateName.slice(0, -5);
-        }
         
         if (!apiTemplateName || apiTemplateName.trim() === '') {
           toast.error('Invalid template name. Please refresh and try again.');
