@@ -61,13 +61,20 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
       // But if it fails (500 error), silently fallback to public templates
       if (user?.id) {
         try {
+          // Validate user.id is not null/undefined/empty
+          const userId = user.id;
+          if (!userId || userId === null || userId === undefined || String(userId).trim() === '') {
+            // Skip user endpoint if user.id is invalid
+            throw new Error('Invalid user ID');
+          }
+          
           const response = await fetch(`${API_BASE_URL}/user-downloadable-templates`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
             },
             credentials: 'include',
-            body: JSON.stringify({ user_id: user.id }),
+            body: JSON.stringify({ user_id: String(userId).trim() }),
           });
           
           // Only process if response is successful (200-299)
@@ -270,6 +277,45 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
           }
         }));
         return;
+      }
+
+      // Debug: Log what we're sending (remove in production if needed)
+      // console.log('Sending request data:', JSON.stringify(requestData, null, 2));
+      
+      // Final validation - ensure requestData is valid
+      if (!requestData.vessel_imo || !requestData.vessel_imo.trim()) {
+        toast.error('Vessel IMO is required');
+        setProcessingStatus(prev => ({
+          ...prev,
+          [templateKey]: {
+            status: 'failed',
+            message: 'Vessel IMO missing'
+          }
+        }));
+        return;
+      }
+      
+      // Ensure we have either template_id or template_name (not both, not neither)
+      if (!requestData.template_id && !requestData.template_name) {
+        toast.error('Template information is missing');
+        setProcessingStatus(prev => ({
+          ...prev,
+          [templateKey]: {
+            status: 'failed',
+            message: 'Template info missing'
+          }
+        }));
+        return;
+      }
+      
+      // Ensure template_name is not null/undefined if it exists
+      if (requestData.template_name === null || requestData.template_name === undefined) {
+        delete requestData.template_name;
+      }
+      
+      // Ensure template_id is not null/undefined if it exists
+      if (requestData.template_id === null || requestData.template_id === undefined) {
+        delete requestData.template_id;
       }
 
       let response;
