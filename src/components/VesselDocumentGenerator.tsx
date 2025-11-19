@@ -110,7 +110,8 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                   plan_name: planName,
                   plan_tier: t.plan_tier || null,
                   remaining_downloads: t.remaining_downloads,
-                  max_downloads: t.max_downloads,
+                  // Handle unlimited: -1 means unlimited, convert to null
+                  max_downloads: (t.max_downloads === -1 || t.max_downloads === null || t.max_downloads === undefined) ? null : t.max_downloads,
                   current_downloads: t.current_downloads,
                   metadata: {
                     display_name: displayName,
@@ -183,20 +184,32 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                 
                 if (plan) {
                   userPlanId = plan.id;
-                  userMaxDownloads = plan.max_downloads_per_month;
+                  // Handle unlimited downloads: -1 means unlimited, null means use default
+                  const maxDownloadsValue = plan.max_downloads_per_month;
+                  if (maxDownloadsValue === -1) {
+                    userMaxDownloads = null; // null means unlimited
+                  } else if (maxDownloadsValue === null || maxDownloadsValue === undefined) {
+                    userMaxDownloads = 10; // Default limit
+                  } else {
+                    userMaxDownloads = maxDownloadsValue;
+                  }
                   
-                  // Get current month's download count for user
-                  const startOfMonth = new Date();
-                  startOfMonth.setDate(1);
-                  startOfMonth.setHours(0, 0, 0, 0);
-                  
-                  const { count } = await supabase
-                    .from('processed_documents')
-                    .select('*', { count: 'exact', head: true })
-                    .eq('created_by', user.id)
-                    .gte('created_at', startOfMonth.toISOString());
-                  
-                  userCurrentDownloads = count || 0;
+                  // Get current month's download count for user (only if not unlimited)
+                  if (userMaxDownloads !== null) {
+                    const startOfMonth = new Date();
+                    startOfMonth.setDate(1);
+                    startOfMonth.setHours(0, 0, 0, 0);
+                    
+                    const { count } = await supabase
+                      .from('processed_documents')
+                      .select('*', { count: 'exact', head: true })
+                      .eq('created_by', user.id)
+                      .gte('created_at', startOfMonth.toISOString());
+                    
+                    userCurrentDownloads = count || 0;
+                  } else {
+                    userCurrentDownloads = 0; // Unlimited, so no need to count
+                  }
                 }
               }
             }
@@ -271,9 +284,12 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                     canDownload = templatePerm.plan_id === userPlanId;
                     
                     // Set download limits if user has a plan
+                    // null means unlimited, otherwise use the limit
+                    maxDownloads = userMaxDownloads; // Can be null (unlimited) or a number
                     if (userMaxDownloads !== null) {
-                      maxDownloads = userMaxDownloads;
                       remainingDownloads = Math.max(0, userMaxDownloads - userCurrentDownloads);
+                    } else {
+                      remainingDownloads = null; // Unlimited
                     }
                   } else {
                     // User not logged in - template requires a plan
@@ -282,17 +298,21 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                 } else if (userPlanId) {
                   // Template has no plan restrictions, but user is logged in
                   // Allow download but check download limits
+                  maxDownloads = userMaxDownloads; // Can be null (unlimited) or a number
                   if (userMaxDownloads !== null) {
-                    maxDownloads = userMaxDownloads;
                     remainingDownloads = Math.max(0, userMaxDownloads - userCurrentDownloads);
+                  } else {
+                    remainingDownloads = null; // Unlimited
                   }
                 }
               } else if (userPlanId) {
                 // Template not in database, but user is logged in
                 // Allow download but check download limits
+                maxDownloads = userMaxDownloads; // Can be null (unlimited) or a number
                 if (userMaxDownloads !== null) {
-                  maxDownloads = userMaxDownloads;
                   remainingDownloads = Math.max(0, userMaxDownloads - userCurrentDownloads);
+                } else {
+                  remainingDownloads = null; // Unlimited
                 }
               }
               
@@ -332,6 +352,8 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
     const templateKey = template.id || template.file_name || template.name;
     
     // Check if user can download this template
+    // If remaining_downloads is null, it means unlimited
+    // If remaining_downloads is 0 or less, limit reached
     const hasRemainingDownloads = template.remaining_downloads === undefined || 
                                  template.remaining_downloads === null || 
                                  template.remaining_downloads > 0;
@@ -687,7 +709,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                           )}
                         </div>
                         
-                        {/* Download Counter - Always show if user is logged in and has limits */}
+                        {/* Download Counter - Always show if user is logged in */}
                         {user?.id && (
                           <div className="mt-2">
                             {template.max_downloads !== undefined && template.max_downloads !== null ? (
@@ -699,12 +721,14 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                                     template.remaining_downloads !== null && 
                                     template.remaining_downloads > 0 
                                       ? 'text-green-600 dark:text-green-400' 
-                                      : 'text-red-600 dark:text-red-400'
+                                      : template.remaining_downloads === 0
+                                      ? 'text-red-600 dark:text-red-400'
+                                      : 'text-blue-600 dark:text-blue-400'
                                   }`}>
                                     {template.remaining_downloads !== undefined && 
                                      template.remaining_downloads !== null 
                                       ? template.remaining_downloads 
-                                      : 0}
+                                      : '∞'}
                                   </span>
                                   <span className="text-muted-foreground">/</span>
                                   <span className="text-muted-foreground">{template.max_downloads}</span>
@@ -720,7 +744,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                               </div>
                             ) : (
                               <div className="text-xs text-muted-foreground">
-                                Unlimited downloads
+                                <span className="font-medium">Downloads:</span> <span className="text-blue-600 dark:text-blue-400 font-semibold">Unlimited</span>
                               </div>
                             )}
                           </div>
