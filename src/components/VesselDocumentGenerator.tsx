@@ -229,9 +229,45 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
         return;
       }
       
-      if (template.id && template.id.trim && template.id.trim() !== '') {
+      // Check if template.id exists and is valid (could be string or number)
+      const templateId = template.id;
+      if (templateId !== null && templateId !== undefined && templateId !== '') {
         // Use template_id if available and valid
-        requestData.template_id = String(template.id).trim();
+        const idString = String(templateId).trim();
+        if (idString !== '' && idString !== 'null' && idString !== 'undefined') {
+          requestData.template_id = idString;
+        } else {
+          // template.id is invalid, use template_name instead
+          const templateFileName = (template.file_name || template.name || '').toString().trim();
+          if (!templateFileName || templateFileName === 'null' || templateFileName === 'undefined') {
+            toast.error('Template name is missing. Please refresh and try again.');
+            setProcessingStatus(prev => ({
+              ...prev,
+              [templateKey]: {
+                status: 'failed',
+                message: 'Template name missing'
+              }
+            }));
+            return;
+          }
+          // Remove .docx extension if present
+          let apiTemplateName = templateFileName;
+          if (apiTemplateName.toLowerCase().endsWith('.docx')) {
+            apiTemplateName = apiTemplateName.slice(0, -5);
+          }
+          if (!apiTemplateName || apiTemplateName.trim() === '') {
+            toast.error('Invalid template name. Please refresh and try again.');
+            setProcessingStatus(prev => ({
+              ...prev,
+              [templateKey]: {
+                status: 'failed',
+                message: 'Invalid template name'
+              }
+            }));
+            return;
+          }
+          requestData.template_name = apiTemplateName.trim();
+        }
       } else {
         // Get template name - ensure it's not empty or None
         const templateFileName = (template.file_name || template.name || '').toString().trim();
