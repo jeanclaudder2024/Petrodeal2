@@ -57,7 +57,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
     try {
       setLoading(true);
       
-      // If user is logged in, use user-downloadable-templates endpoint
+      // If user is logged in, try user-downloadable-templates endpoint
       if (user?.id) {
         try {
           const response = await fetch(`${API_BASE_URL}/user-downloadable-templates`, {
@@ -114,9 +114,13 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
               setLoading(false);
               return;
             }
+          } else {
+            // If endpoint returns error (500, 404, etc.), silently fallback to public templates
+            // Don't show error to user - just use public templates
           }
         } catch (error) {
-          // Error fetching user templates - will fallback to public templates
+          // Network error or other exception - silently fallback to public templates
+          // This is expected if the endpoint doesn't exist yet
         }
       }
       

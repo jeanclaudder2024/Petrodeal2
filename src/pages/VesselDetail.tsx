@@ -931,14 +931,10 @@ const VesselDetail = () => {
                 <Dialog open={dealDialogOpen} onOpenChange={setDealDialogOpen}>
                   <DialogTrigger asChild>
                     <Button 
-                      className="w-full bg-red-600 hover:bg-red-700 text-white animate-pulse font-bold text-lg shadow-lg ring-4 ring-red-400 ring-offset-2"
-                      style={{ 
-                        animation: 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-                        boxShadow: '0 0 20px rgba(239, 68, 68, 0.8)'
-                      }}
+                      className="w-full bg-primary hover:bg-primary/90 text-white"
                     >
                       <Briefcase className="h-4 w-4 mr-2" />
-                      🔴 TEST: Create Broker Deal (RED BUTTON TEST) 🔴
+                      Create Broker Deal
                     </Button>
                   </DialogTrigger>
                   <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto w-[95vw] sm:w-full">
