@@ -256,33 +256,20 @@ BEGIN
   -- CRITICAL: Templates WITHOUT plan permissions should be available to ALL users (can_download = true)
   -- Only templates WITH explicit plan permissions should be restricted
   RETURN QUERY
-  WITH template_permission_check AS (
-    SELECT 
-      dt.id AS template_id,
-      dt.title AS template_name,
-      -- Check if template has ANY plan permissions at all
-      CASE 
-        WHEN EXISTS (
-          SELECT 1 FROM public.plan_template_permissions 
-          WHERE template_id = dt.id
-        ) THEN true  -- Template HAS plan permissions
-        ELSE false   -- Template has NO plan permissions
-      END AS has_any_permissions,
-      ptp.id AS permission_id,
-      ptp.can_download AS permission_can_download
-    FROM public.document_templates dt
-    LEFT JOIN public.plan_template_permissions ptp 
-      ON ptp.template_id = dt.id AND ptp.plan_id = v_plan_id
-    WHERE dt.is_active = true
-  )
   SELECT 
-    tpc.template_id,
-    tpc.template_name,
-    -- If template has NO plan permissions, it's available to ALL users (true)
-    -- If template HAS plan permissions, check if user's plan has permission
+    dt.id AS template_id,
+    dt.title AS template_name,
+    -- Check if template has ANY plan permissions at all
+    -- If NO permissions exist, template is available to ALL users (true)
+    -- If permissions exist, check if user's plan has permission
     CASE 
-      WHEN tpc.has_any_permissions = false THEN true  -- No permissions = available to all
-      WHEN tpc.permission_id IS NOT NULL AND tpc.permission_can_download = true THEN true  -- User's plan has permission
+      -- First: Check if template has NO plan permissions at all (available to all)
+      WHEN NOT EXISTS (
+        SELECT 1 FROM public.plan_template_permissions 
+        WHERE template_id = dt.id
+      ) THEN true  -- Template has NO plan permissions = available to ALL users
+      -- Second: Check if user's plan has permission
+      WHEN ptp.id IS NOT NULL AND ptp.can_download = true THEN true  -- User's plan has permission
       ELSE false  -- Template has permissions but user's plan doesn't have access
     END AS can_download,
     COALESCE(v_max_downloads_val, 10) AS max_downloads,
@@ -290,7 +277,7 @@ BEGIN
       (SELECT COUNT(*) 
        FROM public.user_document_downloads 
        WHERE user_id = p_user_id 
-       AND template_id = tpc.template_id
+       AND template_id = dt.id
        AND DATE_TRUNC('month', created_at) = DATE_TRUNC('month', CURRENT_DATE)
       ), 0
     ) AS current_downloads,
@@ -300,13 +287,16 @@ BEGIN
         (SELECT COUNT(*) 
          FROM public.user_document_downloads 
          WHERE user_id = p_user_id 
-         AND template_id = tpc.template_id
+         AND template_id = dt.id
          AND DATE_TRUNC('month', created_at) = DATE_TRUNC('month', CURRENT_DATE)
         ), 0
       )
     ) AS remaining_downloads
-  FROM template_permission_check tpc
-  ORDER BY tpc.template_name;
+  FROM public.document_templates dt
+  LEFT JOIN public.plan_template_permissions ptp 
+    ON ptp.template_id = dt.id AND ptp.plan_id = v_plan_id
+  WHERE dt.is_active = true
+  ORDER BY dt.title;
 END;
 $$;
 
