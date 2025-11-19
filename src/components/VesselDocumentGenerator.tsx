@@ -297,12 +297,15 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
             .eq('is_active', true);
           
           if (dbTemplates) {
-            // Get plan permissions for templates
+            // Get plan permissions for templates - get ALL permissions, not just can_download=true
             const templateIds = dbTemplates.map(t => t.id);
             const { data: permissions } = await supabase
               .from('plan_template_permissions')
               .select('template_id, plan_id, can_download')
               .in('template_id', templateIds);
+            
+            console.log('Template permissions from database:', permissions);
+            console.log('User plan ID:', userPlanId);
             
             // Get plan details (including max_downloads_per_month)
             let planDetails: Record<string, any> = {};
@@ -384,8 +387,14 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                       }
                     }
                   } else {
-                    // Template has NO plan restrictions in database - allow download for logged-in users
-                    canDownload = true;
+                    // Template has NO plan restrictions in database - LOCK IT (user's plan doesn't have access)
+                    // Only allow if template is explicitly assigned to user's plan
+                    canDownload = false;
+                    // Show user's plan name to indicate they need to upgrade or this template isn't available
+                    if (userPlanDetails) {
+                      planName = userPlanDetails.plan_name;
+                      planTier = userPlanDetails.plan_tier;
+                    }
                   }
                 } else {
                   // User not logged in
