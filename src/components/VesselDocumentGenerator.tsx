@@ -293,22 +293,39 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
             const { data: permissions } = await supabase
               .from('plan_template_permissions')
               .select('template_id, plan_id, can_download')
-              .in('template_id', templateIds)
-              .eq('can_download', true);
+              .in('template_id', templateIds);
             
-            // Get plan details
+            // Get plan details (including max_downloads_per_month)
             let planDetails: Record<string, any> = {};
             if (permissions && permissions.length > 0) {
               const planIds = [...new Set(permissions.map(p => p.plan_id))];
               const { data: plans } = await supabase
                 .from('subscription_plans')
-                .select('id, plan_name, plan_tier')
+                .select('id, plan_name, plan_tier, max_downloads_per_month')
                 .in('id', planIds);
               
               if (plans) {
                 planDetails = Object.fromEntries(
-                  plans.map(p => [p.id, { plan_name: p.plan_name, plan_tier: p.plan_tier }])
+                  plans.map(p => [p.id, { 
+                    plan_name: p.plan_name, 
+                    plan_tier: p.plan_tier,
+                    max_downloads_per_month: p.max_downloads_per_month
+                  }])
                 );
+              }
+            }
+            
+            // Also get user's plan details if available
+            let userPlanDetails: any = null;
+            if (userPlanId) {
+              const { data: userPlan } = await supabase
+                .from('subscription_plans')
+                .select('id, plan_name, plan_tier, max_downloads_per_month')
+                .eq('id', userPlanId)
+                .single();
+              
+              if (userPlan) {
+                userPlanDetails = userPlan;
               }
             }
             
@@ -336,6 +353,23 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
               let remainingDownloads: number | null = null;
               let maxDownloads: number | null = null;
               
+              // Always use user's plan max_downloads if available (from earlier fetch)
+              // This ensures we show the correct limit even if template doesn't have restrictions
+              if (userPlanId && userMaxDownloads !== undefined) {
+                maxDownloads = userMaxDownloads; // Can be null (unlimited) or a number
+                if (userMaxDownloads !== null) {
+                  remainingDownloads = Math.max(0, userMaxDownloads - userCurrentDownloads);
+                } else {
+                  remainingDownloads = null; // Unlimited
+                }
+                
+                // Set plan name from user's plan
+                if (userPlanDetails) {
+                  planName = userPlanDetails.plan_name;
+                  planTier = userPlanDetails.plan_tier;
+                }
+              }
+              
               if (dbTemplate) {
                 // Find plan permission for this template
                 const templatePerm = permissions?.find(p => p.template_id === dbTemplate.id);
@@ -344,28 +378,18 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                   // User is logged in - check if their plan allows this template
                   if (templatePerm) {
                     // Template has plan restrictions - check if user's plan matches
-                    canDownload = templatePerm.plan_id === userPlanId;
-                    if (canDownload && planDetails[templatePerm.plan_id]) {
+                    canDownload = templatePerm.plan_id === userPlanId && templatePerm.can_download === true;
+                    if (planDetails[templatePerm.plan_id]) {
                       const plan = planDetails[templatePerm.plan_id];
-                      planName = plan.plan_name;
-                      planTier = plan.plan_tier;
-                    } else if (!canDownload && planDetails[templatePerm.plan_id]) {
-                      // User doesn't have access - show which plan is required
-                      const plan = planDetails[templatePerm.plan_id];
-                      planName = plan.plan_name;
-                      planTier = plan.plan_tier;
+                      // Only override plan name if template requires a different plan
+                      if (!canDownload) {
+                        planName = plan.plan_name;
+                        planTier = plan.plan_tier;
+                      }
                     }
                   } else {
                     // Template has NO plan restrictions in database - allow download for logged-in users
                     canDownload = true;
-                  }
-                  
-                  // Set download limits from user's plan
-                  maxDownloads = userMaxDownloads; // Can be null (unlimited) or a number
-                  if (userMaxDownloads !== null) {
-                    remainingDownloads = Math.max(0, userMaxDownloads - userCurrentDownloads);
-                  } else {
-                    remainingDownloads = null; // Unlimited
                   }
                 } else {
                   // User not logged in
@@ -384,14 +408,8 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                 }
               } else if (userPlanId) {
                 // Template not in database, but user is logged in
-                // Allow download but check download limits
+                // Allow download but check download limits (already set above)
                 canDownload = true;
-                maxDownloads = userMaxDownloads; // Can be null (unlimited) or a number
-                if (userMaxDownloads !== null) {
-                  remainingDownloads = Math.max(0, userMaxDownloads - userCurrentDownloads);
-                } else {
-                  remainingDownloads = null; // Unlimited
-                }
               } else {
                 // Template not in database and user not logged in - allow (public template)
                 canDownload = true;
@@ -403,11 +421,21 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                 plan_name: planName,
                 plan_tier: planTier,
                 can_download: canDownload,
-                max_downloads: maxDownloads,
-                remaining_downloads: remainingDownloads,
+                max_downloads: maxDownloads !== undefined ? maxDownloads : t.max_downloads,
+                remaining_downloads: remainingDownloads !== undefined ? remainingDownloads : t.remaining_downloads,
                 current_downloads: userCurrentDownloads
               };
             });
+          } else if (userPlanId && userMaxDownloads !== undefined) {
+            // No database templates, but user is logged in - enrich with user's plan data
+            activeTemplates = activeTemplates.map(t => ({
+              ...t,
+              max_downloads: userMaxDownloads,
+              remaining_downloads: userMaxDownloads !== null 
+                ? Math.max(0, userMaxDownloads - userCurrentDownloads)
+                : null,
+              current_downloads: userCurrentDownloads
+            }));
           }
         } catch (planError) {
           // If plan enrichment fails, just use templates without plan info
@@ -768,11 +796,16 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                         {/* Template Display Name */}
                         <h4 className="font-medium text-base">{displayName}</h4>
                         
-                        {/* Plan Information - Show if user is logged in */}
-                        {user?.id && planName && (
+                        {/* Plan Information - Show if user is logged in or template requires a plan */}
+                        {planName && (
                           <div className="mt-1">
                             <p className="text-sm text-muted-foreground">
                               <span className="font-medium text-primary">Plan:</span> {planName}
+                              {!canDownload && (
+                                <span className="ml-2 text-xs text-orange-600 dark:text-orange-400">
+                                  (Required)
+                                </span>
+                              )}
                             </p>
                           </div>
                         )}
