@@ -50,9 +50,13 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
   const [loading, setLoading] = useState(false);
   const [processingStatus, setProcessingStatus] = useState<Record<string, ProcessingStatus>>({});
 
+  // Force refresh when component mounts, vessel changes, or user changes
   useEffect(() => {
+    // Clear any cached data first
+    setTemplates([]);
+    // Fetch fresh data
     fetchTemplates();
-  }, [user?.id]);
+  }, [vesselImo, user?.id]);
 
   const fetchTemplates = async () => {
     try {
@@ -69,10 +73,13 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
             throw new Error('Invalid user ID');
           }
           
-          const response = await fetch(`${API_BASE_URL}/user-downloadable-templates`, {
+          // Add cache busting to ensure fresh data
+          const cacheBuster = `?t=${Date.now()}`;
+          const response = await fetch(`${API_BASE_URL}/user-downloadable-templates${cacheBuster}`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
+              'Cache-Control': 'no-cache',
             },
             credentials: 'include',
             body: JSON.stringify({ user_id: String(userId).trim() }),
