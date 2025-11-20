@@ -54,8 +54,12 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
   useEffect(() => {
     // Clear any cached data first
     setTemplates([]);
-    // Fetch fresh data
-    fetchTemplates();
+    setLoading(true);
+    // Fetch fresh data with a small delay to ensure state is cleared
+    const timer = setTimeout(() => {
+      fetchTemplates();
+    }, 100);
+    return () => clearTimeout(timer);
   }, [vesselImo, user?.id]);
 
   const fetchTemplates = async () => {
