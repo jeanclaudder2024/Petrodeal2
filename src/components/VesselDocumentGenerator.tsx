@@ -96,7 +96,29 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                                    t.metadata?.description || 
                                    '';
                 
+                // CRITICAL: Use plan_name and max_downloads directly from backend
+                // Backend now returns user's actual plan info, not template restrictions
                 const planName = t.plan_name || t.plan_tier || null;
+                
+                // Process max_downloads: -1 means unlimited (convert to null), otherwise use as-is
+                let maxDownloads = t.max_downloads;
+                if (maxDownloads === -1 || maxDownloads === '-1') {
+                  maxDownloads = null; // null means unlimited
+                } else if (maxDownloads !== null && maxDownloads !== undefined && maxDownloads !== '') {
+                  // Convert to number if it's a string
+                  maxDownloads = typeof maxDownloads === 'string' ? parseInt(maxDownloads, 10) : maxDownloads;
+                  if (isNaN(maxDownloads) || maxDownloads < 0) {
+                    maxDownloads = undefined; // Invalid value
+                  }
+                }
+                
+                console.log('Template from API:', {
+                  name: displayName,
+                  plan_name: planName,
+                  max_downloads: maxDownloads,
+                  remaining_downloads: t.remaining_downloads,
+                  can_download: t.can_download
+                });
                 
                 return {
                   id: t.id || t.template_id || String(t.id),
@@ -107,17 +129,10 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                   placeholders: t.placeholders || [],
                   is_active: t.is_active !== false,
                   can_download: t.can_download !== false,
-                  plan_name: planName,
+                  plan_name: planName, // Use directly from backend (user's actual plan)
                   plan_tier: t.plan_tier || null,
                   remaining_downloads: t.remaining_downloads,
-                  // Use the actual value from backend RPC function
-                  // The RPC function returns max_downloads from max_downloads_per_month
-                  // -1 means unlimited, any other number is the limit
-                  max_downloads: (t.max_downloads === -1 || t.max_downloads === '-1') 
-                    ? null 
-                    : (t.max_downloads === null || t.max_downloads === undefined || t.max_downloads === '')
-                      ? undefined // Keep undefined so we can fetch from user's plan
-                      : (typeof t.max_downloads === 'string' ? parseInt(t.max_downloads, 10) : t.max_downloads),
+                  max_downloads: maxDownloads, // Use directly from backend (user's actual plan max_downloads)
                   current_downloads: t.current_downloads,
                   metadata: {
                     display_name: displayName,
@@ -126,47 +141,6 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                   }
                 } as DocumentTemplate;
               });
-              
-              // After processing templates from /user-downloadable-templates,
-              // ensure max_downloads is set from user's plan if not already set
-              if (user?.id && processedTemplates.length > 0) {
-                try {
-                  const { data: subscriber, error: subscriberError } = await supabase
-                    .from('subscribers')
-                    .select('subscription_tier')
-                    .eq('user_id', user.id)
-                    .limit(1)
-                    .maybeSingle(); // Use maybeSingle() to handle no results gracefully
-                  
-                  if (subscriberError) {
-                    console.warn('Error fetching subscriber for template enrichment:', subscriberError);
-                  }
-                  
-                  if (subscriber) {
-                    const userPlanTier = subscriber.subscription_tier || null;
-                    if (userPlanTier) {
-                      const { data: plan } = await supabase
-                        .from('subscription_plans')
-                        .select('id, plan_name, plan_tier, max_downloads_per_month')
-                        .eq('plan_tier', userPlanTier)
-                        .limit(1)
-                        .single();
-                      
-                      if (plan && plan.max_downloads_per_month !== undefined && plan.max_downloads_per_month !== null) {
-                        const planMaxDownloads = plan.max_downloads_per_month === -1 ? null : plan.max_downloads_per_month;
-                        
-                        // Update templates that don't have max_downloads set or have undefined
-                        processedTemplates = processedTemplates.map(t => ({
-                          ...t,
-                          max_downloads: (t.max_downloads === undefined || t.max_downloads === null) ? planMaxDownloads : t.max_downloads
-                        }));
-                      }
-                    }
-                  }
-                } catch (planError) {
-                  console.debug('Could not enrich templates with plan max_downloads:', planError);
-                }
-              }
               
               setTemplates(processedTemplates);
               setLoading(false);
@@ -808,7 +782,16 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                                  template.metadata?.description || 
                                  '';
               
+              // CRITICAL: Use plan_name directly from template (comes from backend with user's actual plan)
               const planName = template.plan_name || template.plan_tier || null;
+              
+              // Debug log to verify data
+              console.log('Rendering template:', {
+                name: displayName,
+                plan_name: planName,
+                max_downloads: template.max_downloads,
+                remaining_downloads: template.remaining_downloads
+              });
               
               // Check if user can download
               const hasRemainingDownloads = template.remaining_downloads === undefined || 
