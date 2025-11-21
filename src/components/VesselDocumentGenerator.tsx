@@ -290,35 +290,86 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
             .eq('is_active', true);
           
           if (dbTemplates) {
-            // Get plan permissions for templates - get ALL permissions, not just can_download=true
+            // Check if user has broker membership
+            let hasBrokerMembership = false;
+            let brokerMembershipId: string | null = null;
+            if (user) {
+              try {
+                const { data: brokerMembership } = await supabase
+                  .from('broker_memberships')
+                  .select('id')
+                  .eq('user_id', user.id)
+                  .eq('payment_status', 'paid')
+                  .eq('membership_status', 'active')
+                  .single();
+                
+                if (brokerMembership) {
+                  hasBrokerMembership = true;
+                  brokerMembershipId = brokerMembership.id;
+                }
+              } catch (e) {
+                // No broker membership
+              }
+            }
+            
             const templateIds = dbTemplates.map(t => t.id);
-            const { data: permissions } = await supabase
-              .from('plan_template_permissions')
-              .select('template_id, plan_id, can_download')
-              .in('template_id', templateIds);
+            
+            // Get permissions based on user type (broker or subscription plan)
+            let permissions: any[] = [];
+            let planDetails: Record<string, any> = {};
+            
+            if (hasBrokerMembership && brokerMembershipId) {
+              // Get broker template permissions with per-template limits
+              const { data: brokerPerms } = await supabase
+                .from('broker_template_permissions')
+                .select('template_id, can_download, max_downloads_per_template')
+                .eq('broker_membership_id', brokerMembershipId)
+                .in('template_id', templateIds);
+              
+              if (brokerPerms) {
+                permissions = brokerPerms.map(p => ({
+                  template_id: p.template_id,
+                  plan_id: brokerMembershipId, // Use broker membership ID as plan_id for consistency
+                  can_download: p.can_download,
+                  max_downloads_per_template: p.max_downloads_per_template,
+                  is_broker: true
+                }));
+              }
+            } else if (userPlanId) {
+              // Get plan permissions for templates with per-template limits
+              const { data: planPerms } = await supabase
+                .from('plan_template_permissions')
+                .select('template_id, plan_id, can_download, max_downloads_per_template')
+                .eq('plan_id', userPlanId)
+                .in('template_id', templateIds);
+              
+              if (planPerms) {
+                permissions = planPerms;
+              }
+              
+              // Get plan details (including max_downloads_per_month as fallback)
+              if (permissions && permissions.length > 0) {
+                const planIds = [...new Set(permissions.map(p => p.plan_id))];
+                const { data: plans } = await supabase
+                  .from('subscription_plans')
+                  .select('id, plan_name, plan_tier, max_downloads_per_month')
+                  .in('id', planIds);
+                
+                if (plans) {
+                  planDetails = Object.fromEntries(
+                    plans.map(p => [p.id, { 
+                      plan_name: p.plan_name, 
+                      plan_tier: p.plan_tier,
+                      max_downloads_per_month: p.max_downloads_per_month
+                    }])
+                  );
+                }
+              }
+            }
             
             console.log('Template permissions from database:', permissions);
             console.log('User plan ID:', userPlanId);
-            
-            // Get plan details (including max_downloads_per_month)
-            let planDetails: Record<string, any> = {};
-            if (permissions && permissions.length > 0) {
-              const planIds = [...new Set(permissions.map(p => p.plan_id))];
-              const { data: plans } = await supabase
-                .from('subscription_plans')
-                .select('id, plan_name, plan_tier, max_downloads_per_month')
-                .in('id', planIds);
-              
-              if (plans) {
-                planDetails = Object.fromEntries(
-                  plans.map(p => [p.id, { 
-                    plan_name: p.plan_name, 
-                    plan_tier: p.plan_tier,
-                    max_downloads_per_month: p.max_downloads_per_month
-                  }])
-                );
-              }
-            }
+            console.log('Has broker membership:', hasBrokerMembership);
             
             // userPlanDetails is already set above if user is logged in
             
@@ -380,27 +431,87 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
               }
               
               if (dbTemplate) {
-                // Find plan permission for this template
+                // Find permission for this template
                 const templatePerm = permissions?.find(p => p.template_id === dbTemplate.id);
                 
-                if (userPlanId) {
-                  // User is logged in - check if their plan allows this template
+                // Get per-template download limit
+                let perTemplateLimit: number | null = null;
+                if (templatePerm && templatePerm.max_downloads_per_template !== null && templatePerm.max_downloads_per_template !== undefined) {
+                  perTemplateLimit = templatePerm.max_downloads_per_template;
+                } else if (userPlanDetails && !hasBrokerMembership) {
+                  // Fallback to plan-level limit if no per-template limit
+                  const planMaxValue = userPlanDetails.max_downloads_per_month;
+                  if (planMaxValue !== null && planMaxValue !== undefined && planMaxValue !== -1) {
+                    perTemplateLimit = typeof planMaxValue === 'string' ? parseInt(planMaxValue, 10) : planMaxValue;
+                  }
+                }
+                
+                // Count downloads for THIS template this month
+                let templateCurrentDownloads = 0;
+                if (user && dbTemplate.id) {
+                  try {
+                    const startOfMonth = new Date();
+                    startOfMonth.setDate(1);
+                    startOfMonth.setHours(0, 0, 0, 0);
+                    
+                    const { count } = await supabase
+                      .from('user_document_downloads')
+                      .select('*', { count: 'exact', head: true })
+                      .eq('user_id', user.id)
+                      .eq('template_id', dbTemplate.id)
+                      .gte('created_at', startOfMonth.toISOString());
+                    
+                    templateCurrentDownloads = count || 0;
+                  } catch (e) {
+                    console.warn('Could not count template downloads:', e);
+                  }
+                }
+                
+                // Calculate remaining downloads for this template
+                let templateRemainingDownloads: number | null = null;
+                if (perTemplateLimit !== null) {
+                  templateRemainingDownloads = Math.max(0, perTemplateLimit - templateCurrentDownloads);
+                }
+                
+                // Use per-template limit instead of plan-level
+                maxDownloads = perTemplateLimit;
+                remainingDownloads = templateRemainingDownloads;
+                
+                if (hasBrokerMembership) {
+                  // Broker membership check
                   if (templatePerm) {
-                    // Template has plan restrictions - check if user's plan matches
+                    canDownload = templatePerm.can_download === true;
+                    planName = 'Broker Membership';
+                    planTier = 'broker';
+                  } else {
+                    // Check if template requires broker membership
+                    const { data: templateData } = await supabase
+                      .from('document_templates')
+                      .select('requires_broker_membership')
+                      .eq('id', dbTemplate.id)
+                      .single();
+                    
+                    if (templateData?.requires_broker_membership) {
+                      canDownload = true;
+                      planName = 'Broker Membership';
+                      planTier = 'broker';
+                    } else {
+                      canDownload = false;
+                    }
+                  }
+                } else if (userPlanId) {
+                  // Subscription plan check
+                  if (templatePerm) {
                     canDownload = templatePerm.plan_id === userPlanId && templatePerm.can_download === true;
                     if (planDetails[templatePerm.plan_id]) {
                       const plan = planDetails[templatePerm.plan_id];
-                      // Only override plan name if template requires a different plan
                       if (!canDownload) {
                         planName = plan.plan_name;
                         planTier = plan.plan_tier;
                       }
                     }
                   } else {
-                    // Template has NO plan restrictions in database - LOCK IT (user's plan doesn't have access)
-                    // Only allow if template is explicitly assigned to user's plan
                     canDownload = false;
-                    // Show user's plan name to indicate they need to upgrade or this template isn't available
                     if (userPlanDetails) {
                       planName = userPlanDetails.plan_name;
                       planTier = userPlanDetails.plan_tier;
@@ -409,21 +520,18 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                 } else {
                   // User not logged in
                   if (templatePerm) {
-                    // Template requires a plan - show which plan
                     if (planDetails[templatePerm.plan_id]) {
                       const plan = planDetails[templatePerm.plan_id];
                       planName = plan.plan_name;
                       planTier = plan.plan_tier;
                     }
-                    canDownload = false; // Must be logged in with correct plan
+                    canDownload = false;
                   } else {
-                    // Template has no plan restrictions - allow for non-logged-in users
                     canDownload = true;
                   }
                 }
-              } else if (userPlanId) {
+              } else if (userPlanId || hasBrokerMembership) {
                 // Template not in database, but user is logged in
-                // Allow download but check download limits (already set above)
                 canDownload = true;
               } else {
                 // Template not in database and user not logged in - allow (public template)
@@ -436,9 +544,9 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                 plan_name: planName,
                 plan_tier: planTier,
                 can_download: canDownload,
-                max_downloads: maxDownloads !== undefined ? maxDownloads : t.max_downloads,
-                remaining_downloads: remainingDownloads !== undefined ? remainingDownloads : t.remaining_downloads,
-                current_downloads: userCurrentDownloads
+                max_downloads: maxDownloads,
+                remaining_downloads: remainingDownloads,
+                current_downloads: templateCurrentDownloads || userCurrentDownloads
               };
             });
           } else if (userPlanId && userMaxDownloads !== undefined) {
@@ -476,8 +584,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
     const templateKey = template.id || template.file_name || template.name;
     
     // Check if user can download this template
-    // If remaining_downloads is null, it means unlimited
-    // If remaining_downloads is 0 or less, limit reached
+    // Per-template limit check
     const hasRemainingDownloads = template.remaining_downloads === undefined || 
                                  template.remaining_downloads === null || 
                                  template.remaining_downloads > 0;
@@ -488,7 +595,8 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
       if (template.can_download === false) {
         toast.error('This template is not available in your current plan. Please upgrade to access this template.');
       } else if (template.remaining_downloads !== undefined && template.remaining_downloads !== null && template.remaining_downloads <= 0) {
-        toast.error(`You have reached your download limit (${template.max_downloads} downloads per month). Please upgrade your plan for more downloads.`);
+        const templateName = template.title || template.name || 'this template';
+        toast.error(`Your monthly downloads for ${templateName} are finished for this month. Please upgrade your plan for more downloads.`);
       } else {
         toast.error('You do not have permission to download this template.');
       }
@@ -847,18 +955,23 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                           )}
                         </div>
                         
-                        {/* Download Counter - Always show if user is logged in */}
+                        {/* Download Counter - Per-template limit display */}
                         {user?.id && (
                           <div className="mt-2">
-                            {/* Only show unlimited if max_downloads is explicitly null (which means -1 from database) */}
+                            {/* Only show unlimited if max_downloads is explicitly null */}
                             {template.max_downloads === null ? (
                               <div className="text-xs text-muted-foreground">
-                                <span className="font-medium">Downloads:</span> <span className="text-blue-600 dark:text-blue-400 font-semibold">Unlimited</span>
+                                <span className="font-medium">Downloads for {displayName}:</span> <span className="text-blue-600 dark:text-blue-400 font-semibold">Unlimited</span>
                               </div>
                             ) : template.max_downloads !== undefined && template.max_downloads !== null ? (
                               <div className="flex items-center gap-2">
                                 <div className="flex items-center gap-1.5 text-xs">
-                                  <span className="font-medium text-muted-foreground">Downloads:</span>
+                                  <span className="font-medium text-muted-foreground">
+                                    {template.remaining_downloads !== undefined && 
+                                     template.remaining_downloads !== null 
+                                      ? `${template.remaining_downloads} / ${template.max_downloads} downloads remaining for ${displayName}`
+                                      : `${template.max_downloads} downloads per month for ${displayName}`}
+                                  </span>
                                   <span className={`font-semibold ${
                                     template.remaining_downloads !== undefined && 
                                     template.remaining_downloads !== null && 
@@ -868,14 +981,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                                       ? 'text-red-600 dark:text-red-400'
                                       : 'text-gray-600 dark:text-gray-400'
                                   }`}>
-                                    {template.remaining_downloads !== undefined && 
-                                     template.remaining_downloads !== null 
-                                      ? template.remaining_downloads 
-                                      : template.max_downloads}
                                   </span>
-                                  <span className="text-muted-foreground">/</span>
-                                  <span className="text-muted-foreground">{template.max_downloads}</span>
-                                  <span className="text-muted-foreground text-xs">per month</span>
                                 </div>
                                 {template.remaining_downloads !== undefined && 
                                  template.remaining_downloads !== null && 
@@ -887,7 +993,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                               </div>
                             ) : (
                               <div className="text-xs text-muted-foreground">
-                                <span className="font-medium">Downloads:</span> <span className="text-gray-500">Loading limit...</span>
+                                <span className="font-medium">Downloads for {displayName}:</span> <span className="text-gray-500">Loading limit...</span>
                               </div>
                             )}
                           </div>
@@ -898,13 +1004,23 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                           <div className="flex items-center gap-2 mt-2 p-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md">
                             <Lock className="h-4 w-4 text-amber-600 dark:text-amber-400 flex-shrink-0" />
                             <div className="flex-1">
-                              <span className="text-xs font-medium text-amber-800 dark:text-amber-200 block">
-                                This template is not available in your current plan
-                              </span>
-                              {planName && (
-                                <span className="text-xs text-amber-700 dark:text-amber-300 mt-1 block">
-                                  Upgrade to <strong>{planName}</strong> plan to download this document
+                              {template.remaining_downloads !== undefined && 
+                               template.remaining_downloads !== null && 
+                               template.remaining_downloads <= 0 ? (
+                                <span className="text-xs font-medium text-amber-800 dark:text-amber-200 block">
+                                  Your monthly downloads for {displayName} are finished for this month
                                 </span>
+                              ) : (
+                                <>
+                                  <span className="text-xs font-medium text-amber-800 dark:text-amber-200 block">
+                                    This template is not available in your current plan
+                                  </span>
+                                  {planName && (
+                                    <span className="text-xs text-amber-700 dark:text-amber-300 mt-1 block">
+                                      Upgrade to <strong>{planName}</strong> plan to download this document
+                                    </span>
+                                  )}
+                                </>
                               )}
                             </div>
                           </div>
@@ -951,7 +1067,13 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                           ? 'bg-gray-400 cursor-not-allowed opacity-60' 
                           : 'bg-blue-600 hover:bg-blue-700'
                       } text-white`}
-                      title={!canDownload ? (planName ? `Upgrade to ${planName} plan to download` : 'Not available in your plan') : ''}
+                      title={!canDownload ? (
+                        template.remaining_downloads !== undefined && 
+                        template.remaining_downloads !== null && 
+                        template.remaining_downloads <= 0
+                          ? `Your monthly downloads for ${displayName} are finished for this month`
+                          : planName ? `Upgrade to ${planName} plan to download` : 'Not available in your plan'
+                      ) : ''}
                     >
                       {isProcessing ? (
                         <>
