@@ -386,6 +386,55 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
               }
             });
             
+            // Fetch all template download counts in parallel first (if user is logged in)
+            const templateDownloadCounts = new Map<string, number>();
+            if (user && dbTemplates && dbTemplates.length > 0) {
+              try {
+                const startOfMonth = new Date();
+                startOfMonth.setDate(1);
+                startOfMonth.setHours(0, 0, 0, 0);
+                
+                const templateIds = dbTemplates.map(t => t.id);
+                const { data: downloads } = await supabase
+                  .from('user_document_downloads')
+                  .select('template_id')
+                  .eq('user_id', user.id)
+                  .in('template_id', templateIds)
+                  .gte('created_at', startOfMonth.toISOString());
+                
+                // Count downloads per template
+                if (downloads) {
+                  downloads.forEach(d => {
+                    const templateId = d.template_id;
+                    const current = templateDownloadCounts.get(templateId) || 0;
+                    templateDownloadCounts.set(templateId, current + 1);
+                  });
+                }
+              } catch (e) {
+                console.warn('Could not fetch template download counts:', e);
+              }
+            }
+            
+            // Fetch broker membership template requirements in parallel
+            const brokerTemplateRequirements = new Map<string, boolean>();
+            if (hasBrokerMembership && dbTemplates) {
+              try {
+                const templateIds = dbTemplates.map(t => t.id);
+                const { data: templateData } = await supabase
+                  .from('document_templates')
+                  .select('id, requires_broker_membership')
+                  .in('id', templateIds);
+                
+                if (templateData) {
+                  templateData.forEach(t => {
+                    brokerTemplateRequirements.set(t.id, t.requires_broker_membership || false);
+                  });
+                }
+              } catch (e) {
+                console.warn('Could not fetch broker template requirements:', e);
+              }
+            }
+            
             // Enrich activeTemplates with plan information and check permissions
             activeTemplates = activeTemplates.map(t => {
               const fileName = (t.file_name || t.name || '').replace('.docx', '').toLowerCase();
@@ -446,26 +495,8 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                   }
                 }
                 
-                // Count downloads for THIS template this month
-                let templateCurrentDownloads = 0;
-                if (user && dbTemplate.id) {
-                  try {
-                    const startOfMonth = new Date();
-                    startOfMonth.setDate(1);
-                    startOfMonth.setHours(0, 0, 0, 0);
-                    
-                    const { count } = await supabase
-                      .from('user_document_downloads')
-                      .select('*', { count: 'exact', head: true })
-                      .eq('user_id', user.id)
-                      .eq('template_id', dbTemplate.id)
-                      .gte('created_at', startOfMonth.toISOString());
-                    
-                    templateCurrentDownloads = count || 0;
-                  } catch (e) {
-                    console.warn('Could not count template downloads:', e);
-                  }
-                }
+                // Get download count for THIS template from pre-fetched data
+                const templateCurrentDownloads = templateDownloadCounts.get(dbTemplate.id) || 0;
                 
                 // Calculate remaining downloads for this template
                 let templateRemainingDownloads: number | null = null;
@@ -484,14 +515,9 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                     planName = 'Broker Membership';
                     planTier = 'broker';
                   } else {
-                    // Check if template requires broker membership
-                    const { data: templateData } = await supabase
-                      .from('document_templates')
-                      .select('requires_broker_membership')
-                      .eq('id', dbTemplate.id)
-                      .single();
-                    
-                    if (templateData?.requires_broker_membership) {
+                    // Check if template requires broker membership (from pre-fetched data)
+                    const requiresBroker = brokerTemplateRequirements.get(dbTemplate.id) || false;
+                    if (requiresBroker) {
                       canDownload = true;
                       planName = 'Broker Membership';
                       planTier = 'broker';
