@@ -4,7 +4,7 @@
 
 set -e
 
-cd /opt/petrodealhub || cd ~/aivessel-trade-flow-main || { echo "ERROR: Project directory not found!"; exit 1; }
+cd /opt/petrodealhub/src || cd /opt/petrodealhub || cd ~/aivessel-trade-flow-main || { echo "ERROR: Project directory not found!"; exit 1; }
 
 echo "🚀 Quick Update Starting..."
 echo ""
@@ -35,14 +35,21 @@ npm run build
 
 # Restart services
 echo "▶️  Starting services..."
-if grep -q "root.*dist" /etc/nginx/sites-enabled/petrodealhub 2>/dev/null; then
+# Check if nginx is serving directly from dist
+if grep -q "root.*dist" /etc/nginx/sites-enabled/* 2>/dev/null || grep -q "root.*dist" /etc/nginx/conf.d/* 2>/dev/null; then
     sudo systemctl reload nginx
     echo "✅ Nginx reloaded (serving from dist)"
+# Check if systemd service exists for React app
+elif systemctl list-units --type=service | grep -q "react-app\|petrodealhub-app"; then
+    sudo systemctl restart react-app 2>/dev/null || sudo systemctl restart petrodealhub-app 2>/dev/null || true
+    sudo systemctl reload nginx
+    echo "✅ Systemd service restarted and nginx reloaded"
+# Fallback to PM2 if exists
 else
     pm2 start serve --name petrodealhub-app -- -s dist -l 3000 2>/dev/null || serve -s dist -l 3000 &
     pm2 save 2>/dev/null || true
     sudo systemctl reload nginx
-    echo "✅ Services restarted"
+    echo "✅ Services restarted (PM2 fallback)"
 fi
 
 echo ""
