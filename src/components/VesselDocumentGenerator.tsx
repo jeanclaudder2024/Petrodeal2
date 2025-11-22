@@ -609,22 +609,50 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
   const processDocument = async (template: DocumentTemplate) => {
     const templateKey = template.id || template.file_name || template.name;
     
-    // Check if user can download this template
-    // Per-template limit check
+    // Enhanced lock/unlock check - matches plan system logic
+    // Check 1: Template permission (can_download)
+    const hasPermission = template.can_download !== false;
+    
+    // Check 2: Remaining downloads (per-template or plan-level)
     const hasRemainingDownloads = template.remaining_downloads === undefined || 
                                  template.remaining_downloads === null || 
                                  template.remaining_downloads > 0;
     
-    const canDownload = (template.can_download !== false) && hasRemainingDownloads;
+    // Final check: Both permission AND remaining downloads must be true
+    const canDownload = hasPermission && hasRemainingDownloads;
+    const isLocked = !canDownload;
     
-    if (!canDownload) {
-      if (template.can_download === false) {
-        toast.error('This template is not available in your current plan. Please upgrade to access this template.');
-      } else if (template.remaining_downloads !== undefined && template.remaining_downloads !== null && template.remaining_downloads <= 0) {
-        const templateName = template.title || template.name || 'this template';
-        toast.error(`Your monthly downloads for ${templateName} are finished for this month. Please upgrade your plan for more downloads.`);
+    // Lock check with detailed error messages
+    if (isLocked) {
+      const templateName = template.title || template.name || template.file_name || 'this template';
+      
+      if (!hasPermission) {
+        // Locked due to plan permission
+        if (template.plan_name) {
+          toast.error(`This template requires ${template.plan_name} plan. Please upgrade to access this template.`, {
+            duration: 5000
+          });
+        } else {
+          toast.error('This template is not available in your current plan. Please upgrade to access this template.', {
+            duration: 5000
+          });
+        }
+      } else if (!hasRemainingDownloads) {
+        // Locked due to download limit reached
+        if (template.max_downloads !== null && template.max_downloads !== undefined) {
+          toast.error(`Your monthly downloads for ${templateName} are finished (${template.max_downloads}/${template.max_downloads} used). Please upgrade your plan for more downloads.`, {
+            duration: 5000
+          });
+        } else {
+          toast.error(`Your monthly downloads for ${templateName} are finished for this month. Please upgrade your plan for more downloads.`, {
+            duration: 5000
+          });
+        }
       } else {
-        toast.error('You do not have permission to download this template.');
+        // Generic lock message
+        toast.error('You do not have permission to download this template.', {
+          duration: 5000
+        });
       }
       return;
     }
@@ -938,12 +966,18 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                 remaining_downloads: template.remaining_downloads
               });
               
-              // Check if user can download
+              // Enhanced lock/unlock check - matches plan system logic
+              // Check 1: Template permission (can_download)
+              const hasPermission = template.can_download !== false;
+              
+              // Check 2: Remaining downloads (per-template or plan-level)
               const hasRemainingDownloads = template.remaining_downloads === undefined || 
                                            template.remaining_downloads === null || 
                                            template.remaining_downloads > 0;
               
-              const canDownload = (template.can_download !== false) && hasRemainingDownloads;
+              // Final check: Both permission AND remaining downloads must be true
+              const canDownload = hasPermission && hasRemainingDownloads;
+              const isLocked = !canDownload;
               
               return (
                 <div key={template.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/50 transition-colors">
@@ -1025,28 +1059,40 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                           </div>
                         )}
                         
-                        {/* Lock Message - Show if cannot download */}
-                        {!canDownload && (
+                        {/* Enhanced Lock Message - Show if cannot download */}
+                        {isLocked && (
                           <div className="flex items-center gap-2 mt-2 p-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md">
                             <Lock className="h-4 w-4 text-amber-600 dark:text-amber-400 flex-shrink-0" />
                             <div className="flex-1">
                               {template.remaining_downloads !== undefined && 
                                template.remaining_downloads !== null && 
                                template.remaining_downloads <= 0 ? (
-                                <span className="text-xs font-medium text-amber-800 dark:text-amber-200 block">
-                                  Your monthly downloads for {displayName} are finished for this month
-                                </span>
-                              ) : (
-                                <>
+                                <div>
                                   <span className="text-xs font-medium text-amber-800 dark:text-amber-200 block">
-                                    This template is not available in your current plan
+                                    🔒 Locked: Your monthly downloads for {displayName} are finished
+                                  </span>
+                                  {template.max_downloads !== null && template.max_downloads !== undefined && (
+                                    <span className="text-xs text-amber-700 dark:text-amber-300 mt-1 block">
+                                      Used: {template.max_downloads} / {template.max_downloads} downloads this month
+                                    </span>
+                                  )}
+                                  {planName && (
+                                    <span className="text-xs text-amber-700 dark:text-amber-300 mt-1 block">
+                                      Upgrade to <strong>{planName}</strong> plan for more downloads
+                                    </span>
+                                  )}
+                                </div>
+                              ) : (
+                                <div>
+                                  <span className="text-xs font-medium text-amber-800 dark:text-amber-200 block">
+                                    🔒 Locked: This template is not available in your current plan
                                   </span>
                                   {planName && (
                                     <span className="text-xs text-amber-700 dark:text-amber-300 mt-1 block">
                                       Upgrade to <strong>{planName}</strong> plan to download this document
                                     </span>
                                   )}
-                                </>
+                                </div>
                               )}
                             </div>
                           </div>
@@ -1087,26 +1133,30 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                   <div className="flex items-center gap-2">
                     <Button
                       onClick={() => processDocument(template)}
-                      disabled={isProcessing || !canDownload}
+                      disabled={isProcessing || isLocked}
                       className={`${
-                        !canDownload 
-                          ? 'bg-gray-400 cursor-not-allowed opacity-60' 
-                          : 'bg-blue-600 hover:bg-blue-700'
-                      } text-white`}
-                      title={!canDownload ? (
+                        isLocked 
+                          ? 'bg-gray-400 dark:bg-gray-600 cursor-not-allowed opacity-60 hover:bg-gray-400 dark:hover:bg-gray-600' 
+                          : 'bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600'
+                      } text-white transition-colors`}
+                      title={isLocked ? (
                         template.remaining_downloads !== undefined && 
                         template.remaining_downloads !== null && 
                         template.remaining_downloads <= 0
-                          ? `Your monthly downloads for ${displayName} are finished for this month`
-                          : planName ? `Upgrade to ${planName} plan to download` : 'Not available in your plan'
-                      ) : ''}
+                          ? `🔒 Locked: Your monthly downloads for ${displayName} are finished (${template.max_downloads || 0}/${template.max_downloads || 0} used)`
+                          : planName 
+                            ? `🔒 Locked: Upgrade to ${planName} plan to download this template`
+                            : '🔒 Locked: Not available in your plan'
+                      ) : canDownload 
+                        ? `Download ${displayName}`
+                        : ''}
                     >
                       {isProcessing ? (
                         <>
                           <Loader2 className="h-4 w-4 animate-spin mr-2" />
                           Downloading...
                         </>
-                      ) : !canDownload ? (
+                      ) : isLocked ? (
                         <>
                           <Lock className="h-4 w-4 mr-2" />
                           Locked
