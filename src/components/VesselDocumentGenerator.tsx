@@ -975,37 +975,24 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
               });
               
               // Enhanced lock/unlock check - matches plan system logic
-              // Check 1: Template permission (can_download from API)
-              // API returns can_download: false if user's plan doesn't have permission for this template
+              // CRITICAL: Check if template is in user's plan
+              // API returns can_download: true only if user's plan has permission for this template
+              // If can_download is false, undefined, or null, the template is NOT in user's plan - LOCK IT
               let hasPermission = template.can_download === true; // Must be explicitly true
               
-              // Additional check: If template requires a specific plan and user is logged in,
-              // verify the user's plan has access (API should handle this, but double-check)
-              if (user?.id && userPlanDetails && planName) {
-                // If template has a required plan_name, check if user's plan matches or has permission
-                // The API should already filter this, but we add extra safety check
-                // If can_download is false, definitely lock it
-                if (template.can_download === false) {
-                  hasPermission = false;
-                }
-                // If template requires a plan but user doesn't have that plan, lock it
-                // (This is a safety check - API should already handle this)
-                if (planName && planName !== 'All Plans' && planName !== userPlanDetails.plan_name) {
-                  // Check if template's plan_tiers array includes user's plan tier
-                  const templatePlanTiers = template.plan_tiers || [];
-                  if (templatePlanTiers.length > 0 && !templatePlanTiers.includes(userPlanDetails.plan_tier)) {
-                    // Template requires a different plan tier - lock it
-                    hasPermission = false;
-                  }
-                }
-              } else if (user?.id && planName && planName !== 'All Plans') {
-                // User is logged in but template requires a specific plan
-                // If can_download is false, lock it
-                if (template.can_download === false) {
-                  hasPermission = false;
-                }
-              } else if (!user?.id && planName && planName !== 'All Plans') {
-                // User not logged in but template requires a plan - lock it
+              // Additional safety checks:
+              // 1. If user is not logged in and template requires a plan, lock it
+              if (!user?.id && planName && planName !== 'All Plans' && planName !== null) {
+                hasPermission = false;
+              }
+              
+              // 2. If template requires a specific plan and can_download is false, lock it
+              if (planName && planName !== 'All Plans' && template.can_download === false) {
+                hasPermission = false;
+              }
+              
+              // 3. If can_download is explicitly false (regardless of plan_name), lock it
+              if (template.can_download === false) {
                 hasPermission = false;
               }
               
