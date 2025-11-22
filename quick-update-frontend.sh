@@ -13,7 +13,7 @@ YELLOW='\033[1;33m'
 RED='\033[0;31m'
 NC='\033[0m' # No Color
 
-# Find project directory
+# Find project directory (ROOT, not src subdirectory)
 if [ -d "/opt/petrodealhub" ]; then
     PROJECT_DIR="/opt/petrodealhub"
 elif [ -d "/opt/aivessel-trade-flow" ]; then
@@ -22,12 +22,19 @@ elif [ -d "$HOME/aivessel-trade-flow-main" ]; then
     PROJECT_DIR="$HOME/aivessel-trade-flow-main"
 else
     echo -e "${RED}❌ Project directory not found!${NC}"
-    echo "Please run this script from your project directory or set PROJECT_DIR manually"
+    echo "Please run this script from your project ROOT directory (where index.html is)"
     exit 1
 fi
 
 echo -e "${YELLOW}📁 Project directory: $PROJECT_DIR${NC}"
 cd "$PROJECT_DIR"
+
+# Verify index.html exists
+if [ ! -f "index.html" ]; then
+    echo -e "${RED}❌ index.html not found in $PROJECT_DIR!${NC}"
+    echo "Make sure you're in the project ROOT directory (not src subdirectory)"
+    exit 1
+fi
 
 # Step 1: Pull latest code
 echo -e "${YELLOW}📥 Pulling latest code from git...${NC}"

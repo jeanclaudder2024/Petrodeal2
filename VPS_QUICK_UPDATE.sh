@@ -4,7 +4,8 @@
 
 set -e
 
-cd /opt/petrodealhub/src || cd /opt/petrodealhub || cd ~/aivessel-trade-flow-main || { echo "ERROR: Project directory not found!"; exit 1; }
+# Navigate to project ROOT (where index.html and vite.config.ts are)
+cd /opt/petrodealhub || cd ~/aivessel-trade-flow-main || { echo "ERROR: Project directory not found!"; exit 1; }
 
 echo "🚀 Quick Update Starting..."
 echo ""
