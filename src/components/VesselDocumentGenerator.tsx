@@ -442,8 +442,10 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
               const dbTemplate = templateMap.get(fileName);
               
               let canDownload = false; // Default to false - must have explicit permission
-              let planName: string | null = null;
-              let planTier: string | null = null;
+              // CRITICAL: Preserve plan_name from API (template's required plan from CMS)
+              // Don't override with user's plan - API already returns the correct template restriction
+              let planName: string | null = t.plan_name || null;  // Use plan_name from API response
+              let planTier: string | null = t.plan_tier || null;  // Use plan_tier from API response
               let remainingDownloads: number | null = null;
               let maxDownloads: number | null = null;
               
@@ -475,9 +477,8 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                   }
                 }
                 
-                // Always set plan name from user's plan (show user's current plan)
-                planName = userPlanDetails.plan_name;
-                planTier = userPlanDetails.plan_tier;
+                // DON'T override plan_name here - keep the template's required plan from API
+                // planName and planTier are already set from API response above
               }
               
               if (dbTemplate) {
@@ -509,12 +510,19 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                 maxDownloads = perTemplateLimit;
                 remainingDownloads = templateRemainingDownloads;
                 
+                // CRITICAL: Don't override plan_name here - use what came from API
+                // The API already returns the template's required plan from CMS
+                // Only override for broker membership (special case)
                 if (hasBrokerMembership) {
                   // Broker membership check
                   if (templatePerm) {
                     canDownload = templatePerm.can_download === true;
-                    planName = 'Broker Membership';
-                    planTier = 'broker';
+                    // Only override plan_name if template requires broker membership
+                    const requiresBroker = brokerTemplateRequirements.get(dbTemplate.id) || false;
+                    if (requiresBroker) {
+                      planName = 'Broker Membership';
+                      planTier = 'broker';
+                    }
                   } else {
                     // Check if template requires broker membership (from pre-fetched data)
                     const requiresBroker = brokerTemplateRequirements.get(dbTemplate.id) || false;
@@ -527,32 +535,19 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                     }
                   }
                 } else if (userPlanId) {
-                  // Subscription plan check
+                  // Subscription plan check - use can_download from API, don't override plan_name
                   if (templatePerm) {
                     canDownload = templatePerm.plan_id === userPlanId && templatePerm.can_download === true;
-                    if (planDetails[templatePerm.plan_id]) {
-                      const plan = planDetails[templatePerm.plan_id];
-                      if (!canDownload) {
-                        planName = plan.plan_name;
-                        planTier = plan.plan_tier;
-                      }
-                    }
+                    // Don't override plan_name - keep what came from API
                   } else {
                     canDownload = false;
-                    if (userPlanDetails) {
-                      planName = userPlanDetails.plan_name;
-                      planTier = userPlanDetails.plan_tier;
-                    }
+                    // Don't override plan_name - keep what came from API (template's required plan)
                   }
                 } else {
-                  // User not logged in
+                  // User not logged in - use can_download from API
                   if (templatePerm) {
-                    if (planDetails[templatePerm.plan_id]) {
-                      const plan = planDetails[templatePerm.plan_id];
-                      planName = plan.plan_name;
-                      planTier = plan.plan_tier;
-                    }
                     canDownload = false;
+                    // Don't override plan_name - keep what came from API
                   } else {
                     canDownload = true;
                   }
