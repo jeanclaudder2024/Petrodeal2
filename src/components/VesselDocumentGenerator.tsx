@@ -107,9 +107,10 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                                    t.metadata?.description || 
                                    '';
                 
-                // CRITICAL: Use plan_name and max_downloads directly from backend
-                // Backend now returns user's actual plan info, not template restrictions
-                const planName = t.plan_name || t.plan_tier || null;
+                // CRITICAL: Use plan_name directly from backend
+                // Backend returns template's required plan (which plan allows downloading this template)
+                // This is what the user configured in CMS, not the user's current plan
+                const planName = t.plan_name || null;  // Don't fallback to plan_tier, use only plan_name from API
                 
                 // Process max_downloads: -1 means unlimited (convert to null), otherwise use as-is
                 let maxDownloads = t.max_downloads;
@@ -140,7 +141,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                   placeholders: t.placeholders || [],
                   is_active: t.is_active !== false,
                   can_download: t.can_download !== false,
-                  plan_name: planName, // Use directly from backend (user's actual plan)
+                  plan_name: planName, // Use directly from backend (template's required plan from CMS)
                   plan_tier: t.plan_tier || null,
                   remaining_downloads: t.remaining_downloads,
                   max_downloads: maxDownloads, // Use directly from backend (user's actual plan max_downloads)
@@ -632,7 +633,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
           toast.error(`This template requires ${template.plan_name} plan. Please upgrade to access this template.`, {
             duration: 5000
           });
-        } else {
+      } else {
           toast.error('This template is not available in your current plan. Please upgrade to access this template.', {
             duration: 5000
           });
@@ -955,8 +956,8 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                                  template.metadata?.description || 
                                  '';
               
-              // CRITICAL: Use plan_name directly from template (comes from backend with user's actual plan)
-              const planName = template.plan_name || template.plan_tier || null;
+              // CRITICAL: Use plan_name directly from template (comes from backend with template's required plan from CMS)
+              const planName = template.plan_name || null;  // Don't fallback to plan_tier, use only plan_name from API
               
               // Debug log to verify data
               console.log('Rendering template:', {
@@ -1068,9 +1069,9 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                                template.remaining_downloads !== null && 
                                template.remaining_downloads <= 0 ? (
                                 <div>
-                                  <span className="text-xs font-medium text-amber-800 dark:text-amber-200 block">
+                                <span className="text-xs font-medium text-amber-800 dark:text-amber-200 block">
                                     🔒 Locked: Your monthly downloads for {displayName} are finished
-                                  </span>
+                                </span>
                                   {template.max_downloads !== null && template.max_downloads !== undefined && (
                                     <span className="text-xs text-amber-700 dark:text-amber-300 mt-1 block">
                                       Used: {template.max_downloads} / {template.max_downloads} downloads this month
