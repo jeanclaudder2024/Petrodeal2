@@ -83,6 +83,41 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
             throw new Error('Invalid user ID');
           }
           
+          // FIRST: Pre-fetch user's plan info BEFORE processing templates
+          let userPlanTierForTemplates: string | null = null;
+          let userPlanNameForTemplates: string | null = null;
+          
+          if (user?.id) {
+            try {
+              const { data: subscriber } = await supabase
+                .from('subscribers')
+                .select('subscription_tier')
+                .eq('user_id', user.id)
+                .limit(1)
+                .maybeSingle();
+              
+              if (subscriber?.subscription_tier) {
+                const { data: plan } = await supabase
+                  .from('subscription_plans')
+                  .select('plan_name, plan_tier')
+                  .eq('plan_tier', subscriber.subscription_tier)
+                  .limit(1)
+                  .single();
+                
+                if (plan) {
+                  userPlanTierForTemplates = plan.plan_tier;
+                  userPlanNameForTemplates = plan.plan_name;
+                  console.log('✅ [Pre-fetch User Plan]', {
+                    plan_tier: userPlanTierForTemplates,
+                    plan_name: userPlanNameForTemplates
+                  });
+                }
+              }
+            } catch (planError) {
+              console.warn('Could not pre-fetch user plan:', planError);
+            }
+          }
+          
           // Add cache busting to ensure fresh data
           const cacheBuster = `?t=${Date.now()}`;
           const response = await fetch(`${API_BASE_URL}/user-downloadable-templates${cacheBuster}`, {
