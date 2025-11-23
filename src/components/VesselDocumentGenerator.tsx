@@ -583,7 +583,10 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                 can_download: canDownload,
                 max_downloads: maxDownloads,
                 remaining_downloads: remainingDownloads,
-                current_downloads: templateCurrentDownloads || userCurrentDownloads
+                current_downloads: templateCurrentDownloads || userCurrentDownloads,
+                // Store user's plan info in template for plan matching in render
+                _user_plan_tier: userPlanDetails?.plan_tier || null,
+                _user_plan_name: userPlanDetails?.plan_name || null
               };
             });
           } else if (userPlanId && userMaxDownloads !== undefined) {
