@@ -234,6 +234,11 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                     // Store user's plan in state so it's available in render function
                     setUserPlanTier(plan.plan_tier);
                     setUserPlanName(plan.plan_name);
+                    console.log('✅ [User Plan Stored]', {
+                      plan_tier: plan.plan_tier,
+                      plan_name: plan.plan_name,
+                      normalized_tier: plan.plan_tier?.toLowerCase().trim()
+                    });
                     
                     // Handle unlimited downloads: -1 means unlimited, null/undefined means use default
                     const maxDownloadsValue = plan.max_downloads_per_month;
