@@ -144,9 +144,10 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                   file_name: t.file_name || '',
                   placeholders: t.placeholders || [],
                   is_active: t.is_active !== false,
-                  can_download: t.can_download !== false,
+                  can_download: t.can_download === true, // Must be explicitly true
                   plan_name: planName, // Use directly from backend (template's required plan from CMS)
                   plan_tier: t.plan_tier || null,
+                  plan_tiers: t.plan_tiers || [], // Store plan_tiers array from API
                   remaining_downloads: t.remaining_downloads,
                   max_downloads: maxDownloads, // Use directly from backend (user's actual plan max_downloads)
                   current_downloads: t.current_downloads,
