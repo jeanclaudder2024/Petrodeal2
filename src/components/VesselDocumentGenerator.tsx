@@ -153,6 +153,9 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                   remaining_downloads: t.remaining_downloads,
                   max_downloads: maxDownloads, // Use directly from backend (user's actual plan max_downloads)
                   current_downloads: t.current_downloads,
+                  // Store user's plan info in template for plan matching in render
+                  _user_plan_tier: userPlanTierForTemplates,
+                  _user_plan_name: userPlanNameForTemplates,
                   metadata: {
                     display_name: displayName,
                     description: description,
