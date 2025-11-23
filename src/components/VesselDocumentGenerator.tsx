@@ -1030,7 +1030,10 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                     console.log(`🔒 [Plan tier mismatch] Template ${displayName} requires plan tiers: [${normalizedTemplatePlanTiers.join(', ')}], user has: ${normalizedUserPlanTier}`);
                     console.log(`   Raw template plan_tiers: [${templatePlanTiers.join(', ')}], Raw user plan tier: ${userPlanTier}`);
                   } else {
-                    console.log(`✅ [Plan tier match] Template ${displayName} - user tier "${normalizedUserPlanTier}" is in allowed tiers: [${normalizedTemplatePlanTiers.join(', ')}]`);
+                    // User's tier IS in the allowed tiers - UNLOCK IT
+                    hasPermission = true;
+                    console.log(`✅ [UNLOCKED - Plan tier match] Template ${displayName}`);
+                    console.log(`   User tier "${normalizedUserPlanTier}" is in allowed tiers: [${normalizedTemplatePlanTiers.join(', ')}]`);
                   }
                 } else if (planName && planName !== 'All Plans' && planName !== null) {
                   // If no plan_tiers but has plan_name, compare plan names (case-insensitive)
@@ -1068,6 +1071,8 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                     console.log(`   User has: "${normalizedUserPlanName}" (tier: "${userPlanNameTier}" or "${normalizedUserPlanTier}")`);
                     console.log(`   Plan names match: ${planNamesMatch}, Tiers match: ${tiersMatch}, User tier matches: ${userTierMatchesPlanName}`);
                   } else {
+                    // Plan matches - UNLOCK IT
+                    hasPermission = true;
                     console.log(`✅ [UNLOCKED - Plan match] Template ${displayName}`);
                     console.log(`   Plan names match: ${planNamesMatch}, Tiers match: ${tiersMatch}, User tier matches: ${userTierMatchesPlanName}`);
                   }
