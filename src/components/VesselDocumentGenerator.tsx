@@ -1012,15 +1012,24 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
               }
               
               // Check 2: If user is logged in, compare template's required plan with user's plan
+              // Use plan info stored in template object (more reliable than state)
               if (user?.id) {
+                // Get user's plan from template object (stored during enrichment) or from state (fallback)
+                const templateUserPlanTier = template._user_plan_tier !== undefined ? template._user_plan_tier : userPlanTier;
+                const templateUserPlanName = template._user_plan_name !== undefined ? template._user_plan_name : userPlanName;
+                
                 // Normalize plan tiers to lowercase for comparison
-                const normalizedUserPlanTier = userPlanTier ? userPlanTier.toLowerCase().trim() : null;
+                const normalizedUserPlanTier = templateUserPlanTier ? templateUserPlanTier.toLowerCase().trim() : null;
                 const normalizedTemplatePlanTiers = templatePlanTiers.map(tier => tier ? tier.toLowerCase().trim() : '').filter(tier => tier);
                 
                 console.log(`🔍 [Plan Check Start] Template: ${displayName}`, {
-                  user_plan_tier: userPlanTier,
+                  user_plan_tier_from_template: template._user_plan_tier,
+                  user_plan_tier_from_state: userPlanTier,
+                  user_plan_tier_used: templateUserPlanTier,
                   normalized_user_tier: normalizedUserPlanTier,
-                  user_plan_name: userPlanName,
+                  user_plan_name_from_template: template._user_plan_name,
+                  user_plan_name_from_state: userPlanName,
+                  user_plan_name_used: templateUserPlanName,
                   template_plan_tiers: templatePlanTiers,
                   normalized_template_tiers: normalizedTemplatePlanTiers,
                   template_plan_name: planName,
@@ -1043,7 +1052,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                 } else if (planName && planName !== 'All Plans' && planName !== null) {
                   // If no plan_tiers but has plan_name, compare plan names (case-insensitive)
                   const normalizedPlanName = planName.toLowerCase().trim();
-                  const normalizedUserPlanName = userPlanName ? userPlanName.toLowerCase().trim() : null;
+                  const normalizedUserPlanName = templateUserPlanName ? templateUserPlanName.toLowerCase().trim() : null;
                   
                   // Extract tier from plan name (e.g., "Enterprise Plan" -> "enterprise")
                   const planNameTier = normalizedPlanName.replace(/\s*plan\s*$/i, '').trim();
