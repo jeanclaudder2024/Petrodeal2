@@ -1027,17 +1027,39 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                   const normalizedPlanName = planName.toLowerCase().trim();
                   const normalizedUserPlanName = userPlanName ? userPlanName.toLowerCase().trim() : null;
                   
-                  if (normalizedUserPlanName && normalizedPlanName !== normalizedUserPlanName && normalizedPlanName !== 'all plans') {
-                    // Template requires different plan than user has - LOCK IT
-                    hasPermission = false;
-                    console.log(`🔒 [Plan name mismatch] Template ${displayName} requires plan: "${normalizedPlanName}", user has: "${normalizedUserPlanName}"`);
-                    console.log(`   Raw template plan_name: "${planName}", Raw user plan_name: "${userPlanName}"`);
-                  } else if (!normalizedUserPlanName) {
+                  // Extract tier from plan name (e.g., "Enterprise Plan" -> "enterprise")
+                  const planNameTier = normalizedPlanName.replace(/\s*plan\s*$/i, '').trim();
+                  const userPlanNameTier = normalizedUserPlanName ? normalizedUserPlanName.replace(/\s*plan\s*$/i, '').trim() : null;
+                  
+                  console.log(`🔍 [Plan Name Check] Template: ${displayName}`, {
+                    template_plan_name: planName,
+                    normalized_template_name: normalizedPlanName,
+                    extracted_tier: planNameTier,
+                    user_plan_name: userPlanName,
+                    normalized_user_name: normalizedUserPlanName,
+                    extracted_user_tier: userPlanNameTier,
+                    user_plan_tier: normalizedUserPlanTier
+                  });
+                  
+                  // Check if plan names match OR if extracted tiers match OR if user tier matches plan name tier
+                  const planNamesMatch = normalizedPlanName === normalizedUserPlanName;
+                  const tiersMatch = planNameTier === userPlanNameTier || planNameTier === normalizedUserPlanTier;
+                  const userTierMatchesPlanName = normalizedUserPlanTier && (normalizedPlanName.includes(normalizedUserPlanTier) || planNameTier === normalizedUserPlanTier);
+                  
+                  if (!normalizedUserPlanName && !normalizedUserPlanTier) {
                     // User has no plan but template requires one - LOCK IT
                     hasPermission = false;
-                    console.log(`🔒 [No user plan] Template ${displayName} requires plan: "${normalizedPlanName}", but user has no plan`);
+                    console.log(`🔒 [LOCKED - No user plan] Template ${displayName} requires plan: "${normalizedPlanName}", but user has no plan`);
+                  } else if (!planNamesMatch && !tiersMatch && !userTierMatchesPlanName) {
+                    // Template requires different plan than user has - LOCK IT
+                    hasPermission = false;
+                    console.log(`🔒 [LOCKED - Plan mismatch] Template ${displayName}`);
+                    console.log(`   Required: "${normalizedPlanName}" (tier: "${planNameTier}")`);
+                    console.log(`   User has: "${normalizedUserPlanName}" (tier: "${userPlanNameTier}" or "${normalizedUserPlanTier}")`);
+                    console.log(`   Plan names match: ${planNamesMatch}, Tiers match: ${tiersMatch}, User tier matches: ${userTierMatchesPlanName}`);
                   } else {
-                    console.log(`✅ [Plan name match] Template ${displayName} - user plan "${normalizedUserPlanName}" matches required plan "${normalizedPlanName}"`);
+                    console.log(`✅ [UNLOCKED - Plan match] Template ${displayName}`);
+                    console.log(`   Plan names match: ${planNamesMatch}, Tiers match: ${tiersMatch}, User tier matches: ${userTierMatchesPlanName}`);
                   }
                 } else {
                   // No plan restrictions - allow if can_download is true
