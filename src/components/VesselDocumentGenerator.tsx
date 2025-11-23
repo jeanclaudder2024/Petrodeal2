@@ -19,6 +19,7 @@ interface DocumentTemplate {
   can_download?: boolean;
   plan_name?: string;
   plan_tier?: string;
+  plan_tiers?: string[]; // Array of plan tiers that can access this template
   remaining_downloads?: number;
   max_downloads?: number;
   current_downloads?: number;
@@ -981,32 +982,45 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
               });
               
               // Enhanced lock/unlock check - matches plan system logic
-              // CRITICAL: Check if template's required plan matches user's plan
-              let hasPermission = template.can_download === true; // Must be explicitly true
+              // CRITICAL: Check if template's required plan matches user's plan FIRST
+              // Then check can_download from API
+              let hasPermission = true; // Start with true, then check restrictions
+              
+              // Get template's plan tiers (array of tiers that can access this template)
+              const templatePlanTiers = template.plan_tiers || [];
               
               // Check 1: If user is not logged in and template requires a plan, lock it
-              if (!user?.id && planName && planName !== 'All Plans' && planName !== null) {
-                hasPermission = false;
+              if (!user?.id) {
+                if (planName && planName !== 'All Plans' && planName !== null) {
+                  hasPermission = false;
+                  console.log(`🔒 [Not logged in] Template ${displayName} requires plan: ${planName}`);
+                } else if (templatePlanTiers.length > 0) {
+                  hasPermission = false;
+                  console.log(`🔒 [Not logged in] Template ${displayName} requires plan tiers: ${templatePlanTiers.join(', ')}`);
+                }
               }
               
               // Check 2: If user is logged in, compare template's required plan with user's plan
-              if (user?.id && planName && planName !== 'All Plans' && planName !== null) {
-                // Get template's plan tiers (array of tiers that can access this template)
-                const templatePlanTiers = template.plan_tiers || [];
-                
-                // If template has plan_tiers, check if user's plan tier is in the list
+              if (user?.id && hasPermission) {
+                // First check plan_tiers array
                 if (templatePlanTiers.length > 0) {
                   if (!userPlanTier || !templatePlanTiers.includes(userPlanTier)) {
                     // User's plan tier is not in template's allowed tiers - LOCK IT
                     hasPermission = false;
-                    console.log(`🔒 Template ${displayName} requires plan tiers: ${templatePlanTiers.join(', ')}, user has: ${userPlanTier}`);
+                    console.log(`🔒 [Plan tier mismatch] Template ${displayName} requires plan tiers: ${templatePlanTiers.join(', ')}, user has: ${userPlanTier}`);
+                  } else {
+                    console.log(`✅ [Plan tier match] Template ${displayName} - user tier ${userPlanTier} is in allowed tiers: ${templatePlanTiers.join(', ')}`);
                   }
-                } else if (planName && userPlanName) {
+                } else if (planName && planName !== 'All Plans' && planName !== null) {
                   // If no plan_tiers but has plan_name, compare plan names
-                  if (planName !== userPlanName && planName !== 'All Plans') {
+                  if (userPlanName && planName !== userPlanName) {
                     // Template requires different plan than user has - LOCK IT
                     hasPermission = false;
-                    console.log(`🔒 Template ${displayName} requires plan: ${planName}, user has: ${userPlanName}`);
+                    console.log(`🔒 [Plan name mismatch] Template ${displayName} requires plan: ${planName}, user has: ${userPlanName}`);
+                  } else if (!userPlanName) {
+                    // User has no plan but template requires one - LOCK IT
+                    hasPermission = false;
+                    console.log(`🔒 [No user plan] Template ${displayName} requires plan: ${planName}, but user has no plan`);
                   }
                 }
               }
@@ -1014,6 +1028,13 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
               // Check 3: If can_download is explicitly false (API says user can't download), lock it
               if (template.can_download === false) {
                 hasPermission = false;
+                console.log(`🔒 [API says no] Template ${displayName} - can_download is false`);
+              }
+              
+              // Final check: If can_download is not explicitly true, don't trust it
+              if (template.can_download !== true && hasPermission) {
+                // If we think it should be allowed but API doesn't confirm, be cautious
+                console.warn(`⚠️ Template ${displayName} - can_download is not true (${template.can_download}), but plan check passed`);
               }
               
               // Check 2: Remaining downloads (per-template or plan-level)
