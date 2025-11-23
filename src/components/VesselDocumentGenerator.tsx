@@ -49,6 +49,9 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
   const [templates, setTemplates] = useState<DocumentTemplate[]>([]);
   const [loading, setLoading] = useState(false);
   const [processingStatus, setProcessingStatus] = useState<Record<string, ProcessingStatus>>({});
+  // Store user's plan information to check against template requirements
+  const [userPlanTier, setUserPlanTier] = useState<string | null>(null);
+  const [userPlanName, setUserPlanName] = useState<string | null>(null);
 
   // Force refresh when component mounts, vessel changes, or user changes
   useEffect(() => {
@@ -226,6 +229,9 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                       plan_tier: plan.plan_tier,
                       max_downloads_per_month: plan.max_downloads_per_month
                     };
+                    // Store user's plan in state so it's available in render function
+                    setUserPlanTier(plan.plan_tier);
+                    setUserPlanName(plan.plan_name);
                     
                     // Handle unlimited downloads: -1 means unlimited, null/undefined means use default
                     const maxDownloadsValue = plan.max_downloads_per_month;
