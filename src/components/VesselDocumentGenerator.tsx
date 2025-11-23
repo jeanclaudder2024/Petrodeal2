@@ -21,6 +21,8 @@ interface DocumentTemplate {
   plan_tier?: string;
   plan_tiers?: string[]; // Array of plan tiers that can access this template
   remaining_downloads?: number;
+  _user_plan_tier?: string | null; // User's plan tier (stored in template for plan matching)
+  _user_plan_name?: string | null; // User's plan name (stored in template for plan matching)
   max_downloads?: number;
   current_downloads?: number;
   metadata?: {
