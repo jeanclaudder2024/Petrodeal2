@@ -1003,31 +1003,50 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
               
               // Check 2: If user is logged in, compare template's required plan with user's plan
               if (user?.id && hasPermission) {
+                // Normalize plan tiers to lowercase for comparison
+                const normalizedUserPlanTier = userPlanTier ? userPlanTier.toLowerCase().trim() : null;
+                const normalizedTemplatePlanTiers = templatePlanTiers.map(tier => tier ? tier.toLowerCase().trim() : '').filter(tier => tier);
+                
                 // First check plan_tiers array
-                if (templatePlanTiers.length > 0) {
-                  if (!userPlanTier || !templatePlanTiers.includes(userPlanTier)) {
+                if (normalizedTemplatePlanTiers.length > 0) {
+                  if (!normalizedUserPlanTier || !normalizedTemplatePlanTiers.includes(normalizedUserPlanTier)) {
                     // User's plan tier is not in template's allowed tiers - LOCK IT
                     hasPermission = false;
-                    console.log(`🔒 [Plan tier mismatch] Template ${displayName} requires plan tiers: ${templatePlanTiers.join(', ')}, user has: ${userPlanTier}`);
+                    console.log(`🔒 [Plan tier mismatch] Template ${displayName} requires plan tiers: [${normalizedTemplatePlanTiers.join(', ')}], user has: ${normalizedUserPlanTier}`);
+                    console.log(`   Raw template plan_tiers: [${templatePlanTiers.join(', ')}], Raw user plan tier: ${userPlanTier}`);
                   } else {
-                    console.log(`✅ [Plan tier match] Template ${displayName} - user tier ${userPlanTier} is in allowed tiers: ${templatePlanTiers.join(', ')}`);
+                    console.log(`✅ [Plan tier match] Template ${displayName} - user tier "${normalizedUserPlanTier}" is in allowed tiers: [${normalizedTemplatePlanTiers.join(', ')}]`);
                   }
                 } else if (planName && planName !== 'All Plans' && planName !== null) {
-                  // If no plan_tiers but has plan_name, compare plan names
-                  if (userPlanName && planName !== userPlanName) {
+                  // If no plan_tiers but has plan_name, compare plan names (case-insensitive)
+                  const normalizedPlanName = planName.toLowerCase().trim();
+                  const normalizedUserPlanName = userPlanName ? userPlanName.toLowerCase().trim() : null;
+                  
+                  if (normalizedUserPlanName && normalizedPlanName !== normalizedUserPlanName && normalizedPlanName !== 'all plans') {
                     // Template requires different plan than user has - LOCK IT
                     hasPermission = false;
-                    console.log(`🔒 [Plan name mismatch] Template ${displayName} requires plan: ${planName}, user has: ${userPlanName}`);
-                  } else if (!userPlanName) {
+                    console.log(`🔒 [Plan name mismatch] Template ${displayName} requires plan: "${normalizedPlanName}", user has: "${normalizedUserPlanName}"`);
+                    console.log(`   Raw template plan_name: "${planName}", Raw user plan_name: "${userPlanName}"`);
+                  } else if (!normalizedUserPlanName) {
                     // User has no plan but template requires one - LOCK IT
                     hasPermission = false;
-                    console.log(`🔒 [No user plan] Template ${displayName} requires plan: ${planName}, but user has no plan`);
+                    console.log(`🔒 [No user plan] Template ${displayName} requires plan: "${normalizedPlanName}", but user has no plan`);
+                  } else {
+                    console.log(`✅ [Plan name match] Template ${displayName} - user plan "${normalizedUserPlanName}" matches required plan "${normalizedPlanName}"`);
                   }
+                } else {
+                  // No plan restrictions - allow if can_download is true
+                  console.log(`✅ [No plan restriction] Template ${displayName} - available to all plans or no plan requirement`);
                 }
               }
               
               // Check 3: If can_download is explicitly false (API says user can't download), lock it
-              if (template.can_download === false) {
+              // BUT: Only if we haven't already determined permission based on plan match
+              // The API might return can_download: false even if plan matches, so we trust our plan check first
+              if (template.can_download === false && hasPermission) {
+                // API says no, but our plan check says yes - trust the plan check
+                console.warn(`⚠️ [API conflict] Template ${displayName} - API says can_download=false but plan check passed. Trusting plan check.`);
+              } else if (template.can_download === false) {
                 hasPermission = false;
                 console.log(`🔒 [API says no] Template ${displayName} - can_download is false`);
               }
