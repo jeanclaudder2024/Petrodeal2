@@ -155,10 +155,18 @@ const CompanyManagement = () => {
 
     setIsAutoFilling(true);
     try {
-      const response = await fetch(`https://ozjhdxvwqbzcvcywhwjg.supabase.co/functions/v1/autofill-company-data`, {
+      // Use environment variables for Supabase URL and key (no hardcoded keys for security)
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const supabaseKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+      
+      if (!supabaseUrl || !supabaseKey) {
+        throw new Error('Supabase configuration missing');
+      }
+      
+      const response = await fetch(`${supabaseUrl}/functions/v1/autofill-company-data`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im96amhkeHZ3cWJ6Y3ZjeXdod2pnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU5MDAyNzUsImV4cCI6MjA3MTQ3NjI3NX0.KLAo1KIRR9ofapXPHenoi-ega0PJtkNhGnDHGtniA-Q`,
+          'Authorization': `Bearer ${supabaseKey}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({ companyName: formData.name }),

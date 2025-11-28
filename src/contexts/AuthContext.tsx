@@ -32,7 +32,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     // Add timeout for auth initialization
     const timeoutId = setTimeout(() => {
-      console.log('Auth initialization timeout, setting loading to false');
       setLoading(false);
     }, 5000);
 
@@ -55,7 +54,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setLoading(false);
       })
       .catch((error) => {
-        console.error('Auth session error:', error);
+        // Error handled silently for security
         clearTimeout(timeoutId);
         setLoading(false);
       });
@@ -80,7 +79,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       });
 
       if (error) {
-        console.error('Sign up error:', error);
         toast({
           title: "Sign Up Failed",
           description: error.message,
@@ -105,7 +103,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       return { error: null };
     } catch (error: any) {
-      console.error('Sign up error:', error);
       toast({
         title: "Sign Up Failed", 
         description: error.message || "An unexpected error occurred",
