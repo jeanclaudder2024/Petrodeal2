@@ -39,7 +39,6 @@ const PaymentSuccess = () => {
       });
 
       if (verificationError || !verificationData?.success) {
-        console.error('Session verification failed:', verificationError);
         setError('Payment verification failed. Please contact support.');
         setLoading(false);
         return;
@@ -93,7 +92,6 @@ const PaymentSuccess = () => {
       });
 
       if (signUpError) {
-        console.error('Registration error:', signUpError);
         setError(`Registration failed: ${signUpError.message}`);
         setLoading(false);
         return;
@@ -122,7 +120,6 @@ const PaymentSuccess = () => {
             }
           });
         } catch (emailError) {
-          console.error('Failed to send confirmation email:', emailError);
           // Continue with registration even if email fails
         }
 
@@ -151,7 +148,6 @@ const PaymentSuccess = () => {
             }
           });
         } catch (billingEmailError) {
-          console.error('Failed to send billing email:', billingEmailError);
           // Continue even if billing email fails
         }
 
@@ -174,7 +170,6 @@ const PaymentSuccess = () => {
         }, 1500);
       }
     } catch (error) {
-      console.error('Error completing registration:', error);
       setError('Failed to complete registration. Please contact support.');
       setLoading(false);
     }

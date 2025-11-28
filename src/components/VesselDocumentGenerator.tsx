@@ -107,14 +107,10 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                 if (plan) {
                   userPlanTierForTemplates = plan.plan_tier;
                   userPlanNameForTemplates = plan.plan_name;
-                  console.log('✅ [Pre-fetch User Plan]', {
-                    plan_tier: userPlanTierForTemplates,
-                    plan_name: userPlanNameForTemplates
-                  });
                 }
               }
             } catch (planError) {
-              console.warn('Could not pre-fetch user plan:', planError);
+              // Error handled silently for security
             }
           }
           
@@ -164,14 +160,6 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                     maxDownloads = undefined; // Invalid value
                   }
                 }
-                
-                console.log('Template from API:', {
-                  name: displayName,
-                  plan_name: planName,
-                  max_downloads: maxDownloads,
-                  remaining_downloads: t.remaining_downloads,
-                  can_download: t.can_download
-                });
                 
                 return {
                   id: t.id || t.template_id || String(t.id),
@@ -248,7 +236,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                 .maybeSingle(); // Use maybeSingle() instead of single() to handle no results gracefully
               
               if (subscriberError) {
-                console.warn('Error fetching subscriber:', subscriberError);
+                // Error handled silently for security
               }
               
               if (subscriber) {
@@ -274,42 +262,22 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                     // Store user's plan in state so it's available in render function
                     setUserPlanTier(plan.plan_tier);
                     setUserPlanName(plan.plan_name);
-                    console.log('✅ [User Plan Stored]', {
-                      plan_tier: plan.plan_tier,
-                      plan_name: plan.plan_name,
-                      normalized_tier: plan.plan_tier?.toLowerCase().trim()
-                    });
                     
                     // Handle unlimited downloads: -1 means unlimited, null/undefined means use default
                     const maxDownloadsValue = plan.max_downloads_per_month;
-                    
-                    // Debug: log the value we're getting
-                    console.log('=== PLAN FETCH DEBUG ===');
-                    console.log('Plan ID:', plan.id);
-                    console.log('Plan name:', plan.plan_name);
-                    console.log('Plan tier:', plan.plan_tier);
-                    console.log('Raw max_downloads_per_month from DB:', plan.max_downloads_per_month);
-                    console.log('max_downloads_per_month type:', typeof plan.max_downloads_per_month);
-                    console.log('max_downloads_per_month value (after processing):', maxDownloadsValue);
-                    console.log('userMaxDownloads set to:', userMaxDownloads);
-                    console.log('Plan details stored:', userPlanDetails);
-                    console.log('========================');
                     
                     if (maxDownloadsValue === -1 || maxDownloadsValue === '-1') {
                       userMaxDownloads = null; // null means unlimited
                     } else if (maxDownloadsValue === null || maxDownloadsValue === undefined || maxDownloadsValue === '') {
                       // If not set, default to 10 (not unlimited!)
                       userMaxDownloads = 10;
-                      console.log('max_downloads_per_month not set, using default:', userMaxDownloads);
                     } else {
                       // Convert to number if it's a string
                       const numValue = typeof maxDownloadsValue === 'string' ? parseInt(maxDownloadsValue, 10) : maxDownloadsValue;
                       if (isNaN(numValue) || numValue < 0) {
                         userMaxDownloads = 10; // Invalid value, use default
-                        console.log('Invalid max_downloads_per_month value, using default:', userMaxDownloads);
                       } else {
                         userMaxDownloads = numValue;
-                        console.log('Using max_downloads_per_month from plan:', userMaxDownloads);
                       }
                     }
                     
@@ -333,7 +301,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                 }
               }
             } catch (planError) {
-              console.warn('Error fetching user plan information:', planError);
+              // Error handled silently for security
             }
           }
           
@@ -421,9 +389,6 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
               }
             }
             
-            console.log('Template permissions from database:', permissions);
-            console.log('User plan ID:', userPlanId);
-            console.log('Has broker membership:', hasBrokerMembership);
             
             // userPlanDetails is already set above if user is logged in
             
@@ -465,7 +430,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                   });
                 }
               } catch (e) {
-                console.warn('Could not fetch template download counts:', e);
+                // Error handled silently for security
               }
             }
             
@@ -485,7 +450,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                   });
                 }
               } catch (e) {
-                console.warn('Could not fetch broker template requirements:', e);
+                // Error handled silently for security
               }
             }
             
@@ -641,7 +606,6 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
         } catch (planError) {
           // If plan enrichment fails, just use templates without plan info
           // This is expected if database is not available or user doesn't have access
-          console.debug('Could not enrich templates with plan info:', planError);
         }
         
         setTemplates(activeTemplates);
@@ -1022,11 +986,6 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
               // CRITICAL: Use plan_name directly from template (comes from backend with template's required plan from CMS)
               const planName = template.plan_name || null;  // Don't fallback to plan_tier, use only plan_name from API
               
-              // Debug log to verify data
-              console.log('Rendering template:', {
-                name: displayName,
-                plan_name: planName,
-                max_downloads: template.max_downloads,
                 remaining_downloads: template.remaining_downloads
               });
               
@@ -1042,10 +1001,8 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
               if (!user?.id) {
                 if (planName && planName !== 'All Plans' && planName !== null) {
                   hasPermission = false;
-                  console.log(`🔒 [Not logged in] Template ${displayName} requires plan: ${planName}`);
                 } else if (templatePlanTiers.length > 0) {
                   hasPermission = false;
-                  console.log(`🔒 [Not logged in] Template ${displayName} requires plan tiers: ${templatePlanTiers.join(', ')}`);
                 }
               }
               
@@ -1060,32 +1017,14 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                 const normalizedUserPlanTier = templateUserPlanTier ? templateUserPlanTier.toLowerCase().trim() : null;
                 const normalizedTemplatePlanTiers = templatePlanTiers.map(tier => tier ? tier.toLowerCase().trim() : '').filter(tier => tier);
                 
-                console.log(`🔍 [Plan Check Start] Template: ${displayName}`, {
-                  user_plan_tier_from_template: template._user_plan_tier,
-                  user_plan_tier_from_state: userPlanTier,
-                  user_plan_tier_used: templateUserPlanTier,
-                  normalized_user_tier: normalizedUserPlanTier,
-                  user_plan_name_from_template: template._user_plan_name,
-                  user_plan_name_from_state: userPlanName,
-                  user_plan_name_used: templateUserPlanName,
-                  template_plan_tiers: templatePlanTiers,
-                  normalized_template_tiers: normalizedTemplatePlanTiers,
-                  template_plan_name: planName,
-                  hasPermission_before: hasPermission
-                });
-                
                 // First check plan_tiers array
                 if (normalizedTemplatePlanTiers.length > 0) {
                   if (!normalizedUserPlanTier || !normalizedTemplatePlanTiers.includes(normalizedUserPlanTier)) {
                     // User's plan tier is not in template's allowed tiers - LOCK IT
                     hasPermission = false;
-                    console.log(`🔒 [Plan tier mismatch] Template ${displayName} requires plan tiers: [${normalizedTemplatePlanTiers.join(', ')}], user has: ${normalizedUserPlanTier}`);
-                    console.log(`   Raw template plan_tiers: [${templatePlanTiers.join(', ')}], Raw user plan tier: ${userPlanTier}`);
                   } else {
                     // User's tier IS in the allowed tiers - UNLOCK IT
                     hasPermission = true;
-                    console.log(`✅ [UNLOCKED - Plan tier match] Template ${displayName}`);
-                    console.log(`   User tier "${normalizedUserPlanTier}" is in allowed tiers: [${normalizedTemplatePlanTiers.join(', ')}]`);
                   }
                 } else if (planName && planName !== 'All Plans' && planName !== null) {
                   // If no plan_tiers but has plan_name, compare plan names (case-insensitive)
@@ -1096,16 +1035,6 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                   const planNameTier = normalizedPlanName.replace(/\s*plan\s*$/i, '').trim();
                   const userPlanNameTier = normalizedUserPlanName ? normalizedUserPlanName.replace(/\s*plan\s*$/i, '').trim() : null;
                   
-                  console.log(`🔍 [Plan Name Check] Template: ${displayName}`, {
-                    template_plan_name: planName,
-                    normalized_template_name: normalizedPlanName,
-                    extracted_tier: planNameTier,
-                    user_plan_name: userPlanName,
-                    normalized_user_name: normalizedUserPlanName,
-                    extracted_user_tier: userPlanNameTier,
-                    user_plan_tier: normalizedUserPlanTier
-                  });
-                  
                   // Check if plan names match OR if extracted tiers match OR if user tier matches plan name tier
                   const planNamesMatch = normalizedPlanName === normalizedUserPlanName;
                   const tiersMatch = planNameTier === userPlanNameTier || planNameTier === normalizedUserPlanTier;
@@ -1114,23 +1043,13 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                   if (!normalizedUserPlanName && !normalizedUserPlanTier) {
                     // User has no plan but template requires one - LOCK IT
                     hasPermission = false;
-                    console.log(`🔒 [LOCKED - No user plan] Template ${displayName} requires plan: "${normalizedPlanName}", but user has no plan`);
                   } else if (!planNamesMatch && !tiersMatch && !userTierMatchesPlanName) {
                     // Template requires different plan than user has - LOCK IT
                     hasPermission = false;
-                    console.log(`🔒 [LOCKED - Plan mismatch] Template ${displayName}`);
-                    console.log(`   Required: "${normalizedPlanName}" (tier: "${planNameTier}")`);
-                    console.log(`   User has: "${normalizedUserPlanName}" (tier: "${userPlanNameTier}" or "${normalizedUserPlanTier}")`);
-                    console.log(`   Plan names match: ${planNamesMatch}, Tiers match: ${tiersMatch}, User tier matches: ${userTierMatchesPlanName}`);
                   } else {
                     // Plan matches - UNLOCK IT
                     hasPermission = true;
-                    console.log(`✅ [UNLOCKED - Plan match] Template ${displayName}`);
-                    console.log(`   Plan names match: ${planNamesMatch}, Tiers match: ${tiersMatch}, User tier matches: ${userTierMatchesPlanName}`);
                   }
-                } else {
-                  // No plan restrictions - allow if can_download is true
-                  console.log(`✅ [No plan restriction] Template ${displayName} - available to all plans or no plan requirement`);
                 }
               }
               
@@ -1140,25 +1059,14 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
               if (template.can_download === false) {
                 if (hasPermission) {
                   // API says no, but our plan check says yes - trust the plan check
-                  console.warn(`⚠️ [API conflict - TRUSTING PLAN CHECK] Template ${displayName}`);
-                  console.warn(`   API says can_download=false but plan check passed. User has access based on plan match.`);
                   // Keep hasPermission = true (don't override)
                 } else {
                   // API says no and plan check also says no - lock it
                   hasPermission = false;
-                  console.log(`🔒 [LOCKED - API says no] Template ${displayName} - can_download is false and plan check also failed`);
                 }
               } else if (template.can_download === true && !hasPermission) {
                 // API says yes but plan check says no - trust the plan check (more restrictive)
-                console.warn(`⚠️ [API conflict - TRUSTING PLAN CHECK] Template ${displayName}`);
-                console.warn(`   API says can_download=true but plan check failed. User does NOT have access based on plan.`);
                 // Keep hasPermission = false (don't override)
-              }
-              
-              // Final check: If can_download is not explicitly true, don't trust it
-              if (template.can_download !== true && hasPermission) {
-                // If we think it should be allowed but API doesn't confirm, be cautious
-                console.warn(`⚠️ Template ${displayName} - can_download is not true (${template.can_download}), but plan check passed`);
               }
               
               // Check 2: Remaining downloads (per-template or plan-level)

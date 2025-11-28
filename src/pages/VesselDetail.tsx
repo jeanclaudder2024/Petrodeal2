@@ -151,7 +151,7 @@ const VesselDetail = () => {
       if (error) throw error;
       setBrokerProfile(data);
     } catch (error) {
-      console.error('Error fetching broker profile:', error);
+      // Error handled silently for security
     }
   };
 
@@ -163,7 +163,7 @@ const VesselDetail = () => {
       ]);
 
       if (vesselRes.error) {
-        console.error('Error fetching vessel:', vesselRes.error);
+        // Error handled silently for security
       } else if (vesselRes.data) {
         const vessel = vesselRes.data;
         const ports = portsRes.data || [];
@@ -186,7 +186,7 @@ const VesselDetail = () => {
         setVessel(enhancedVessel);
       }
     } catch (error) {
-      console.error('Failed to fetch vessel:', error);
+      // Error handled silently for security
     } finally {
       setLoading(false);
     }
@@ -254,7 +254,6 @@ const VesselDetail = () => {
       navigate('/broker-dashboard');
 
     } catch (error) {
-      console.error('Error creating deal:', error);
       toast({
         title: "Error",
         description: "Failed to create broker deal. Please try again.",

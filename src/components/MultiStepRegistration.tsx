@@ -312,8 +312,7 @@ const MultiStepRegistration = () => {
   }, [formData.selectedPorts, vessels]);
 
   useEffect(() => {
-    console.log('Loaded ports:', ports.length, ports);
-    console.log('Loaded vessels:', vessels.length, vessels);
+    // Data loaded
   }, [ports, vessels]);
 
   // Real-time email existence check
@@ -352,7 +351,7 @@ const MultiStepRegistration = () => {
         setDiscounts(discountsRes.data);
       }
     } catch (error) {
-      console.error('Error fetching pricing data:', error);
+      // Error handled silently for security
     }
   };
 
@@ -376,7 +375,6 @@ const MultiStepRegistration = () => {
         setFilteredVessels([]); // Start with no vessels until ports are selected
       }
     } catch (error) {
-      console.error('Error fetching preview data:', error);
       // Fallback to hardcoded regions if fetch fails
       setRegions(['Europe', 'North America', 'Asia Pacific', 'Middle East', 'Africa', 'South America']);
     }
@@ -487,7 +485,6 @@ const MultiStepRegistration = () => {
         setFilteredVessels(vessels.slice(0, 12));
       }
     } catch (error) {
-      console.error('Error filtering vessels:', error);
       setFilteredVessels(vessels.slice(0, 12));
     }
   };
@@ -617,7 +614,6 @@ const MultiStepRegistration = () => {
           });
           
           if (checkoutError) {
-            console.error('Checkout error:', checkoutError);
             toast({
               title: "Payment Setup Failed",
               description: checkoutError.message || "Unable to create payment session. Please try again.",
@@ -644,7 +640,6 @@ const MultiStepRegistration = () => {
             return;
           }
         } catch (error) {
-          console.error('Failed to create checkout:', error);
           toast({
             title: "Setup Failed",
             description: "Unable to process request. Please try again.",
@@ -672,7 +667,6 @@ const MultiStepRegistration = () => {
       });
 
       if (error) {
-        console.error('Signup error:', error);
         toast({
           title: "Registration Failed",
           description: error.message,
@@ -700,7 +694,6 @@ const MultiStepRegistration = () => {
             }
           });
           if (emailError) {
-            console.error('Custom email error:', emailError);
             toast({
               title: "Registration Successful!",
               description: "Account created successfully. You may need to check your email for confirmation.",
@@ -712,7 +705,6 @@ const MultiStepRegistration = () => {
             });
           }
         } catch (emailError) {
-          console.error('Failed to send custom confirmation email:', emailError);
           toast({
             title: "Registration Successful!",
             description: "Account created successfully. You may need to check your email for confirmation.",
@@ -743,14 +735,14 @@ const MultiStepRegistration = () => {
               updated_at: now.toISOString()
             });
             if (insertError) {
-              console.error('Error inserting user into subscribers:', insertError);
+              // Error handled silently
             }
           }
           if (subCheckError) {
-            console.error('Error checking subscribers table:', subCheckError);
+            // Error handled silently
           }
         } catch (insertError) {
-          console.error('Error inserting/checking user in subscribers:', insertError);
+          // Error handled silently
         }
 
         // Check if email confirmation is required
@@ -774,7 +766,6 @@ const MultiStepRegistration = () => {
               await startTrial();
             }
           } catch (trialError) {
-            console.error('Error starting trial:', trialError);
             // Continue anyway as the user is registered
           }
 
@@ -782,7 +773,6 @@ const MultiStepRegistration = () => {
         }
       }
     } catch (error) {
-      console.error('Registration error:', error);
       toast({
         title: "Registration Failed",
         description: "An unexpected error occurred. Please try again.",

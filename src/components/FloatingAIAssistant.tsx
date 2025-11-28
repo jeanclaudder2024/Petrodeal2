@@ -102,7 +102,7 @@ const FloatingAIAssistant = () => {
         }).length
       });
     } catch (error) {
-      console.error('Failed to fetch metrics:', error);
+      // Error handled silently for security
     }
   };
 
@@ -146,8 +146,6 @@ const FloatingAIAssistant = () => {
       setMessages(prev => [...prev, assistantMessage]);
 
     } catch (error) {
-      console.error('AI Assistant error:', error);
-      
       // Fallback response based on keywords
       const fallbackResponse = generateFallbackResponse(inputMessage);
       

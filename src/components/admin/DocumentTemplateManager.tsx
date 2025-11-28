@@ -130,7 +130,6 @@ export default function DocumentTemplateManager() {
           }
         } catch (planError) {
           // If plan enrichment fails, just use templates without plan info
-          console.debug('Could not enrich templates with plan info:', planError);
         }
         
         setTemplates(templatesList);
@@ -139,7 +138,6 @@ export default function DocumentTemplateManager() {
       }
     } catch (error) {
       toast.error('Error fetching templates');
-      console.error('Error:', error);
     } finally {
       setLoading(false);
     }
@@ -153,7 +151,7 @@ export default function DocumentTemplateManager() {
         setVessels(data.vessels || []);
       }
     } catch (error) {
-      console.error('Error fetching vessels:', error);
+      // Error handled silently for security
     }
   };
 
@@ -176,35 +174,23 @@ export default function DocumentTemplateManager() {
       formData.append('description', newTemplate.description);
       formData.append('file', newTemplate.file);
 
-      console.log('Uploading template:', {
-        name: newTemplate.name,
-        description: newTemplate.description,
-        fileName: newTemplate.file.name,
-        fileSize: newTemplate.file.size
-      });
-
       const response = await fetch(`${API_BASE_URL}/upload-template`, {
         method: 'POST',
         body: formData,
       });
 
-      console.log('Upload response status:', response.status);
-
       if (response.ok) {
-        const result = await response.json();
-        console.log('Upload result:', result);
+        await response.json();
         toast.success('Template uploaded successfully');
         setNewTemplate({ name: '', description: '', file: null });
         setShowUploadForm(false);
         fetchTemplates();
       } else {
-        const errorText = await response.text();
-        console.error('Upload failed:', response.status, errorText);
+        await response.text();
         toast.error(`Failed to upload template: ${response.status}`);
       }
     } catch (error) {
       toast.error('Error uploading template');
-      console.error('Error:', error);
     } finally {
       setUploading(false);
     }
@@ -259,15 +245,12 @@ export default function DocumentTemplateManager() {
           }, 1000);
         } else {
           toast.error(result.message || 'Document processing failed');
-          console.error('Processing failed:', result);
         }
       } else {
         toast.error(`Failed to process document (${response.status})`);
-        console.error('HTTP Error:', response.status, responseText);
       }
     } catch (error) {
       toast.error('Error processing document');
-      console.error('Error:', error);
     } finally {
       setLoading(false);
     }
@@ -291,7 +274,6 @@ export default function DocumentTemplateManager() {
       }
     } catch (error) {
       toast.error('Error deleting template');
-      console.error('Error:', error);
     }
   };
 

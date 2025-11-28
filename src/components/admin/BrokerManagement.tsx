@@ -188,7 +188,6 @@ const BrokerManagement = () => {
       setDealSteps(stepsData || []);
 
     } catch (error) {
-      console.error('Failed to fetch data:', error);
       toast({
         title: "Error",
         description: "Failed to load broker data",
@@ -230,7 +229,6 @@ const BrokerManagement = () => {
       toast({ title: "Success", description: "Step approved successfully" });
       fetchData();
     } catch (error) {
-      console.error('Failed to approve step:', error);
       toast({
         title: "Error",
         description: "Failed to approve step",
@@ -284,7 +282,6 @@ const BrokerManagement = () => {
       // Refresh data to show updated status
       await fetchData();
     } catch (error) {
-      console.error('Error rejecting step:', error);
       toast({
         title: "Error", 
         description: "Failed to reject deal step. Please try again.",
@@ -313,7 +310,6 @@ const BrokerManagement = () => {
       toast({ title: "Success", description: "Message sent" });
       fetchData();
     } catch (error) {
-      console.error('Failed to send message:', error);
       toast({
         title: "Error",
         description: "Failed to send message",
@@ -337,7 +333,6 @@ const BrokerManagement = () => {
       toast({ title: "Success", description: "Broker verified successfully" });
       fetchData();
     } catch (error) {
-      console.error('Failed to verify broker:', error);
       toast({
         title: "Error",
         description: "Failed to verify broker",
@@ -362,7 +357,6 @@ const BrokerManagement = () => {
       toast({ title: "Success", description: "Broker verification rejected" });
       fetchData();
     } catch (error) {
-      console.error('Failed to reject broker:', error);
       toast({
         title: "Error",
         description: "Failed to reject broker",
@@ -838,7 +832,6 @@ const BrokerManagement = () => {
                                        window.open(data.signedUrl, '_blank');
                                      }
                                    } catch (error) {
-                                     console.error('Error viewing document:', error);
                                      toast({
                                        title: "View Error",
                                        description: "Failed to open document. Please try downloading it instead.",
@@ -1414,7 +1407,6 @@ const BrokerManagement = () => {
                               window.open(data.signedUrl, '_blank');
                             }
                           } catch (error) {
-                            console.error('Error viewing document:', error);
                             toast({
                               title: "View Error",
                               description: "Failed to open document. Please try downloading it instead.",

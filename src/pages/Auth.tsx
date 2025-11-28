@@ -52,7 +52,6 @@ const Auth = () => {
       error
     } = await signIn(signInData.email, signInData.password);
     if (error) {
-      console.error('Login error:', error);
       toast({
         title: "Login Failed",
         description: error.message,
@@ -89,8 +88,7 @@ const Auth = () => {
             updated_at: now.toISOString()
           });
           if (insertError) {
-            console.error('Error creating trial record:', insertError);
-            // Don't block login for this error, just log it
+            // Don't block login for this error
           }
         }
       } else {
@@ -112,8 +110,7 @@ const Auth = () => {
         }
       }
     } catch (err) {
-      console.error('Error checking/inserting subscribers table:', err);
-      // Don't block login for this error, just log it
+      // Don't block login for this error
     }
     toast({
       title: "Welcome back!",
