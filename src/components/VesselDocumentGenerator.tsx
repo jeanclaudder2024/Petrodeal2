@@ -986,9 +986,6 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
               // CRITICAL: Use plan_name directly from template (comes from backend with template's required plan from CMS)
               const planName = template.plan_name || null;  // Don't fallback to plan_tier, use only plan_name from API
               
-                remaining_downloads: template.remaining_downloads
-              });
-              
               // Enhanced lock/unlock check - matches plan system logic
               // CRITICAL: Check if template's required plan matches user's plan FIRST
               // Then check can_download from API
