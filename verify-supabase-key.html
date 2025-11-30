@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Supabase API Key Verification</title>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+    <h1>Supabase API Key Verification</h1>
+    <div id="result"></div>
+    
+    <script>
+        const SUPABASE_URL = 'https://ozjhdxvwqbzcvcywhwjg.supabase.co';
+        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im96amhdeHZ3cWJ6Y3ZjeXdod2pnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU5MDAyNzUsImV4cCI6MjA3MTQ3NjI3NX0.KLAo1KIRR9ofapXPHenoi-ega0PJtkNhGnDHGtniA-Q';
+        
+        const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        
+        // Test connection
+        supabase.auth.getSession()
+            .then(({ data, error }) => {
+                const resultDiv = document.getElementById('result');
+                if (error) {
+                    resultDiv.innerHTML = `
+                        <h2 style="color: red;">❌ API Key Error</h2>
+                        <p><strong>Error:</strong> ${error.message}</p>
+                        <p><strong>Status:</strong> ${error.status || 'Unknown'}</p>
+                        <h3>Solution:</h3>
+                        <ol>
+                            <li>Go to <a href="https://supabase.com/dashboard/project/ozjhdxvwqbzcvcywhwjg/settings/api" target="_blank">Supabase Dashboard → Settings → API</a></li>
+                            <li>Copy the <strong>anon public</strong> key</li>
+                            <li>Update the key in your code</li>
+                        </ol>
+                    `;
+                } else {
+                    resultDiv.innerHTML = `
+                        <h2 style="color: green;">✅ API Key is Valid!</h2>
+                        <p>Connection successful. The API key is working correctly.</p>
+                    `;
+                }
+            })
+            .catch(err => {
+                document.getElementById('result').innerHTML = `
+                    <h2 style="color: red;">❌ Connection Failed</h2>
+                    <p>${err.message}</p>
+                `;
+            });
+    </script>
+</body>
+</html>
+

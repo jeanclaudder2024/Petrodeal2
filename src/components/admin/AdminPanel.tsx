@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Shield, Users, Settings, FileText, BarChart3, Ship, Building2, MapPin, Factory, UserCheck, Bot, Filter, CreditCard, Video, Layout } from 'lucide-react';
+import { Shield, Users, Settings, FileText, BarChart3, Ship, Building2, MapPin, Factory, UserCheck, Bot, Filter, CreditCard, Video, Layout, Mail, Send, Inbox } from 'lucide-react';
 import UserManagement from './UserManagement';
 import SystemSettings from './SystemSettings';
 import AdminNotes from './AdminNotes';
@@ -19,8 +20,30 @@ import FilterManagement from './FilterManagement';
 import SubscriptionManagement from './SubscriptionManagement';
 import TutorialManagement from './TutorialManagement';
 import LandingPageManager from './LandingPageManager';
+import EmailConfiguration from '@/pages/admin/EmailConfiguration';
+import EmailTemplates from '@/pages/admin/EmailTemplates';
+import AutoReplySystem from '@/pages/admin/AutoReplySystem';
 
 const AdminPanel = () => {
+  const location = useLocation();
+  const [activeTab, setActiveTab] = useState("users");
+
+  useEffect(() => {
+    // Read hash from URL and set active tab
+    if (location.hash) {
+      const hash = location.hash.replace('#', '');
+      // Map hash to tab value
+      const tabMap: Record<string, string> = {
+        'email-config': 'email-config',
+        'email-templates': 'email-templates',
+        'auto-reply': 'auto-reply',
+      };
+      if (tabMap[hash]) {
+        setActiveTab(tabMap[hash]);
+      }
+    }
+  }, [location.hash]);
+
   return (
     <div className="space-y-6">
       <Card className="trading-card">
@@ -35,7 +58,7 @@ const AdminPanel = () => {
         </CardHeader>
       </Card>
 
-      <Tabs defaultValue="users" className="space-y-6">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
         <div className="w-full bg-gray-50/50 rounded-lg p-2">
           <TabsList className="grid w-full grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-2 h-auto p-2 bg-white shadow-sm">
             <TabsTrigger value="users" className="flex flex-col items-center gap-1 p-3 h-auto min-h-[70px] rounded-lg transition-all duration-200 hover:bg-blue-50 hover:scale-105 data-[state=active]:bg-blue-100 data-[state=active]:text-blue-700 data-[state=active]:shadow-md">
@@ -118,6 +141,21 @@ const AdminPanel = () => {
               <span className="text-xs font-medium">Notes</span>
             </TabsTrigger>
 
+            <TabsTrigger value="email-config" className="flex flex-col items-center gap-1 p-3 h-auto min-h-[60px] border-2 border-blue-200 hover:border-blue-400">
+              <Mail className="h-5 w-5 text-blue-600" />
+              <span className="text-xs font-medium">Email Config</span>
+            </TabsTrigger>
+
+            <TabsTrigger value="email-templates" className="flex flex-col items-center gap-1 p-3 h-auto min-h-[60px] border-2 border-blue-200 hover:border-blue-400">
+              <Send className="h-5 w-5 text-blue-600" />
+              <span className="text-xs font-medium">Email Templates</span>
+            </TabsTrigger>
+
+            <TabsTrigger value="auto-reply" className="flex flex-col items-center gap-1 p-3 h-auto min-h-[60px] border-2 border-blue-200 hover:border-blue-400">
+              <Inbox className="h-5 w-5 text-blue-600" />
+              <span className="text-xs font-medium">Auto-Reply</span>
+            </TabsTrigger>
+
             <TabsTrigger value="analytics" className="flex flex-col items-center gap-1 p-3 h-auto min-h-[60px]">
               <BarChart3 className="h-5 w-5" />
               <span className="text-xs font-medium">Analytics</span>
@@ -184,6 +222,18 @@ const AdminPanel = () => {
 
         <TabsContent value="notes">
           <AdminNotes />
+        </TabsContent>
+
+        <TabsContent value="email-config">
+          <EmailConfiguration />
+        </TabsContent>
+
+        <TabsContent value="email-templates">
+          <EmailTemplates />
+        </TabsContent>
+
+        <TabsContent value="auto-reply">
+          <AutoReplySystem />
         </TabsContent>
 
         <TabsContent value="analytics">

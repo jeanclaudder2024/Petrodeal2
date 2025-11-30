@@ -12,7 +12,10 @@ import {
   Crown,
   Map,
   HelpCircle,
-  BookOpen
+  BookOpen,
+  Mail,
+  Send,
+  Inbox
 } from 'lucide-react';
 import {
   Sidebar,
@@ -307,6 +310,66 @@ export function AppSidebar() {
                       <HelpCircle className={`transition-all duration-300 ${collapsed ? 'h-5 w-5' : 'h-4 w-4'} ${isActive('/support-admin') ? 'animate-glow-pulse' : ''}`} />
                       {!collapsed && (
                         <span className="font-medium animate-fade-in">Support Admin</span>
+                      )}
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild>
+                    <NavLink 
+                      to="/admin#email-config" 
+                      className={({ isActive }) => `
+                        flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-300 ease-out
+                        transform hover:scale-[1.02] hover:shadow-flame border-2 border-blue-200
+                        ${isActive || currentPath.includes('email') 
+                          ? 'bg-gradient-to-r from-blue-20 to-blue-10 text-blue-700 border-l-4 border-blue-500 shadow-flame' 
+                          : 'hover:bg-gradient-to-r hover:from-blue-10 hover:to-blue-5 text-muted-foreground hover:text-blue-600'
+                        }
+                      `}
+                    >
+                      <Mail className={`transition-all duration-300 ${collapsed ? 'h-5 w-5' : 'h-4 w-4'} text-blue-600`} />
+                      {!collapsed && (
+                        <span className="font-medium animate-fade-in">Email Config</span>
+                      )}
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild>
+                    <NavLink 
+                      to="/admin#email-templates" 
+                      className={({ isActive }) => `
+                        flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-300 ease-out
+                        transform hover:scale-[1.02] hover:shadow-flame border-2 border-blue-200
+                        ${isActive || currentPath.includes('email') 
+                          ? 'bg-gradient-to-r from-blue-20 to-blue-10 text-blue-700 border-l-4 border-blue-500 shadow-flame' 
+                          : 'hover:bg-gradient-to-r hover:from-blue-10 hover:to-blue-5 text-muted-foreground hover:text-blue-600'
+                        }
+                      `}
+                    >
+                      <Send className={`transition-all duration-300 ${collapsed ? 'h-5 w-5' : 'h-4 w-4'} text-blue-600`} />
+                      {!collapsed && (
+                        <span className="font-medium animate-fade-in">Email Templates</span>
+                      )}
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild>
+                    <NavLink 
+                      to="/admin#auto-reply" 
+                      className={({ isActive }) => `
+                        flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-300 ease-out
+                        transform hover:scale-[1.02] hover:shadow-flame border-2 border-blue-200
+                        ${isActive || currentPath.includes('email') 
+                          ? 'bg-gradient-to-r from-blue-20 to-blue-10 text-blue-700 border-l-4 border-blue-500 shadow-flame' 
+                          : 'hover:bg-gradient-to-r hover:from-blue-10 hover:to-blue-5 text-muted-foreground hover:text-blue-600'
+                        }
+                      `}
+                    >
+                      <Inbox className={`transition-all duration-300 ${collapsed ? 'h-5 w-5' : 'h-4 w-4'} text-blue-600`} />
+                      {!collapsed && (
+                        <span className="font-medium animate-fade-in">Auto-Reply</span>
                       )}
                     </NavLink>
                   </SidebarMenuButton>

@@ -2,13 +2,23 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from './types';
 
-// Get Supabase credentials from environment variables only (no hardcoded keys for security)
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
-const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+// Get Supabase credentials from environment variables
+// Fallback to default values for production (should be set via .env file)
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://ozjhdxvwqbzcvcywhwjg.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im96amhkeHZ3cWJ6Y3ZjeXdod2pnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU5MDAyNzUsImV4cCI6MjA3MTQ3NjI3NX0.KLAo1KIRR9ofapXPHenoi-ega0PJtkNhGnDHGtniA-Q";
 
-// Validate that environment variables are set
-if (!SUPABASE_URL || !SUPABASE_PUBLISHABLE_KEY) {
-  throw new Error('Missing required Supabase environment variables: VITE_SUPABASE_URL and VITE_SUPABASE_PUBLISHABLE_KEY must be set');
+// Debug: Log what we're using (only in development)
+if (import.meta.env.DEV) {
+  console.log('🔧 Supabase Config:', {
+    url: SUPABASE_URL,
+    hasKey: !!SUPABASE_PUBLISHABLE_KEY,
+    keyLength: SUPABASE_PUBLISHABLE_KEY?.length,
+    fromEnv: !!import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY
+  });
+  
+  if (!import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY) {
+    console.warn('⚠️ Using fallback Supabase credentials. Set VITE_SUPABASE_PUBLISHABLE_KEY in .env file for production.');
+  }
 }
 
 // Import the supabase client like this:

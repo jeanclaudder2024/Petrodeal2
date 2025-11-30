@@ -19,4 +19,20 @@ export default defineConfig(({ mode }) => ({
       "@": path.resolve(__dirname, "./src"),
     },
   },
+  build: {
+    commonjsOptions: {
+      include: [/node_modules/],
+      transformMixedEsModules: true,
+    },
+    rollupOptions: {
+      output: {
+        manualChunks: {
+          'supabase': ['@supabase/supabase-js'],
+        },
+      },
+    },
+  },
+  optimizeDeps: {
+    include: ['@supabase/supabase-js'],
+  },
 }));
