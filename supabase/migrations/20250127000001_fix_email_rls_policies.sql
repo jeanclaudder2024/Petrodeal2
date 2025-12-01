@@ -2,12 +2,14 @@
 -- This migration updates the RLS policies to use has_role() function instead of JWT claims
 -- Run this in your Supabase SQL Editor
 
--- Drop old policies
-DROP POLICY IF EXISTS "Admins can manage email configurations" ON email_configurations;
-DROP POLICY IF EXISTS "Admins can manage email templates" ON email_templates;
-DROP POLICY IF EXISTS "Admins can view email logs" ON email_logs;
-DROP POLICY IF EXISTS "Admins can manage incoming emails" ON incoming_emails;
-DROP POLICY IF EXISTS "Admins can manage auto-reply rules" ON auto_reply_rules;
+-- Drop old policies (use CASCADE to drop dependent policies if any)
+DROP POLICY IF EXISTS "Admins can manage email configurations" ON email_configurations CASCADE;
+DROP POLICY IF EXISTS "Admins can manage email templates" ON email_templates CASCADE;
+DROP POLICY IF EXISTS "Admins can view email logs" ON email_logs CASCADE;
+DROP POLICY IF EXISTS "System can insert email logs" ON email_logs CASCADE;
+DROP POLICY IF EXISTS "Admins can manage incoming emails" ON incoming_emails CASCADE;
+DROP POLICY IF EXISTS "System can insert incoming emails" ON incoming_emails CASCADE;
+DROP POLICY IF EXISTS "Admins can manage auto-reply rules" ON auto_reply_rules CASCADE;
 
 -- Create new policies using has_role() function (same pattern as other admin tables)
 CREATE POLICY "Admins can manage email configurations"
