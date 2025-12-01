@@ -30,7 +30,7 @@ cd document-processor
 if ! grep -q "OPENAI_API_KEY" .env 2>/dev/null; then
     echo "" >> .env
     echo "# OpenAI Configuration (for AI-powered random data generation)" >> .env
-    echo "OPENAI_API_KEY=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" >> .env
+    echo "OPENAI_API_KEY=YOUR_OPENAI_API_KEY_HERE" >> .env
     echo "✅ Added OPENAI_API_KEY to .env"
 else
     echo "⚠️  OPENAI_API_KEY already exists in .env"

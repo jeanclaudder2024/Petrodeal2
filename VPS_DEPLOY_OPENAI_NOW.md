@@ -56,7 +56,7 @@ ls -la .env
 # Add API key
 echo "" >> .env
 echo "# OpenAI Configuration (for AI-powered random data generation)" >> .env
-echo "OPENAI_API_KEY=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" >> .env
+echo "OPENAI_API_KEY=YOUR_OPENAI_API_KEY_HERE" >> .env
 
 # Verify
 grep OPENAI .env
@@ -136,7 +136,7 @@ cd /opt/petrodealhub && git pull origin main && git submodule update --init --re
 source venv/bin/activate && pip install openai==1.3.0
 
 # Add API key
-echo "" >> .env && echo "# OpenAI Configuration" >> .env && echo "OPENAI_API_KEY=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" >> .env
+echo "" >> .env && echo "# OpenAI Configuration" >> .env && echo "OPENAI_API_KEY=YOUR_OPENAI_API_KEY_HERE" >> .env
 
 # Restart (choose one):
 # PM2: pm2 restart document-processor
