@@ -89,17 +89,20 @@ ALTER TABLE incoming_emails ENABLE ROW LEVEL SECURITY;
 ALTER TABLE auto_reply_rules ENABLE ROW LEVEL SECURITY;
 
 -- RLS Policies (allow admins to manage everything)
+-- Use has_role() function to check admin status (same as other tables)
 CREATE POLICY "Admins can manage email configurations"
   ON email_configurations FOR ALL
-  USING (auth.jwt() ->> 'role' = 'admin');
+  USING (public.has_role(auth.uid(), 'admin'::public.app_role))
+  WITH CHECK (public.has_role(auth.uid(), 'admin'::public.app_role));
 
 CREATE POLICY "Admins can manage email templates"
   ON email_templates FOR ALL
-  USING (auth.jwt() ->> 'role' = 'admin');
+  USING (public.has_role(auth.uid(), 'admin'::public.app_role))
+  WITH CHECK (public.has_role(auth.uid(), 'admin'::public.app_role));
 
 CREATE POLICY "Admins can view email logs"
   ON email_logs FOR SELECT
-  USING (auth.jwt() ->> 'role' = 'admin');
+  USING (public.has_role(auth.uid(), 'admin'::public.app_role));
 
 CREATE POLICY "System can insert email logs"
   ON email_logs FOR INSERT
@@ -107,7 +110,8 @@ CREATE POLICY "System can insert email logs"
 
 CREATE POLICY "Admins can manage incoming emails"
   ON incoming_emails FOR ALL
-  USING (auth.jwt() ->> 'role' = 'admin');
+  USING (public.has_role(auth.uid(), 'admin'::public.app_role))
+  WITH CHECK (public.has_role(auth.uid(), 'admin'::public.app_role));
 
 CREATE POLICY "System can insert incoming emails"
   ON incoming_emails FOR INSERT
@@ -115,7 +119,8 @@ CREATE POLICY "System can insert incoming emails"
 
 CREATE POLICY "Admins can manage auto-reply rules"
   ON auto_reply_rules FOR ALL
-  USING (auth.jwt() ->> 'role' = 'admin');
+  USING (public.has_role(auth.uid(), 'admin'::public.app_role))
+  WITH CHECK (public.has_role(auth.uid(), 'admin'::public.app_role));
 
 -- Function to update updated_at timestamp
 CREATE OR REPLACE FUNCTION update_updated_at_column()
