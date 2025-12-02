@@ -189,7 +189,8 @@ export default function EmailConfiguration() {
     setTesting('smtp');
     try {
       // Call backend API to test SMTP connection
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+      // Use /api/ prefix which nginx proxies to Python backend on port 8000
+      const apiUrl = import.meta.env.VITE_API_URL || '/api';
       const response = await fetch(`${apiUrl}/email/test-smtp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -226,7 +227,8 @@ export default function EmailConfiguration() {
     setTesting('imap');
     try {
       // Call backend API to test IMAP connection
-      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+      // Use /api/ prefix which nginx proxies to Python backend on port 8000
+      const apiUrl = import.meta.env.VITE_API_URL || '/api';
       const response = await fetch(`${apiUrl}/email/test-imap`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
