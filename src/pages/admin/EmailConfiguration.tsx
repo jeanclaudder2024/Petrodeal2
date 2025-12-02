@@ -188,6 +188,17 @@ export default function EmailConfiguration() {
   const testSMTPConnection = async () => {
     setTesting('smtp');
     try {
+      // Validate required fields before testing
+      if (!smtpConfig.host || !smtpConfig.username || !smtpConfig.password) {
+        toast({
+          title: "Missing Information",
+          description: "Please fill in Host, Username, and Password before testing",
+          variant: "destructive",
+        });
+        setTesting(null);
+        return;
+      }
+
       // Call backend API to test SMTP connection
       // Use /api/ prefix which nginx proxies to Python backend on port 8000
       const apiUrl = import.meta.env.VITE_API_URL || '/api';
@@ -197,25 +208,41 @@ export default function EmailConfiguration() {
         body: JSON.stringify(smtpConfig),
       });
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ message: 'Connection test failed' }));
-        throw new Error(errorData.message || `HTTP ${response.status}: Connection test failed`);
+      // Try to parse response as JSON
+      let data;
+      try {
+        const text = await response.text();
+        if (!text) {
+          throw new Error('Empty response from server');
+        }
+        data = JSON.parse(text);
+      } catch (parseError) {
+        // If response is not JSON, check status
+        if (!response.ok) {
+          throw new Error(`Server error: HTTP ${response.status}. Endpoint may not exist. Please restart backend.`);
+        }
+        throw new Error('Invalid response from server');
       }
 
-      const data = await response.json();
-
-      if (data.success) {
+      // Check if response indicates success
+      if (data.success === true) {
         toast({
           title: "Connection Successful",
           description: data.message || "SMTP connection test passed!",
         });
       } else {
-        throw new Error(data.message || 'Connection test failed');
+        // Backend returned success: false with error message
+        toast({
+          title: "Connection Failed",
+          description: data.message || data.error || 'Connection test failed',
+          variant: "destructive",
+        });
       }
     } catch (error: any) {
+      console.error('SMTP test error:', error);
       toast({
         title: "Connection Failed",
-        description: error.message || "Failed to connect to SMTP server",
+        description: error.message || "Failed to connect to SMTP server. Check if backend is running.",
         variant: "destructive",
       });
     } finally {
@@ -226,6 +253,17 @@ export default function EmailConfiguration() {
   const testIMAPConnection = async () => {
     setTesting('imap');
     try {
+      // Validate required fields before testing
+      if (!imapConfig.host || !imapConfig.username || !imapConfig.password) {
+        toast({
+          title: "Missing Information",
+          description: "Please fill in Host, Username, and Password before testing",
+          variant: "destructive",
+        });
+        setTesting(null);
+        return;
+      }
+
       // Call backend API to test IMAP connection
       // Use /api/ prefix which nginx proxies to Python backend on port 8000
       const apiUrl = import.meta.env.VITE_API_URL || '/api';
@@ -235,25 +273,41 @@ export default function EmailConfiguration() {
         body: JSON.stringify(imapConfig),
       });
 
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ message: 'Connection test failed' }));
-        throw new Error(errorData.message || `HTTP ${response.status}: Connection test failed`);
+      // Try to parse response as JSON
+      let data;
+      try {
+        const text = await response.text();
+        if (!text) {
+          throw new Error('Empty response from server');
+        }
+        data = JSON.parse(text);
+      } catch (parseError) {
+        // If response is not JSON, check status
+        if (!response.ok) {
+          throw new Error(`Server error: HTTP ${response.status}. Endpoint may not exist. Please restart backend.`);
+        }
+        throw new Error('Invalid response from server');
       }
 
-      const data = await response.json();
-
-      if (data.success) {
+      // Check if response indicates success
+      if (data.success === true) {
         toast({
           title: "Connection Successful",
           description: data.message || "IMAP connection test passed!",
         });
       } else {
-        throw new Error(data.message || 'Connection test failed');
+        // Backend returned success: false with error message
+        toast({
+          title: "Connection Failed",
+          description: data.message || data.error || 'Connection test failed',
+          variant: "destructive",
+        });
       }
     } catch (error: any) {
+      console.error('IMAP test error:', error);
       toast({
         title: "Connection Failed",
-        description: error.message || "Failed to connect to IMAP server",
+        description: error.message || "Failed to connect to IMAP server. Check if backend is running.",
         variant: "destructive",
       });
     } finally {
