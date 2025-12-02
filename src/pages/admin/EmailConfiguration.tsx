@@ -189,18 +189,24 @@ export default function EmailConfiguration() {
     setTesting('smtp');
     try {
       // Call backend API to test SMTP connection
-      const response = await fetch('/api/email/test-smtp', {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+      const response = await fetch(`${apiUrl}/email/test-smtp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(smtpConfig),
       });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: 'Connection test failed' }));
+        throw new Error(errorData.message || `HTTP ${response.status}: Connection test failed`);
+      }
 
       const data = await response.json();
 
       if (data.success) {
         toast({
           title: "Connection Successful",
-          description: "SMTP connection test passed!",
+          description: data.message || "SMTP connection test passed!",
         });
       } else {
         throw new Error(data.message || 'Connection test failed');
@@ -220,18 +226,24 @@ export default function EmailConfiguration() {
     setTesting('imap');
     try {
       // Call backend API to test IMAP connection
-      const response = await fetch('/api/email/test-imap', {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
+      const response = await fetch(`${apiUrl}/email/test-imap`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(imapConfig),
       });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({ message: 'Connection test failed' }));
+        throw new Error(errorData.message || `HTTP ${response.status}: Connection test failed`);
+      }
 
       const data = await response.json();
 
       if (data.success) {
         toast({
           title: "Connection Successful",
-          description: "IMAP connection test passed!",
+          description: data.message || "IMAP connection test passed!",
         });
       } else {
         throw new Error(data.message || 'Connection test failed');
