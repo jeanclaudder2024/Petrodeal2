@@ -1390,6 +1390,105 @@ async def upload_template(
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
 
+# ============================================================================
+# EMAIL SERVICE ENDPOINTS
+# ============================================================================
+
+try:
+    import smtplib
+    import imaplib
+    EMAIL_LIBS_AVAILABLE = True
+except ImportError:
+    EMAIL_LIBS_AVAILABLE = False
+    logger.warning("Email libraries not available. Email endpoints will be disabled.")
+
+@app.post("/email/test-smtp")
+async def test_smtp_connection(request: Request):
+    """Test SMTP connection with provided configuration"""
+    if not EMAIL_LIBS_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Email libraries not available")
+    
+    try:
+        body = await request.json()
+        
+        # Map frontend field names to backend field names
+        host = body.get('host', '')
+        port = body.get('port', 587)
+        username = body.get('username', '')
+        password = body.get('password', '')
+        enable_tls = body.get('enableTLS', True)
+        
+        # Validate required fields
+        if not host or not username or not password:
+            raise HTTPException(status_code=400, detail="Missing required fields: host, username, password")
+        
+        # Test SMTP connection
+        try:
+            if enable_tls:
+                server = smtplib.SMTP(host, port)
+                server.starttls()
+            else:
+                server = smtplib.SMTP(host, port)
+            
+            server.login(username, password)
+            server.quit()
+            
+            return {"success": True, "message": "SMTP connection successful"}
+        except smtplib.SMTPAuthenticationError as e:
+            return {"success": False, "message": f"Authentication failed: {str(e)}"}
+        except smtplib.SMTPConnectError as e:
+            return {"success": False, "message": f"Connection failed: {str(e)}"}
+        except Exception as e:
+            return {"success": False, "message": f"SMTP error: {str(e)}"}
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error testing SMTP connection: {e}")
+        return {"success": False, "message": str(e)}
+
+@app.post("/email/test-imap")
+async def test_imap_connection(request: Request):
+    """Test IMAP connection with provided configuration"""
+    if not EMAIL_LIBS_AVAILABLE:
+        raise HTTPException(status_code=503, detail="Email libraries not available")
+    
+    try:
+        body = await request.json()
+        
+        # Map frontend field names to backend field names
+        host = body.get('host', '')
+        port = body.get('port', 993)
+        username = body.get('username', '')
+        password = body.get('password', '')
+        enable_tls = body.get('enableTLS', True)
+        
+        # Validate required fields
+        if not host or not username or not password:
+            raise HTTPException(status_code=400, detail="Missing required fields: host, username, password")
+        
+        # Test IMAP connection
+        try:
+            if enable_tls:
+                mail = imaplib.IMAP4_SSL(host, port)
+            else:
+                mail = imaplib.IMAP4(host, port)
+            
+            mail.login(username, password)
+            mail.logout()
+            
+            return {"success": True, "message": "IMAP connection successful"}
+        except imaplib.IMAP4.error as e:
+            return {"success": False, "message": f"IMAP authentication failed: {str(e)}"}
+        except Exception as e:
+            return {"success": False, "message": f"IMAP error: {str(e)}"}
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error testing IMAP connection: {e}")
+        return {"success": False, "message": str(e)}
+
 if __name__ == "__main__":
     import uvicorn
     
