@@ -1402,7 +1402,17 @@ except ImportError:
     EMAIL_LIBS_AVAILABLE = False
     logger.warning("Email libraries not available. Email endpoints will be disabled.")
 
+@app.options("/email/test-smtp")
+async def options_test_smtp(request: Request):
+    """Handle CORS preflight for test-smtp endpoint"""
+    return Response(status_code=200, headers={
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type",
+    })
+
 @app.post("/email/test-smtp")
+@app.post("/api/email/test-smtp")  # Also support direct /api path
 async def test_smtp_connection(request: Request):
     """Test SMTP connection with provided configuration"""
     if not EMAIL_LIBS_AVAILABLE:
@@ -1447,7 +1457,17 @@ async def test_smtp_connection(request: Request):
         logger.error(f"Error testing SMTP connection: {e}")
         return {"success": False, "message": str(e)}
 
+@app.options("/email/test-imap")
+async def options_test_imap(request: Request):
+    """Handle CORS preflight for test-imap endpoint"""
+    return Response(status_code=200, headers={
+        "Access-Control-Allow-Origin": "*",
+        "Access-Control-Allow-Methods": "POST, OPTIONS",
+        "Access-Control-Allow-Headers": "Content-Type",
+    })
+
 @app.post("/email/test-imap")
+@app.post("/api/email/test-imap")  # Also support direct /api path
 async def test_imap_connection(request: Request):
     """Test IMAP connection with provided configuration"""
     if not EMAIL_LIBS_AVAILABLE:
