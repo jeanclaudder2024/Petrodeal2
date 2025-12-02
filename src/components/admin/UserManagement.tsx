@@ -32,23 +32,12 @@ const UserManagement = () => {
   const fetchUsers = async () => {
     setLoading(true);
     try {
-      // Use the new function to get users with roles
-      const { data: usersData, error } = await db
-        .from('users_with_roles')
-        .select('*');
-
-      if (error) {
-        // Fallback to RPC call if the view doesn't work
-        const { data: rpcData, error: rpcError } = await supabase.rpc('get_users_with_roles');
-        
-        if (rpcError) throw rpcError;
-        
-        console.log('Fetched users via RPC:', rpcData);
-        setUsers(rpcData || []);
-      } else {
-        console.log('Fetched users via table:', usersData);
-        setUsers(usersData || []);
-      }
+      // Use RPC function directly - this is the reliable method
+      const { data: usersData, error } = await supabase.rpc('get_users_with_roles');
+      
+      if (error) throw error;
+      
+      setUsers(usersData || []);
     } catch (error) {
       console.error('Failed to fetch users:', error);
       toast({
