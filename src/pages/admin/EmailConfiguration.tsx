@@ -188,16 +188,25 @@ export default function EmailConfiguration() {
   const testSMTPConnection = async () => {
     setTesting('smtp');
     try {
-      // Validate required fields before testing
+      // Validate only essential connection fields (not From Name/Email)
       if (!smtpConfig.host || !smtpConfig.username || !smtpConfig.password) {
         toast({
           title: "Missing Information",
-          description: "Please fill in Host, Username, and Password before testing",
+          description: "Please fill in SMTP Host, Username, and Password before testing",
           variant: "destructive",
         });
         setTesting(null);
         return;
       }
+
+      // Only send connection test fields, not From Name/Email (those are for sending, not testing connection)
+      const testConfig = {
+        host: smtpConfig.host,
+        port: smtpConfig.port,
+        username: smtpConfig.username,
+        password: smtpConfig.password,
+        enableTLS: smtpConfig.enableTLS,
+      };
 
       // Call backend API to test SMTP connection
       // Use /api/ prefix which nginx proxies to Python backend on port 8000
@@ -205,7 +214,7 @@ export default function EmailConfiguration() {
       const response = await fetch(`${apiUrl}/email/test-smtp`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(smtpConfig),
+        body: JSON.stringify(testConfig),
       });
 
       // Try to parse response as JSON
@@ -253,16 +262,25 @@ export default function EmailConfiguration() {
   const testIMAPConnection = async () => {
     setTesting('imap');
     try {
-      // Validate required fields before testing
+      // Validate only essential connection fields
       if (!imapConfig.host || !imapConfig.username || !imapConfig.password) {
         toast({
           title: "Missing Information",
-          description: "Please fill in Host, Username, and Password before testing",
+          description: "Please fill in IMAP Host, Username, and Password before testing",
           variant: "destructive",
         });
         setTesting(null);
         return;
       }
+
+      // Only send connection test fields
+      const testConfig = {
+        host: imapConfig.host,
+        port: imapConfig.port,
+        username: imapConfig.username,
+        password: imapConfig.password,
+        enableTLS: imapConfig.enableTLS,
+      };
 
       // Call backend API to test IMAP connection
       // Use /api/ prefix which nginx proxies to Python backend on port 8000
@@ -270,7 +288,7 @@ export default function EmailConfiguration() {
       const response = await fetch(`${apiUrl}/email/test-imap`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(imapConfig),
+        body: JSON.stringify(testConfig),
       });
 
       // Try to parse response as JSON
