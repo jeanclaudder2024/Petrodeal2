@@ -15,7 +15,8 @@ import {
   BookOpen,
   Mail,
   Send,
-  Inbox
+  Inbox,
+  Key
 } from 'lucide-react';
 import {
   Sidebar,
@@ -370,6 +371,26 @@ export function AppSidebar() {
                       <Inbox className={`transition-all duration-300 ${collapsed ? 'h-5 w-5' : 'h-4 w-4'} text-blue-600`} />
                       {!collapsed && (
                         <span className="font-medium animate-fade-in">Auto-Reply</span>
+                      )}
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild>
+                    <NavLink 
+                      to="/admin#api-webhooks" 
+                      className={({ isActive }) => `
+                        flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-300 ease-out
+                        transform hover:scale-[1.02] hover:shadow-flame border-2 border-green-200
+                        ${isActive || currentPath.includes('api') 
+                          ? 'bg-gradient-to-r from-green-20 to-green-10 text-green-700 border-l-4 border-green-500 shadow-flame' 
+                          : 'hover:bg-gradient-to-r hover:from-green-10 hover:to-green-5 text-muted-foreground hover:text-green-600'
+                        }
+                      `}
+                    >
+                      <Key className={`transition-all duration-300 ${collapsed ? 'h-5 w-5' : 'h-4 w-4'} text-green-600`} />
+                      {!collapsed && (
+                        <span className="font-medium animate-fade-in">API & Webhooks</span>
                       )}
                     </NavLink>
                   </SidebarMenuButton>

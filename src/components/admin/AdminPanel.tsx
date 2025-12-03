@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Shield, Users, Settings, FileText, BarChart3, Ship, Building2, MapPin, Factory, UserCheck, Bot, Filter, CreditCard, Video, Layout, Mail, Send, Inbox } from 'lucide-react';
+import { Shield, Users, Settings, FileText, BarChart3, Ship, Building2, MapPin, Factory, UserCheck, Bot, Filter, CreditCard, Video, Layout, Mail, Send, Inbox, Key } from 'lucide-react';
 import UserManagement from './UserManagement';
 import SystemSettings from './SystemSettings';
 import AdminNotes from './AdminNotes';
@@ -23,6 +23,7 @@ import LandingPageManager from './LandingPageManager';
 import EmailConfiguration from '@/pages/admin/EmailConfiguration';
 import EmailTemplates from '@/pages/admin/EmailTemplates';
 import AutoReplySystem from '@/pages/admin/AutoReplySystem';
+import ApiWebhooks from '@/pages/admin/ApiWebhooks';
 
 const AdminPanel = () => {
   const location = useLocation();
@@ -37,6 +38,7 @@ const AdminPanel = () => {
         'email-config': 'email-config',
         'email-templates': 'email-templates',
         'auto-reply': 'auto-reply',
+        'api-webhooks': 'api-webhooks',
       };
       if (tabMap[hash]) {
         setActiveTab(tabMap[hash]);
@@ -156,6 +158,11 @@ const AdminPanel = () => {
               <span className="text-xs font-medium">Auto-Reply</span>
             </TabsTrigger>
 
+            <TabsTrigger value="api-webhooks" className="flex flex-col items-center gap-1 p-3 h-auto min-h-[60px] border-2 border-green-200 hover:border-green-400">
+              <Key className="h-5 w-5 text-green-600" />
+              <span className="text-xs font-medium">API & Webhooks</span>
+            </TabsTrigger>
+
             <TabsTrigger value="analytics" className="flex flex-col items-center gap-1 p-3 h-auto min-h-[60px]">
               <BarChart3 className="h-5 w-5" />
               <span className="text-xs font-medium">Analytics</span>
@@ -234,6 +241,10 @@ const AdminPanel = () => {
 
         <TabsContent value="auto-reply">
           <AutoReplySystem />
+        </TabsContent>
+
+        <TabsContent value="api-webhooks">
+          <ApiWebhooks />
         </TabsContent>
 
         <TabsContent value="analytics">
