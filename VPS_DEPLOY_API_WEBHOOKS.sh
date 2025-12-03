@@ -25,7 +25,19 @@ git pull origin main
 echo ""
 echo "📦 Step 2: Installing/updating Python dependencies..."
 cd document-processor
+
+# Check if virtual environment exists, create if not
+if [ ! -d "venv" ]; then
+    echo "Creating virtual environment..."
+    python3 -m venv venv
+fi
+
+# Activate virtual environment and install
+source venv/bin/activate
+pip install --upgrade pip --quiet
 pip install aiohttp==3.9.1 --quiet
+deactivate
+
 cd ..
 
 echo ""
