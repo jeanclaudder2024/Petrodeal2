@@ -280,25 +280,55 @@ export default function EmailConfiguration() {
         console.log('⚠️ Python backend not available, trying Supabase Edge Function');
         
         try {
-          const edgeFunctionResult = await supabase.functions.invoke('bright-function', {
-            body: {
-              type: 'smtp',
-              ...testConfig,
-            },
-          });
+          // Try bright-function first, then fallback to test-email-connection
+          let edgeFunctionResult;
+          let functionName = 'bright-function';
+          
+          try {
+            edgeFunctionResult = await supabase.functions.invoke('bright-function', {
+              body: {
+                type: 'smtp',
+                ...testConfig,
+              },
+            });
+            console.log('Using bright-function Edge Function');
+          } catch (brightFunctionError: any) {
+            // If bright-function fails (404), try test-email-connection
+            if (brightFunctionError.message?.includes('404') || brightFunctionError.message?.includes('not found')) {
+              console.log('bright-function not found, trying test-email-connection');
+              functionName = 'test-email-connection';
+              edgeFunctionResult = await supabase.functions.invoke('test-email-connection', {
+                body: {
+                  type: 'smtp',
+                  ...testConfig,
+                },
+              });
+            } else {
+              throw brightFunctionError;
+            }
+          }
           
           data = edgeFunctionResult.data;
           error = edgeFunctionResult.error;
           
           // Handle Supabase function errors
           if (error) {
-            console.error('Supabase function error:', error);
-            throw new Error(error.message || 'Supabase Edge Function error occurred');
+            console.error(`Supabase function error (${functionName}):`, error);
+            const errorMsg = error.message || 'Supabase Edge Function error occurred';
+            
+            // Check for specific error types
+            if (errorMsg.includes('404') || errorMsg.includes('not found')) {
+              throw new Error(`Edge Function "${functionName}" not found. Please deploy the function or check the function name.`);
+            } else if (errorMsg.includes('timeout')) {
+              throw new Error('Edge Function request timed out. Please try again.');
+            } else {
+              throw new Error(`Edge Function error: ${errorMsg}`);
+            }
           }
           
           // Check Supabase function response
           if (data && data.success === true) {
-            console.log('SMTP connection test successful via Supabase!');
+            console.log(`SMTP connection test successful via ${functionName}!`);
             toast({
               title: "Connection Successful",
               description: data.message || "SMTP connection test passed!",
@@ -306,19 +336,60 @@ export default function EmailConfiguration() {
             setTesting(null);
             return;
           } else if (data && data.success === false) {
-            const errorMsg = data.message || data.error || 'Connection test failed';
+            let errorMsg = data.message || data.error || 'Connection test failed';
+            
+            // Provide more helpful error messages based on common errors
+            if (errorMsg.includes('No response from SMTP server')) {
+              errorMsg = `Unable to connect to SMTP server "${testConfig.host}:${testConfig.port}". Please check:
+• SMTP server address and port are correct
+• Server is accessible and running
+• Firewall allows connections on port ${testConfig.port}
+• For port 587, ensure TLS is enabled
+• For port 465, use SSL instead of TLS`;
+            } else if (errorMsg.includes('connection error') || errorMsg.includes('Unable to connect')) {
+              errorMsg = `Connection failed to ${testConfig.host}:${testConfig.port}. Please verify:
+• Server address is correct
+• Port number matches your SMTP provider's settings
+• Your network allows outbound SMTP connections`;
+            } else if (errorMsg.includes('authentication failed')) {
+              errorMsg = `Authentication failed. Please check:
+• Username is correct (may need full email address)
+• Password is correct
+• Account is not locked or suspended`;
+            } else if (errorMsg.includes('STARTTLS failed')) {
+              errorMsg = `TLS connection failed. Please check:
+• Port 587 requires TLS enabled
+• Port 465 requires SSL (not TLS)
+• Your SMTP server supports STARTTLS`;
+            }
+            
             console.error('SMTP connection test failed:', errorMsg);
             toast({
               title: "Connection Failed",
               description: errorMsg,
               variant: "destructive",
+              duration: 10000, // Show longer for troubleshooting info
             });
             setTesting(null);
             return;
+          } else if (!data) {
+            throw new Error(`No response from ${functionName} Edge Function. Please check if the function is deployed.`);
           }
         } catch (edgeFunctionError: any) {
           console.error('Edge function error:', edgeFunctionError);
-          throw new Error(`Edge Function error: ${edgeFunctionError.message || 'Failed to connect to email test service'}`);
+          
+          // Provide more helpful error messages
+          let errorMsg = edgeFunctionError.message || 'Failed to connect to email test service';
+          
+          if (errorMsg.includes('404') || errorMsg.includes('not found')) {
+            errorMsg = 'Email test function not found. Please ensure the Edge Function is deployed on Supabase.';
+          } else if (errorMsg.includes('timeout')) {
+            errorMsg = 'Email test request timed out. The SMTP server may be unreachable or slow.';
+          } else if (errorMsg.includes('No response')) {
+            errorMsg = 'No response from email test service. Please check your SMTP settings and try again.';
+          }
+          
+          throw new Error(errorMsg);
         }
       }
 
@@ -351,14 +422,22 @@ export default function EmailConfiguration() {
       let errorMsg = "Failed to test SMTP connection. ";
       
       if (error.message) {
-        if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+        const msg = error.message.toLowerCase();
+        
+        if (msg.includes('failed to fetch') || msg.includes('networkerror')) {
           errorMsg = "Network error: Unable to reach the server. Please check your internet connection and try again.";
-        } else if (error.message.includes('timeout')) {
+        } else if (msg.includes('timeout')) {
           errorMsg = "Request timed out. The server may be slow or unreachable. Please try again.";
-        } else if (error.message.includes('Backend timeout')) {
+        } else if (msg.includes('backend timeout')) {
           errorMsg = "Backend server is not responding. Please ensure the Python backend is running on port 8000.";
-        } else if (error.message.includes('Edge Function')) {
+        } else if (msg.includes('edge function') || msg.includes('not found') || msg.includes('404')) {
           errorMsg = error.message;
+        } else if (msg.includes('no response from smtp server')) {
+          errorMsg = "Unable to connect to SMTP server. Please check:\n• SMTP host and port are correct\n• Server is accessible from your network\n• Firewall allows connections on this port\n• TLS/SSL settings match your server configuration";
+        } else if (msg.includes('authentication failed') || msg.includes('auth')) {
+          errorMsg = "Authentication failed. Please check your username and password are correct.";
+        } else if (msg.includes('connection failed') || msg.includes('connection error')) {
+          errorMsg = "Connection failed. Please verify:\n• SMTP server address is correct\n• Port number is correct (587 for TLS, 465 for SSL, 25 for no encryption)\n• Your network allows SMTP connections";
         } else {
           errorMsg += error.message;
         }
@@ -370,6 +449,7 @@ export default function EmailConfiguration() {
         title: "Connection Failed",
         description: errorMsg,
         variant: "destructive",
+        duration: 8000, // Show longer for detailed error messages
       });
     } finally {
       setTesting(null);
