@@ -263,9 +263,9 @@ export default function EmailConfiguration() {
       } catch (backendError) {
         // Backend not available, use Supabase Edge Function instead
         console.log('⚠️ Python backend not available, using Supabase Edge Function');
-        console.log('Calling Supabase Edge Function: test-email-connection');
+        console.log('Calling Supabase Edge Function: bright-function');
         
-        const edgeFunctionResult = await supabase.functions.invoke('test-email-connection', {
+        const edgeFunctionResult = await supabase.functions.invoke('bright-function', {
           body: {
             type: 'smtp',
             ...testConfig,
@@ -400,9 +400,9 @@ export default function EmailConfiguration() {
       } catch (backendError) {
         // Backend not available, use Supabase Edge Function instead
         console.log('⚠️ Python backend not available, using Supabase Edge Function');
-        console.log('Calling Supabase Edge Function: test-email-connection');
+        console.log('Calling Supabase Edge Function: bright-function');
         
-        const edgeFunctionResult = await supabase.functions.invoke('test-email-connection', {
+        const edgeFunctionResult = await supabase.functions.invoke('bright-function', {
           body: {
             type: 'imap',
             ...testConfig,
