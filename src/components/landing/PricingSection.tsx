@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge";
 import { Check, ArrowRight, Zap, Crown, Star, Percent } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useLandingPageContent } from "@/hooks/useLandingPageContent";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { db } from '@/lib/supabase-helper';
 
 interface Discount {
@@ -14,14 +14,47 @@ interface Discount {
   billing_cycle: 'monthly' | 'annual';
 }
 
+interface DatabasePlan {
+  id: string;
+  plan_name: string;
+  plan_tier: string;
+  description: string;
+  monthly_price: number;
+  annual_price: number;
+  features: string[];
+  is_popular: boolean;
+  sort_order: number;
+}
+
 const PricingSection = () => {
   const navigate = useNavigate();
   const [discounts, setDiscounts] = useState<Discount[]>([]);
-  const [isAnnual, setIsAnnual] = useState(false);
+  const [isAnnual, setIsAnnual] = useState(true); // Default to annual
+  const [dbPlans, setDbPlans] = useState<DatabasePlan[]>([]);
+  const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     fetchActiveDiscounts();
+    fetchDynamicPlans();
+    
+    // Set up polling to refresh prices every 30 seconds
+    pollingIntervalRef.current = setInterval(() => {
+      fetchActiveDiscounts();
+      fetchDynamicPlans();
+    }, 30000);
+    
+    // Cleanup interval on unmount
+    return () => {
+      if (pollingIntervalRef.current) {
+        clearInterval(pollingIntervalRef.current);
+      }
+    };
   }, []);
+
+  // Refresh discounts when billing cycle changes
+  useEffect(() => {
+    fetchActiveDiscounts();
+  }, [isAnnual]);
 
   const fetchActiveDiscounts = async () => {
     try {
@@ -42,6 +75,25 @@ const PricingSection = () => {
     }
   };
 
+  const fetchDynamicPlans = async () => {
+    try {
+      const { data, error } = await db
+        .from('subscription_plans')
+        .select('*')
+        .eq('is_active', true)
+        .order('sort_order', { ascending: true });
+
+      if (error) {
+        console.warn('Error fetching plans, using static plans:', error);
+        return;
+      }
+
+      setDbPlans(data || []);
+    } catch (error) {
+      console.warn('Error fetching plans, using static plans:', error);
+    }
+  };
+
   const getDiscountForPlan = (planTier: string): Discount | null => {
     const billingCycle = isAnnual ? 'annual' : 'monthly';
     return discounts.find(discount => 
@@ -52,7 +104,9 @@ const PricingSection = () => {
   const calculateDiscountedPrice = (originalPrice: number, discountPercentage: number) => {
     return originalPrice * (1 - discountPercentage / 100);
   };
-  const plans = [{
+
+  // Static plans as fallback
+  const staticPlans = [{
     name: "Basic Plan",
     tier: "basic",
     monthlyPrice: 29.99,
@@ -121,6 +175,23 @@ const PricingSection = () => {
     gradient: "from-primary to-accent-green",
     onClick: () => navigate("/auth")
   }];
+
+  // Use dynamic plans from database or fallback to static plans
+  const displayPlans = dbPlans.length > 0 ? dbPlans.map(dbPlan => ({
+    name: dbPlan.plan_name,
+    tier: dbPlan.plan_tier,
+    monthlyPrice: Number(dbPlan.monthly_price) || 0,
+    annualPrice: Number(dbPlan.annual_price) || 0,
+    description: dbPlan.description || "",
+    features: dbPlan.features || [],
+    cta: "Get Started",
+    popular: dbPlan.is_popular || false,
+    icon: dbPlan.plan_tier === 'enterprise' ? Star : dbPlan.plan_tier === 'professional' ? Crown : Zap,
+    gradient: dbPlan.plan_tier === 'enterprise' ? "from-primary to-accent-green" : 
+              dbPlan.plan_tier === 'professional' ? "from-accent to-gold" : "from-water to-primary",
+    onClick: () => navigate("/auth")
+  })) : staticPlans;
+
   return <section className="py-32 relative overflow-hidden">
       {/* Background Elements */}
       <div className="absolute inset-0 bg-gradient-to-br from-background via-muted/20 to-background bg-slate-700" />
@@ -173,7 +244,7 @@ const PricingSection = () => {
 
         {/* Pricing Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-7xl mx-auto">
-          {plans.map((plan, index) => {
+          {displayPlans.map((plan, index) => {
             const price = isAnnual ? plan.annualPrice : plan.monthlyPrice;
             const period = isAnnual ? 'year' : 'month';
             const discount = getDiscountForPlan(plan.tier);
@@ -182,13 +253,13 @@ const PricingSection = () => {
             return <Card key={index} className={`group relative p-8 border-0 bg-gradient-to-br from-card/90 to-card/60 backdrop-blur-xl hover:shadow-2xl transition-all duration-500 hover:scale-[1.02] animate-fade-in-up ${plan.popular ? 'ring-2 ring-accent/50 shadow-accent/20' : ''}`} style={{
             animationDelay: `${index * 0.2}s`
           }}>
-                {plan.popular && <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
+                {plan.popular && <div className="absolute -top-4 left-1/2 transform -translate-x-1/2 z-20">
                     <Badge className="bg-gradient-to-r from-accent to-gold text-white px-6 py-1 shadow-lg">
                       Most Popular
                     </Badge>
                   </div>}
                   
-                {discount && <div className="absolute -top-4 right-4">
+                {discount && <div className={`absolute -top-4 ${plan.popular ? 'right-4' : 'right-4'} z-20`}>
                     <Badge className="bg-red-500 text-white px-4 py-1 shadow-lg">
                       <Percent className="h-3 w-3 mr-1" />
                       {discount.discount_percentage}% OFF
@@ -221,7 +292,7 @@ const PricingSection = () => {
                           <span className="text-muted-foreground ml-2">/ {period}</span>
                         </div>
                         {discount.discount_name && (
-                          <div className="text-sm text-red-600 font-medium">
+                          <div className="text-sm text-red-600 font-medium mt-1">
                             {discount.discount_name}
                           </div>
                         )}

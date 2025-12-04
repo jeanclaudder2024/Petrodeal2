@@ -222,11 +222,16 @@ export default function EmailConfiguration() {
       const url = `${apiUrl}/email/test-smtp`;
       console.log('Calling endpoint:', url);
       
+      // Create abort controller for timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+      
       const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(testConfig),
-      });
+        signal: controller.signal,
+      }).finally(() => clearTimeout(timeoutId));
 
       console.log('Response status:', response.status, response.statusText);
       console.log('Response headers:', Object.fromEntries(response.headers.entries()));
@@ -283,7 +288,23 @@ export default function EmailConfiguration() {
       }
     } catch (error: any) {
       console.error('SMTP test error:', error);
-      const errorMsg = error.message || "Failed to connect to SMTP server. Check if backend is running and check browser console for details.";
+      
+      // Provide more specific error messages
+      let errorMsg = "Failed to test SMTP connection. ";
+      
+      if (error.name === 'AbortError' || error.message?.includes('timeout')) {
+        errorMsg += "Request timed out. The backend API may not be responding. Please check if the backend is running.";
+      } else if (error.name === 'TypeError' && error.message.includes('fetch')) {
+        errorMsg += "Unable to reach the backend API. Please check:\n";
+        errorMsg += "1. The backend API is running (check port 8000)\n";
+        errorMsg += "2. Check browser console for network errors\n";
+        errorMsg += "3. Verify API URL: " + (import.meta.env.VITE_API_URL || '/api') + "/email/test-smtp";
+      } else if (error.message) {
+        errorMsg += error.message;
+      } else {
+        errorMsg += "Check browser console for details.";
+      }
+      
       toast({
         title: "Connection Failed",
         description: errorMsg,
@@ -331,11 +352,16 @@ export default function EmailConfiguration() {
       const url = `${apiUrl}/email/test-imap`;
       console.log('Calling endpoint:', url);
       
+      // Create abort controller for timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
+      
       const response = await fetch(url, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(testConfig),
-      });
+        signal: controller.signal,
+      }).finally(() => clearTimeout(timeoutId));
 
       console.log('Response status:', response.status, response.statusText);
 
@@ -391,7 +417,23 @@ export default function EmailConfiguration() {
       }
     } catch (error: any) {
       console.error('IMAP test error:', error);
-      const errorMsg = error.message || "Failed to connect to IMAP server. Check if backend is running and check browser console for details.";
+      
+      // Provide more specific error messages
+      let errorMsg = "Failed to test IMAP connection. ";
+      
+      if (error.name === 'AbortError' || error.message?.includes('timeout')) {
+        errorMsg += "Request timed out. The backend API may not be responding. Please check if the backend is running.";
+      } else if (error.name === 'TypeError' && error.message.includes('fetch')) {
+        errorMsg += "Unable to reach the backend API. Please check:\n";
+        errorMsg += "1. The backend API is running (check port 8000)\n";
+        errorMsg += "2. Check browser console for network errors\n";
+        errorMsg += "3. Verify API URL: " + (import.meta.env.VITE_API_URL || '/api') + "/email/test-imap";
+      } else if (error.message) {
+        errorMsg += error.message;
+      } else {
+        errorMsg += "Check browser console for details.";
+      }
+      
       toast({
         title: "Connection Failed",
         description: errorMsg,
