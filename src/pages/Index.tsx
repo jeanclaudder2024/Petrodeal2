@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
 import { useAccess } from "@/contexts/AccessContext";
 import LandingNavbar from "@/components/landing/LandingNavbar";
+import BlackFridayCountdown from "@/components/landing/BlackFridayCountdown";
 import Hero from "@/components/Hero";
 import IndustrialWhySection from "@/components/landing/IndustrialWhySection";
 import HowItWorks from "@/components/landing/HowItWorks";
@@ -29,6 +30,7 @@ const Index = () => {
   return (
     <div className="min-h-screen landing-page-container dark">
       <LandingNavbar />
+      <BlackFridayCountdown />
       <div id="home">
         <Hero />
       </div>

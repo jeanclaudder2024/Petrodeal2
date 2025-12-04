@@ -20,7 +20,7 @@ const Hero = () => {
   const rawTitle = content?.title || "PETRO DEAL HUB";
   // Force “PETRO DEAL HUB” on one line (no wrap)
   const titleOneLine = rawTitle.replace(/\s+/g, " ").trim();
-  return <section className="relative min-h-screen flex items-center justify-center overflow-hidden bg-background">
+  return <section className="relative min-h-screen flex items-center justify-center overflow-hidden bg-background pt-20 sm:pt-24 md:pt-28 lg:pt-[180px]">
       {/* Background */}
       <div className="absolute inset-0">
         <div className="absolute inset-0 opacity-20 bg-cover bg-center bg-no-repeat" style={{
