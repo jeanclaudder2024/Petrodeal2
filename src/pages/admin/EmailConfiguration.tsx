@@ -259,10 +259,21 @@ export default function EmailConfiguration() {
 
       // Handle HTTP error status codes (400, 500, etc.)
       if (!response.ok) {
-        const errorMsg = data.detail || data.message || data.error || `HTTP ${response.status}: ${response.statusText}`;
+        let errorMsg = data.detail || data.message || data.error || `HTTP ${response.status}: ${response.statusText}`;
+        
+        // Provide specific guidance for 404 errors
+        if (response.status === 404) {
+          errorMsg = `Backend API endpoint not found (404). The email test endpoint is not available.\n\n` +
+            `Please ensure:\n` +
+            `1. The Python backend API is running on port 8000\n` +
+            `2. The endpoint /api/email/test-smtp exists in the backend\n` +
+            `3. Check backend logs for configuration issues\n\n` +
+            `URL attempted: ${url}`;
+        }
+        
         console.error('HTTP error response:', errorMsg);
         toast({
-          title: "Connection Failed",
+          title: response.status === 404 ? "Endpoint Not Found" : "Connection Failed",
           description: errorMsg,
           variant: "destructive",
         });
@@ -388,10 +399,21 @@ export default function EmailConfiguration() {
 
       // Handle HTTP error status codes (400, 500, etc.)
       if (!response.ok) {
-        const errorMsg = data.detail || data.message || data.error || `HTTP ${response.status}: ${response.statusText}`;
+        let errorMsg = data.detail || data.message || data.error || `HTTP ${response.status}: ${response.statusText}`;
+        
+        // Provide specific guidance for 404 errors
+        if (response.status === 404) {
+          errorMsg = `Backend API endpoint not found (404). The email test endpoint is not available.\n\n` +
+            `Please ensure:\n` +
+            `1. The Python backend API is running on port 8000\n` +
+            `2. The endpoint /api/email/test-imap exists in the backend\n` +
+            `3. Check backend logs for configuration issues\n\n` +
+            `URL attempted: ${url}`;
+        }
+        
         console.error('HTTP error response:', errorMsg);
         toast({
-          title: "Connection Failed",
+          title: response.status === 404 ? "Endpoint Not Found" : "Connection Failed",
           description: errorMsg,
           variant: "destructive",
         });
