@@ -185,20 +185,6 @@ export default function EmailConfiguration() {
     }
   };
 
-  const checkBackendHealth = async (): Promise<boolean> => {
-    try {
-      const apiUrl = import.meta.env.VITE_API_URL || '/api';
-      const healthUrl = `${apiUrl}/health`;
-      const response = await fetch(healthUrl, {
-        method: 'GET',
-        signal: AbortSignal.timeout(5000), // 5 second timeout
-      });
-      return response.ok;
-    } catch {
-      return false;
-    }
-  };
-
   const testSMTPConnection = async () => {
     setTesting('smtp');
     try {
@@ -213,25 +199,9 @@ export default function EmailConfiguration() {
         return;
       }
 
-      // Check if backend is available
-      const backendAvailable = await checkBackendHealth();
-      if (!backendAvailable) {
-        toast({
-          title: "Backend API Not Available",
-          description: `The backend API is not running. To start it:\n\n` +
-            `1. Open a terminal\n` +
-            `2. Navigate to: document-processor/\n` +
-            `3. Run: python -m uvicorn main:app --host 0.0.0.0 --port 8000\n\n` +
-            `Or if using PM2: pm2 start document-processor/main.py --name email-api\n\n` +
-            `Then try testing again.`,
-          variant: "destructive",
-        });
-        setTesting(null);
-        return;
-      }
-
       // Only send connection test fields, not From Name/Email (those are for sending, not testing connection)
       const testConfig = {
+        type: 'smtp' as const,
         host: smtpConfig.host,
         port: smtpConfig.port,
         username: smtpConfig.username,
@@ -247,84 +217,41 @@ export default function EmailConfiguration() {
         password: '***hidden***'
       });
 
-      // Call backend API to test SMTP connection
-      // Use /api/ prefix which nginx proxies to Python backend on port 8000
-      const apiUrl = import.meta.env.VITE_API_URL || '/api';
-      const url = `${apiUrl}/email/test-smtp`;
-      console.log('Calling endpoint:', url);
+      // Call Supabase Edge Function to test SMTP connection (no Python backend needed!)
+      console.log('Calling Supabase Edge Function: test-email-connection');
       
-      // Create abort controller for timeout
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
-      
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(testConfig),
-        signal: controller.signal,
-      }).finally(() => clearTimeout(timeoutId));
+      const { data, error } = await supabase.functions.invoke('test-email-connection', {
+        body: testConfig,
+      });
 
-      console.log('Response status:', response.status, response.statusText);
-      console.log('Response headers:', Object.fromEntries(response.headers.entries()));
-
-      // Try to parse response as JSON
-      let data;
-      const text = await response.text();
-      console.log('Response text:', text);
-      
-      if (!text) {
-        throw new Error(`Empty response from server (HTTP ${response.status})`);
+      if (error) {
+        console.error('Supabase function error:', error);
+        throw error;
       }
 
-      try {
-        data = JSON.parse(text);
-        console.log('Parsed response data:', data);
-      } catch (parseError) {
-        console.error('Failed to parse JSON:', parseError, 'Raw text:', text);
-        // If response is not JSON, check status
-        if (!response.ok) {
-          throw new Error(`Server error: HTTP ${response.status} ${response.statusText}. Response: ${text.substring(0, 200)}`);
-        }
-        throw new Error(`Invalid JSON response from server: ${text.substring(0, 200)}`);
-      }
-
-      // Handle HTTP error status codes (400, 500, etc.)
-      if (!response.ok) {
-        let errorMsg = data.detail || data.message || data.error || `HTTP ${response.status}: ${response.statusText}`;
-        
-        // Provide specific guidance for 404 errors
-        if (response.status === 404) {
-          errorMsg = `Backend API endpoint not found (404). The email test endpoint is not available.\n\n` +
-            `Please ensure:\n` +
-            `1. The Python backend API is running on port 8000\n` +
-            `2. The endpoint /api/email/test-smtp exists in the backend\n` +
-            `3. Check backend logs for configuration issues\n\n` +
-            `URL attempted: ${url}`;
-        }
-        
-        console.error('HTTP error response:', errorMsg);
-        toast({
-          title: response.status === 404 ? "Endpoint Not Found" : "Connection Failed",
-          description: errorMsg,
-          variant: "destructive",
-        });
-        return;
-      }
+      console.log('Response data:', data);
 
       // Check if response indicates success
-      if (data.success === true) {
+      if (data && data.success === true) {
         console.log('SMTP connection test successful!');
         toast({
           title: "Connection Successful",
           description: data.message || "SMTP connection test passed!",
         });
       } else {
-        // Backend returned success: false with error message
-        const errorMsg = data.message || data.error || data.detail || 'Connection test failed';
+        // Function returned success: false with error message
+        const errorMsg = data.message || data.error || 'Connection test failed';
         console.error('SMTP connection test failed:', errorMsg);
         toast({
           title: "Connection Failed",
           description: errorMsg,
+          variant: "destructive",
+        });
+      } else {
+        // Unexpected response format
+        toast({
+          title: "Connection Failed",
+          description: data?.message || data?.error || 'Unexpected response from server',
           variant: "destructive",
         });
       }
@@ -334,14 +261,7 @@ export default function EmailConfiguration() {
       // Provide more specific error messages
       let errorMsg = "Failed to test SMTP connection. ";
       
-      if (error.name === 'AbortError' || error.message?.includes('timeout')) {
-        errorMsg += "Request timed out. The backend API may not be responding. Please check if the backend is running.";
-      } else if (error.name === 'TypeError' && error.message.includes('fetch')) {
-        errorMsg += "Unable to reach the backend API. Please check:\n";
-        errorMsg += "1. The backend API is running (check port 8000)\n";
-        errorMsg += "2. Check browser console for network errors\n";
-        errorMsg += "3. Verify API URL: " + (import.meta.env.VITE_API_URL || '/api') + "/email/test-smtp";
-      } else if (error.message) {
+      if (error.message) {
         errorMsg += error.message;
       } else {
         errorMsg += "Check browser console for details.";
@@ -371,25 +291,9 @@ export default function EmailConfiguration() {
         return;
       }
 
-      // Check if backend is available
-      const backendAvailable = await checkBackendHealth();
-      if (!backendAvailable) {
-        toast({
-          title: "Backend API Not Available",
-          description: `The backend API is not running. To start it:\n\n` +
-            `1. Open a terminal\n` +
-            `2. Navigate to: document-processor/\n` +
-            `3. Run: python -m uvicorn main:app --host 0.0.0.0 --port 8000\n\n` +
-            `Or if using PM2: pm2 start document-processor/main.py --name email-api\n\n` +
-            `Then try testing again.`,
-          variant: "destructive",
-        });
-        setTesting(null);
-        return;
-      }
-
       // Only send connection test fields
       const testConfig = {
+        type: 'imap' as const,
         host: imapConfig.host,
         port: imapConfig.port,
         username: imapConfig.username,
@@ -405,79 +309,30 @@ export default function EmailConfiguration() {
         password: '***hidden***'
       });
 
-      // Call backend API to test IMAP connection
-      // Use /api/ prefix which nginx proxies to Python backend on port 8000
-      const apiUrl = import.meta.env.VITE_API_URL || '/api';
-      const url = `${apiUrl}/email/test-imap`;
-      console.log('Calling endpoint:', url);
+      // Call Supabase Edge Function to test IMAP connection (no Python backend needed!)
+      console.log('Calling Supabase Edge Function: test-email-connection');
       
-      // Create abort controller for timeout
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout
-      
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(testConfig),
-        signal: controller.signal,
-      }).finally(() => clearTimeout(timeoutId));
+      const { data, error } = await supabase.functions.invoke('test-email-connection', {
+        body: testConfig,
+      });
 
-      console.log('Response status:', response.status, response.statusText);
-
-      // Try to parse response as JSON
-      let data;
-      const text = await response.text();
-      console.log('Response text:', text);
-      
-      if (!text) {
-        throw new Error(`Empty response from server (HTTP ${response.status})`);
+      if (error) {
+        console.error('Supabase function error:', error);
+        throw error;
       }
 
-      try {
-        data = JSON.parse(text);
-        console.log('Parsed response data:', data);
-      } catch (parseError) {
-        console.error('Failed to parse JSON:', parseError, 'Raw text:', text);
-        // If response is not JSON, check status
-        if (!response.ok) {
-          throw new Error(`Server error: HTTP ${response.status} ${response.statusText}. Response: ${text.substring(0, 200)}`);
-        }
-        throw new Error(`Invalid JSON response from server: ${text.substring(0, 200)}`);
-      }
-
-      // Handle HTTP error status codes (400, 500, etc.)
-      if (!response.ok) {
-        let errorMsg = data.detail || data.message || data.error || `HTTP ${response.status}: ${response.statusText}`;
-        
-        // Provide specific guidance for 404 errors
-        if (response.status === 404) {
-          errorMsg = `Backend API endpoint not found (404). The email test endpoint is not available.\n\n` +
-            `Please ensure:\n` +
-            `1. The Python backend API is running on port 8000\n` +
-            `2. The endpoint /api/email/test-imap exists in the backend\n` +
-            `3. Check backend logs for configuration issues\n\n` +
-            `URL attempted: ${url}`;
-        }
-        
-        console.error('HTTP error response:', errorMsg);
-        toast({
-          title: response.status === 404 ? "Endpoint Not Found" : "Connection Failed",
-          description: errorMsg,
-          variant: "destructive",
-        });
-        return;
-      }
+      console.log('Response data:', data);
 
       // Check if response indicates success
-      if (data.success === true) {
+      if (data && data.success === true) {
         console.log('IMAP connection test successful!');
         toast({
           title: "Connection Successful",
           description: data.message || "IMAP connection test passed!",
         });
       } else {
-        // Backend returned success: false with error message
-        const errorMsg = data.message || data.error || data.detail || 'Connection test failed';
+        // Function returned success: false with error message
+        const errorMsg = data.message || data.error || 'Connection test failed';
         console.error('IMAP connection test failed:', errorMsg);
         toast({
           title: "Connection Failed",
@@ -491,14 +346,7 @@ export default function EmailConfiguration() {
       // Provide more specific error messages
       let errorMsg = "Failed to test IMAP connection. ";
       
-      if (error.name === 'AbortError' || error.message?.includes('timeout')) {
-        errorMsg += "Request timed out. The backend API may not be responding. Please check if the backend is running.";
-      } else if (error.name === 'TypeError' && error.message.includes('fetch')) {
-        errorMsg += "Unable to reach the backend API. Please check:\n";
-        errorMsg += "1. The backend API is running (check port 8000)\n";
-        errorMsg += "2. Check browser console for network errors\n";
-        errorMsg += "3. Verify API URL: " + (import.meta.env.VITE_API_URL || '/api') + "/email/test-imap";
-      } else if (error.message) {
+      if (error.message) {
         errorMsg += error.message;
       } else {
         errorMsg += "Check browser console for details.";
