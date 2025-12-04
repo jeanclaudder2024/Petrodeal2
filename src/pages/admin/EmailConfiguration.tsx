@@ -185,6 +185,20 @@ export default function EmailConfiguration() {
     }
   };
 
+  const checkBackendHealth = async (): Promise<boolean> => {
+    try {
+      const apiUrl = import.meta.env.VITE_API_URL || '/api';
+      const healthUrl = `${apiUrl}/health`;
+      const response = await fetch(healthUrl, {
+        method: 'GET',
+        signal: AbortSignal.timeout(5000), // 5 second timeout
+      });
+      return response.ok;
+    } catch {
+      return false;
+    }
+  };
+
   const testSMTPConnection = async () => {
     setTesting('smtp');
     try {
@@ -193,6 +207,23 @@ export default function EmailConfiguration() {
         toast({
           title: "Missing Information",
           description: "Please fill in SMTP Host, Username, and Password before testing",
+          variant: "destructive",
+        });
+        setTesting(null);
+        return;
+      }
+
+      // Check if backend is available
+      const backendAvailable = await checkBackendHealth();
+      if (!backendAvailable) {
+        toast({
+          title: "Backend API Not Available",
+          description: `The backend API is not running. To start it:\n\n` +
+            `1. Open a terminal\n` +
+            `2. Navigate to: document-processor/\n` +
+            `3. Run: python -m uvicorn main:app --host 0.0.0.0 --port 8000\n\n` +
+            `Or if using PM2: pm2 start document-processor/main.py --name email-api\n\n` +
+            `Then try testing again.`,
           variant: "destructive",
         });
         setTesting(null);
@@ -334,6 +365,23 @@ export default function EmailConfiguration() {
         toast({
           title: "Missing Information",
           description: "Please fill in IMAP Host, Username, and Password before testing",
+          variant: "destructive",
+        });
+        setTesting(null);
+        return;
+      }
+
+      // Check if backend is available
+      const backendAvailable = await checkBackendHealth();
+      if (!backendAvailable) {
+        toast({
+          title: "Backend API Not Available",
+          description: `The backend API is not running. To start it:\n\n` +
+            `1. Open a terminal\n` +
+            `2. Navigate to: document-processor/\n` +
+            `3. Run: python -m uvicorn main:app --host 0.0.0.0 --port 8000\n\n` +
+            `Or if using PM2: pm2 start document-processor/main.py --name email-api\n\n` +
+            `Then try testing again.`,
           variant: "destructive",
         });
         setTesting(null);
