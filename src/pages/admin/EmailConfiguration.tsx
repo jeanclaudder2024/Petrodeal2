@@ -247,58 +247,102 @@ export default function EmailConfiguration() {
           
           if (response.ok) {
             const responseData = await response.json();
+            
+            // Check if backend returned success: false
+            if (responseData.success === false) {
+              const errorMsg = responseData.message || responseData.error || 'SMTP connection test failed';
+              throw new Error(errorMsg);
+            }
+            
             data = responseData;
             error = null;
             console.log('✅ Using Python backend (VPS)');
           } else {
-            throw new Error('Backend not available');
+            // Try to get error message from response
+            let errorText = `Backend returned status ${response.status}`;
+            try {
+              const errorData = await response.json();
+              errorText = errorData.message || errorData.detail || errorText;
+            } catch {
+              // Couldn't parse error response
+            }
+            throw new Error(errorText);
           }
         } catch (backendError: any) {
           clearTimeout(timeoutId);
           if (backendError.name === 'AbortError') {
-            throw new Error('Backend timeout');
+            throw new Error('Backend timeout - request took longer than 5 seconds');
           }
           throw backendError;
         }
-      } catch (backendError) {
+      } catch (backendError: any) {
         // Backend not available, use Supabase Edge Function instead
-        console.log('⚠️ Python backend not available, using Supabase Edge Function');
-        console.log('Calling Supabase Edge Function: bright-function');
+        console.log('⚠️ Python backend not available, trying Supabase Edge Function');
         
-        const edgeFunctionResult = await supabase.functions.invoke('bright-function', {
-          body: {
-            type: 'smtp',
-            ...testConfig,
-          },
-        });
-        
-        data = edgeFunctionResult.data;
-        error = edgeFunctionResult.error;
+        try {
+          const edgeFunctionResult = await supabase.functions.invoke('bright-function', {
+            body: {
+              type: 'smtp',
+              ...testConfig,
+            },
+          });
+          
+          data = edgeFunctionResult.data;
+          error = edgeFunctionResult.error;
+          
+          // Handle Supabase function errors
+          if (error) {
+            console.error('Supabase function error:', error);
+            throw new Error(error.message || 'Supabase Edge Function error occurred');
+          }
+          
+          // Check Supabase function response
+          if (data && data.success === true) {
+            console.log('SMTP connection test successful via Supabase!');
+            toast({
+              title: "Connection Successful",
+              description: data.message || "SMTP connection test passed!",
+            });
+            setTesting(null);
+            return;
+          } else if (data && data.success === false) {
+            const errorMsg = data.message || data.error || 'Connection test failed';
+            console.error('SMTP connection test failed:', errorMsg);
+            toast({
+              title: "Connection Failed",
+              description: errorMsg,
+              variant: "destructive",
+            });
+            setTesting(null);
+            return;
+          }
+        } catch (edgeFunctionError: any) {
+          console.error('Edge function error:', edgeFunctionError);
+          throw new Error(`Edge Function error: ${edgeFunctionError.message || 'Failed to connect to email test service'}`);
+        }
       }
 
-      if (error) {
-        console.error('Supabase function error:', error);
-        throw error;
-      }
+      // Handle successful backend response
+      if (data && !error) {
+        console.log('Response data:', data);
 
-      console.log('Response data:', data);
-
-      // Check if response indicates success
-      if (data && data.success === true) {
-        console.log('SMTP connection test successful!');
-        toast({
-          title: "Connection Successful",
-          description: data.message || "SMTP connection test passed!",
-        });
-      } else {
-        // Function returned success: false with error message
-        const errorMsg = data?.message || data?.error || 'Connection test failed';
-        console.error('SMTP connection test failed:', errorMsg);
-        toast({
-          title: "Connection Failed",
-          description: errorMsg,
-          variant: "destructive",
-        });
+        // Check if response indicates success
+        if (data.success === true) {
+          console.log('SMTP connection test successful!');
+          toast({
+            title: "Connection Successful",
+            description: data.message || "SMTP connection test passed!",
+          });
+        } else {
+          // Function returned success: false with error message
+          const errorMsg = data.message || data.error || 'Connection test failed';
+          console.error('SMTP connection test failed:', errorMsg);
+          toast({
+            title: "Connection Failed",
+            description: errorMsg,
+            variant: "destructive",
+          });
+        }
       }
     } catch (error: any) {
       console.error('SMTP test error:', error);
@@ -307,7 +351,17 @@ export default function EmailConfiguration() {
       let errorMsg = "Failed to test SMTP connection. ";
       
       if (error.message) {
-        errorMsg += error.message;
+        if (error.message.includes('Failed to fetch') || error.message.includes('NetworkError')) {
+          errorMsg = "Network error: Unable to reach the server. Please check your internet connection and try again.";
+        } else if (error.message.includes('timeout')) {
+          errorMsg = "Request timed out. The server may be slow or unreachable. Please try again.";
+        } else if (error.message.includes('Backend timeout')) {
+          errorMsg = "Backend server is not responding. Please ensure the Python backend is running on port 8000.";
+        } else if (error.message.includes('Edge Function')) {
+          errorMsg = error.message;
+        } else {
+          errorMsg += error.message;
+        }
       } else {
         errorMsg += "Check browser console for details.";
       }
@@ -384,11 +438,26 @@ export default function EmailConfiguration() {
           
           if (response.ok) {
             const responseData = await response.json();
+            
+            // Check if backend returned success: false (even with 200 status)
+            if (responseData.success === false) {
+              const errorMsg = responseData.message || responseData.error || 'SMTP connection test failed';
+              throw new Error(errorMsg);
+            }
+            
             data = responseData;
             error = null;
             console.log('✅ Using Python backend (VPS)');
           } else {
-            throw new Error('Backend not available');
+            // Try to get error message from response
+            let errorText = `Backend returned status ${response.status}`;
+            try {
+              const errorData = await response.json();
+              errorText = errorData.message || errorData.detail || errorText;
+            } catch {
+              // Couldn't parse error response
+            }
+            throw new Error(errorText);
           }
         } catch (backendError: any) {
           clearTimeout(timeoutId);

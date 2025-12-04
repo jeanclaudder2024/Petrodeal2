@@ -11,28 +11,22 @@ const BlackFridayCountdown = () => {
     seconds: 0,
   });
 
-  // Set Black Friday date (you can adjust this date)
-  // Black Friday 2024: November 29, 2024
-  // Black Friday 2025: November 28, 2025
-  const getBlackFridayDate = () => {
+  // Countdown 7 days from now
+  const getCountdownDate = () => {
     const now = new Date();
-    // Set to next Black Friday (November 29, 2024 or later)
-    let blackFriday = new Date("2024-11-29T23:59:59");
-    
-    // If that date has passed, use next year
-    if (blackFriday < now) {
-      blackFriday = new Date("2025-11-28T23:59:59");
-    }
-    
-    return blackFriday.getTime();
+    // Add 7 days (7 * 24 * 60 * 60 * 1000 milliseconds)
+    const countdownDate = new Date(now.getTime() + (7 * 24 * 60 * 60 * 1000));
+    // Set to end of day (23:59:59)
+    countdownDate.setHours(23, 59, 59, 999);
+    return countdownDate.getTime();
   };
   
-  const blackFridayDate = getBlackFridayDate();
+  const countdownDate = getCountdownDate();
 
   useEffect(() => {
     const timer = setInterval(() => {
       const now = new Date().getTime();
-      const distance = blackFridayDate - now;
+      const distance = countdownDate - now;
 
       if (distance < 0) {
         // Countdown finished, hide the bar or set to next year
