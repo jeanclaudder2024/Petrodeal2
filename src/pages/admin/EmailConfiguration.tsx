@@ -217,12 +217,64 @@ export default function EmailConfiguration() {
         password: '***hidden***'
       });
 
-      // Call Supabase Edge Function to test SMTP connection (no Python backend needed!)
-      console.log('Calling Supabase Edge Function: test-email-connection');
+      // Try Python backend first (for VPS), then fall back to Supabase Edge Function
+      const apiUrl = import.meta.env.VITE_API_URL || '/api';
+      const backendUrl = `${apiUrl}/email/test-smtp`;
       
-      const { data, error } = await supabase.functions.invoke('test-email-connection', {
-        body: testConfig,
-      });
+      let data, error;
+      
+      // First, try Python backend (for VPS deployment)
+      try {
+        console.log('Trying Python backend first:', backendUrl);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout for backend check
+        
+        try {
+          const response = await fetch(backendUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              host: testConfig.host,
+              port: testConfig.port,
+              username: testConfig.username,
+              password: testConfig.password,
+              enableTLS: testConfig.enableTLS,
+            }),
+            signal: controller.signal,
+          });
+          
+          clearTimeout(timeoutId);
+          
+          if (response.ok) {
+            const responseData = await response.json();
+            data = responseData;
+            error = null;
+            console.log('✅ Using Python backend (VPS)');
+          } else {
+            throw new Error('Backend not available');
+          }
+        } catch (backendError: any) {
+          clearTimeout(timeoutId);
+          if (backendError.name === 'AbortError') {
+            throw new Error('Backend timeout');
+          }
+          throw backendError;
+        }
+      } catch (backendError) {
+        // Backend not available, use Supabase Edge Function instead
+        console.log('⚠️ Python backend not available, using Supabase Edge Function');
+        console.log('Calling Supabase Edge Function: test-email-connection');
+        
+        const edgeFunctionResult = await supabase.functions.invoke('test-email-connection', {
+          body: {
+            type: 'smtp',
+            ...testConfig,
+          },
+        });
+        
+        data = edgeFunctionResult.data;
+        error = edgeFunctionResult.error;
+      }
 
       if (error) {
         console.error('Supabase function error:', error);
@@ -240,18 +292,11 @@ export default function EmailConfiguration() {
         });
       } else {
         // Function returned success: false with error message
-        const errorMsg = data.message || data.error || 'Connection test failed';
+        const errorMsg = data?.message || data?.error || 'Connection test failed';
         console.error('SMTP connection test failed:', errorMsg);
         toast({
           title: "Connection Failed",
           description: errorMsg,
-          variant: "destructive",
-        });
-      } else {
-        // Unexpected response format
-        toast({
-          title: "Connection Failed",
-          description: data?.message || data?.error || 'Unexpected response from server',
           variant: "destructive",
         });
       }
@@ -309,15 +354,67 @@ export default function EmailConfiguration() {
         password: '***hidden***'
       });
 
-      // Call Supabase Edge Function to test IMAP connection (no Python backend needed!)
-      console.log('Calling Supabase Edge Function: test-email-connection');
+      // Try Python backend first (for VPS), then fall back to Supabase Edge Function
+      const apiUrl = import.meta.env.VITE_API_URL || '/api';
+      const backendUrl = `${apiUrl}/email/test-imap`;
       
-      const { data, error } = await supabase.functions.invoke('test-email-connection', {
-        body: testConfig,
-      });
+      let data, error;
+      
+      // First, try Python backend (for VPS deployment)
+      try {
+        console.log('Trying Python backend first:', backendUrl);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout for backend check
+        
+        try {
+          const response = await fetch(backendUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              host: testConfig.host,
+              port: testConfig.port,
+              username: testConfig.username,
+              password: testConfig.password,
+              enableTLS: testConfig.enableTLS,
+            }),
+            signal: controller.signal,
+          });
+          
+          clearTimeout(timeoutId);
+          
+          if (response.ok) {
+            const responseData = await response.json();
+            data = responseData;
+            error = null;
+            console.log('✅ Using Python backend (VPS)');
+          } else {
+            throw new Error('Backend not available');
+          }
+        } catch (backendError: any) {
+          clearTimeout(timeoutId);
+          if (backendError.name === 'AbortError') {
+            throw new Error('Backend timeout');
+          }
+          throw backendError;
+        }
+      } catch (backendError) {
+        // Backend not available, use Supabase Edge Function instead
+        console.log('⚠️ Python backend not available, using Supabase Edge Function');
+        console.log('Calling Supabase Edge Function: test-email-connection');
+        
+        const edgeFunctionResult = await supabase.functions.invoke('test-email-connection', {
+          body: {
+            type: 'imap',
+            ...testConfig,
+          },
+        });
+        
+        data = edgeFunctionResult.data;
+        error = edgeFunctionResult.error;
+      }
 
       if (error) {
-        console.error('Supabase function error:', error);
+        console.error('Email function error:', error);
         throw error;
       }
 
@@ -332,7 +429,7 @@ export default function EmailConfiguration() {
         });
       } else {
         // Function returned success: false with error message
-        const errorMsg = data.message || data.error || 'Connection test failed';
+        const errorMsg = data?.message || data?.error || 'Connection test failed';
         console.error('IMAP connection test failed:', errorMsg);
         toast({
           title: "Connection Failed",
