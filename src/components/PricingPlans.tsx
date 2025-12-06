@@ -226,6 +226,11 @@ const PricingPlans: React.FC<PricingPlansProps> = ({
     highlight: `Perfect for ${dbPlan.plan_tier} level users.`
   })) : staticPlans;
 
+  // Check if plan is selected from URL parameter
+  const isSelectedFromUrl = (tier: string) => {
+    return selectedPlan && tier.toLowerCase() === selectedPlan.toLowerCase();
+  };
+
   return (
     <div className="space-y-8">
       {/* Billing Toggle */}
