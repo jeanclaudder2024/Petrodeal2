@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -214,22 +214,39 @@ const PricingPlans: React.FC<PricingPlansProps> = ({
     }
   ];
 
-  const displayPlans = dbPlans.length > 0 ? dbPlans.map(dbPlan => ({
-    tier: dbPlan.plan_tier,
-    name: dbPlan.plan_name,
-    subtitle: dbPlan.description,
-    monthlyPrice: dbPlan.monthly_price,
-    annualPrice: dbPlan.annual_price,
-    icon: dbPlan.plan_tier === 'enterprise' ? Zap : dbPlan.plan_tier === 'professional' ? Crown : Ship,
-    popular: dbPlan.is_popular,
-    features: dbPlan.features.map(feature => ({ icon: Check, text: feature })),
-    highlight: `Perfect for ${dbPlan.plan_tier} level users.`
-  })) : staticPlans;
+  // Check if plan is selected from URL parameter (define before use)
+  const isSelectedFromUrl = useCallback((tier: string) => {
+    if (!selectedPlan || !tier) return false;
+    return tier.toLowerCase() === selectedPlan.toLowerCase();
+  }, [selectedPlan]);
 
-  // Check if plan is selected from URL parameter
-  const isSelectedFromUrl = (tier: string) => {
-    return selectedPlan && tier.toLowerCase() === selectedPlan.toLowerCase();
-  };
+  const displayPlans = useMemo(() => {
+    if (dbPlans.length > 0) {
+      return dbPlans.map(dbPlan => ({
+        tier: dbPlan.plan_tier || '',
+        name: dbPlan.plan_name || '',
+        subtitle: dbPlan.description || '',
+        monthlyPrice: dbPlan.monthly_price || 0,
+        annualPrice: dbPlan.annual_price || 0,
+        icon: dbPlan.plan_tier === 'enterprise' ? Zap : dbPlan.plan_tier === 'professional' ? Crown : Ship,
+        popular: dbPlan.is_popular || false,
+        features: (dbPlan.features || []).map(feature => ({ icon: Check, text: feature })),
+        highlight: `Perfect for ${dbPlan.plan_tier} level users.`
+      }));
+    }
+    return staticPlans;
+  }, [dbPlans]);
+
+  // Safety check: ensure displayPlans is always an array
+  if (!displayPlans || displayPlans.length === 0) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <div className="text-center">
+          <p className="text-muted-foreground">Loading plans...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8">
