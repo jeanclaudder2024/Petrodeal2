@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { Download, FileText, Loader2, CheckCircle, XCircle, Lock } from 'lucide-react';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Download, FileText, Loader2, CheckCircle, XCircle, Lock, CreditCard, ArrowRight } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
@@ -49,12 +51,16 @@ const API_BASE_URL = process.env.NODE_ENV === 'production'
 
 export default function VesselDocumentGenerator({ vesselImo, vesselName }: VesselDocumentGeneratorProps) {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [templates, setTemplates] = useState<DocumentTemplate[]>([]);
   const [loading, setLoading] = useState(false);
   const [processingStatus, setProcessingStatus] = useState<Record<string, ProcessingStatus>>({});
   // Store user's plan information to check against template requirements
   const [userPlanTier, setUserPlanTier] = useState<string | null>(null);
   const [userPlanName, setUserPlanName] = useState<string | null>(null);
+  // Dialog state for locked templates
+  const [upgradeDialogOpen, setUpgradeDialogOpen] = useState(false);
+  const [lockedTemplate, setLockedTemplate] = useState<DocumentTemplate | null>(null);
 
   // Force refresh when component mounts, vessel changes, or user changes
   useEffect(() => {
@@ -1228,21 +1234,30 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                   
                   <div className="flex items-center gap-2">
                     <Button
-                      onClick={() => processDocument(template)}
-                      disabled={isProcessing || isLocked}
+                      onClick={() => {
+                        if (isLocked) {
+                          // Open upgrade dialog instead of processing
+                          setLockedTemplate(template);
+                          setUpgradeDialogOpen(true);
+                        } else if (!isProcessing) {
+                          // Process document only if not locked and not processing
+                          processDocument(template);
+                        }
+                      }}
+                      disabled={isProcessing}
                       className={`${
                         isLocked 
-                          ? 'bg-gray-400 dark:bg-gray-600 cursor-not-allowed opacity-60 hover:bg-gray-400 dark:hover:bg-gray-600' 
+                          ? 'bg-amber-600 hover:bg-amber-700 dark:bg-amber-500 dark:hover:bg-amber-600 cursor-pointer' 
                           : 'bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600'
                       } text-white transition-colors`}
                       title={isLocked ? (
                         template.remaining_downloads !== undefined && 
                         template.remaining_downloads !== null && 
                         template.remaining_downloads <= 0
-                          ? `🔒 Locked: Your monthly downloads for ${displayName} are finished (${template.max_downloads || 0}/${template.max_downloads || 0} used)`
+                          ? `🔒 Click to upgrade: Your monthly downloads for ${displayName} are finished (${template.max_downloads || 0}/${template.max_downloads || 0} used)`
                           : planName 
-                            ? `🔒 Locked: Upgrade to ${planName} plan to download this template`
-                            : '🔒 Locked: Not available in your plan'
+                            ? `🔒 Click to upgrade to ${planName} plan`
+                            : '🔒 Click to view upgrade options'
                       ) : canDownload 
                         ? `Download ${displayName}`
                         : ''}
@@ -1255,7 +1270,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                       ) : isLocked ? (
                         <>
                           <Lock className="h-4 w-4 mr-2" />
-                          Locked
+                          Upgrade to Unlock
                         </>
                       ) : (
                         <>
@@ -1272,6 +1287,92 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
             </CardContent>
           </Card>
         )}
+        
+        {/* Upgrade Dialog for Locked Templates */}
+        <Dialog open={upgradeDialogOpen} onOpenChange={setUpgradeDialogOpen}>
+          <DialogContent className="sm:max-w-[500px]">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Lock className="h-5 w-5 text-amber-600" />
+                Upgrade Required
+              </DialogTitle>
+              <DialogDescription>
+                {lockedTemplate && (
+                  <div className="mt-2">
+                    <p className="font-medium text-base text-foreground mb-2">
+                      {lockedTemplate.metadata?.display_name || lockedTemplate.name || lockedTemplate.title || 'This template'}
+                    </p>
+                    {lockedTemplate.remaining_downloads !== undefined && 
+                     lockedTemplate.remaining_downloads !== null && 
+                     lockedTemplate.remaining_downloads <= 0 ? (
+                      <div className="space-y-2">
+                        <p className="text-sm text-muted-foreground">
+                          Your monthly download limit for this template has been reached.
+                        </p>
+                        {lockedTemplate.max_downloads !== null && lockedTemplate.max_downloads !== undefined && (
+                          <p className="text-sm text-muted-foreground">
+                            You've used <strong>{lockedTemplate.max_downloads}</strong> out of <strong>{lockedTemplate.max_downloads}</strong> downloads for this month.
+                          </p>
+                        )}
+                      </div>
+                    ) : lockedTemplate.plan_name ? (
+                      <p className="text-sm text-muted-foreground">
+                        This template requires the <strong>{lockedTemplate.plan_name}</strong> plan to access.
+                        Upgrade your plan to download this document.
+                      </p>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">
+                        This template is not available in your current plan. Upgrade to access this document.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </DialogDescription>
+            </DialogHeader>
+            
+            <div className="py-4">
+              <div className="p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+                <div className="flex items-start gap-3">
+                  <CreditCard className="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5" />
+                  <div className="flex-1">
+                    <h4 className="font-semibold text-amber-900 dark:text-amber-100 mb-1">
+                      Benefits of Upgrading:
+                    </h4>
+                    <ul className="text-sm text-amber-800 dark:text-amber-200 space-y-1 list-disc list-inside">
+                      {lockedTemplate?.plan_name && (
+                        <li>Access to <strong>{lockedTemplate.plan_name}</strong> plan templates</li>
+                      )}
+                      <li>Unlock all premium document templates</li>
+                      <li>Increase or remove download limits</li>
+                      <li>Get priority support</li>
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <DialogFooter className="flex flex-col sm:flex-row gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setUpgradeDialogOpen(false)}
+                className="w-full sm:w-auto"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => {
+                  setUpgradeDialogOpen(false);
+                  navigate('/subscription');
+                }}
+                className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 group"
+              >
+                <CreditCard className="h-4 w-4 mr-2" />
+                View Plans & Upgrade
+                <ArrowRight className="h-4 w-4 ml-2 group-hover:translate-x-1 transition-transform" />
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
     </div>
   );
 }
