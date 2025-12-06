@@ -631,23 +631,84 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
   const processDocument = async (template: DocumentTemplate) => {
     const templateKey = template.id || template.file_name || template.name;
     
-    // Enhanced lock/unlock check - matches plan system logic
-    // Check 1: Template permission (can_download from API)
-    // API returns can_download: false if user's plan doesn't have permission for this template
-    let hasPermission = template.can_download === true; // Must be explicitly true
+    // Enhanced lock/unlock check - MUST MATCH the render logic exactly
+    // Use the SAME plan matching logic as the render section
+    let hasPermission = true; // Start with true, then check restrictions
     
-    // Additional check: If template requires a specific plan, verify user has access
-    if (template.plan_name && template.plan_name !== 'All Plans') {
-      // Template requires a specific plan - if can_download is false, definitely lock it
-      if (template.can_download === false) {
+    // Get template's plan info
+    const planName = template.plan_name || null;
+    const templatePlanTiers = template.plan_tiers || [];
+    
+    // Check 1: If user is not logged in and template requires a plan, lock it
+    if (!user?.id) {
+      if (planName && planName !== 'All Plans' && planName !== null) {
+        hasPermission = false;
+      } else if (templatePlanTiers.length > 0) {
         hasPermission = false;
       }
-    } else if (!template.plan_name || template.plan_name === 'All Plans') {
-      // Template is available to all plans - use can_download from API
-      hasPermission = template.can_download !== false;
     }
     
-    // Check 2: Remaining downloads (per-template or plan-level)
+    // Check 2: If user is logged in, compare template's required plan with user's plan
+    if (user?.id) {
+      // Get user's plan from template object (stored during enrichment) or from state (fallback)
+      const templateUserPlanTier = template._user_plan_tier !== undefined ? template._user_plan_tier : userPlanTier;
+      const templateUserPlanName = template._user_plan_name !== undefined ? template._user_plan_name : userPlanName;
+      
+      // Normalize plan tiers to lowercase for comparison
+      const normalizedUserPlanTier = templateUserPlanTier ? templateUserPlanTier.toLowerCase().trim() : null;
+      const normalizedTemplatePlanTiers = templatePlanTiers.map(tier => tier ? tier.toLowerCase().trim() : '').filter(tier => tier);
+      
+      // First check plan_tiers array
+      if (normalizedTemplatePlanTiers.length > 0) {
+        if (!normalizedUserPlanTier || !normalizedTemplatePlanTiers.includes(normalizedUserPlanTier)) {
+          // User's plan tier is not in template's allowed tiers - LOCK IT
+          hasPermission = false;
+        } else {
+          // User's tier IS in the allowed tiers - UNLOCK IT
+          hasPermission = true;
+        }
+      } else if (planName && planName !== 'All Plans' && planName !== null) {
+        // If no plan_tiers but has plan_name, compare plan names (case-insensitive)
+        const normalizedPlanName = planName.toLowerCase().trim();
+        const normalizedUserPlanName = templateUserPlanName ? templateUserPlanName.toLowerCase().trim() : null;
+        
+        // Extract tier from plan name (e.g., "Enterprise Plan" -> "enterprise")
+        const planNameTier = normalizedPlanName.replace(/\s*plan\s*$/i, '').trim();
+        const userPlanNameTier = normalizedUserPlanName ? normalizedUserPlanName.replace(/\s*plan\s*$/i, '').trim() : null;
+        
+        // Check if plan names match OR if extracted tiers match OR if user tier matches plan name tier
+        const planNamesMatch = normalizedPlanName === normalizedUserPlanName;
+        const tiersMatch = planNameTier === userPlanNameTier || planNameTier === normalizedUserPlanTier;
+        const userTierMatchesPlanName = normalizedUserPlanTier && (normalizedPlanName.includes(normalizedUserPlanTier) || planNameTier === normalizedUserPlanTier);
+        
+        // Also check if plan name contains user tier or vice versa (e.g., "Professional Plan" contains "professional")
+        const planNameContainsTier = normalizedUserPlanTier && normalizedPlanName.includes(normalizedUserPlanTier);
+        const tierMatchesPlanName = normalizedUserPlanTier && planNameTier === normalizedUserPlanTier;
+        
+        if (!normalizedUserPlanName && !normalizedUserPlanTier) {
+          // User has no plan but template requires one - LOCK IT
+          hasPermission = false;
+        } else if (planNamesMatch || tiersMatch || userTierMatchesPlanName || planNameContainsTier || tierMatchesPlanName) {
+          // Plan matches - UNLOCK IT (trust plan check over API)
+          hasPermission = true;
+        } else {
+          // Template requires different plan than user has - LOCK IT
+          hasPermission = false;
+        }
+      }
+    }
+    
+    // Check 3: If can_download is explicitly false (API says user can't download), 
+    // BUT: If our plan check says the user has access, TRUST THE PLAN CHECK over API
+    if (template.can_download === false) {
+      if (!hasPermission) {
+        // Both API and plan check say no - lock it
+        hasPermission = false;
+      }
+      // If plan check says yes, keep hasPermission = true (trust plan check)
+    }
+    
+    // Check 4: Remaining downloads (per-template or plan-level)
     const hasRemainingDownloads = template.remaining_downloads === undefined || 
                                  template.remaining_downloads === null || 
                                  template.remaining_downloads > 0;
@@ -1043,15 +1104,19 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                   const tiersMatch = planNameTier === userPlanNameTier || planNameTier === normalizedUserPlanTier;
                   const userTierMatchesPlanName = normalizedUserPlanTier && (normalizedPlanName.includes(normalizedUserPlanTier) || planNameTier === normalizedUserPlanTier);
                   
+                  // Also check if plan name contains user tier or vice versa (e.g., "Professional Plan" contains "professional")
+                  const planNameContainsTier = normalizedUserPlanTier && normalizedPlanName.includes(normalizedUserPlanTier);
+                  const tierMatchesPlanName = normalizedUserPlanTier && planNameTier === normalizedUserPlanTier;
+                  
                   if (!normalizedUserPlanName && !normalizedUserPlanTier) {
                     // User has no plan but template requires one - LOCK IT
                     hasPermission = false;
-                  } else if (!planNamesMatch && !tiersMatch && !userTierMatchesPlanName) {
+                  } else if (planNamesMatch || tiersMatch || userTierMatchesPlanName || planNameContainsTier || tierMatchesPlanName) {
+                    // Plan matches - UNLOCK IT (multiple ways to match)
+                    hasPermission = true;
+                  } else {
                     // Template requires different plan than user has - LOCK IT
                     hasPermission = false;
-                  } else {
-                    // Plan matches - UNLOCK IT
-                    hasPermission = true;
                   }
                 }
               }
