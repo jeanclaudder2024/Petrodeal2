@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAccess } from '@/contexts/AccessContext';
+import { useSearchParams } from 'react-router-dom';
 import { Loader2 } from 'lucide-react';
 import { db, supabase } from '@/lib/supabase-helper';
 import { toast } from 'sonner';
@@ -26,10 +27,14 @@ interface SubscriptionData {
 const Subscription = () => {
   const { user } = useAuth();
   const { accessType, trialDaysLeft } = useAccess();
+  const [searchParams] = useSearchParams();
   const [subscriptionData, setSubscriptionData] = useState<SubscriptionData | null>(null);
   const [loading, setLoading] = useState(true);
   const [checkingSubscription, setCheckingSubscription] = useState(false);
   const [processingCheckout, setProcessingCheckout] = useState(false);
+  
+  // Get plan from URL parameter (for auto-selection after registration)
+  const selectedPlanFromUrl = searchParams.get('plan') || searchParams.get('tier');
 
   useEffect(() => {
     checkSubscription();
@@ -252,6 +257,7 @@ const Subscription = () => {
         onSubscribe={handleCheckout}
         currentTier={subscriptionData?.subscription_tier || undefined}
         isProcessing={processingCheckout}
+        selectedPlan={selectedPlanFromUrl || undefined}
       />
 
       {/* Show login prompt for non-authenticated users */}

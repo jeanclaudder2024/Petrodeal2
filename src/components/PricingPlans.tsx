@@ -25,6 +25,7 @@ interface PricingPlansProps {
   onSubscribe: (tier: string, billingCycle: string) => void;
   currentTier?: string;
   isProcessing?: boolean;
+  selectedPlan?: string; // Plan to highlight/scroll to from URL parameter
 }
 
 interface Discount {
@@ -49,16 +50,45 @@ interface DatabasePlan {
 const PricingPlans: React.FC<PricingPlansProps> = ({ 
   onSubscribe, 
   currentTier, 
-  isProcessing = false 
+  isProcessing = false,
+  selectedPlan 
 }) => {
   const [isAnnual, setIsAnnual] = useState(false);
   const [discounts, setDiscounts] = useState<Discount[]>([]);
   const [dbPlans, setDbPlans] = useState<DatabasePlan[]>([]);
+  const planRefs = React.useRef<{ [key: string]: HTMLDivElement | null }>({});
 
   useEffect(() => {
     fetchActiveDiscounts();
     fetchDynamicPlans();
   }, []);
+
+  // Scroll to and highlight selected plan from URL
+  useEffect(() => {
+    if (!selectedPlan || dbPlans.length === 0) return;
+    
+    // Wait for DOM to update with plans
+    const timeoutId = setTimeout(() => {
+      const planTier = selectedPlan.toLowerCase();
+      const planElement = planRefs.current[planTier];
+      
+      if (planElement) {
+        // Scroll to plan with smooth behavior
+        planElement.scrollIntoView({ 
+          behavior: 'smooth', 
+          block: 'center' 
+        });
+        
+        // Add highlight animation
+        planElement.classList.add('animate-pulse');
+        setTimeout(() => {
+          planElement.classList.remove('animate-pulse');
+        }, 2000);
+      }
+    }, 500); // Wait for plans to render
+    
+    return () => clearTimeout(timeoutId);
+  }, [selectedPlan, dbPlans]);
 
   const fetchDynamicPlans = async () => {
     const plansData = await fetchPlans();
@@ -223,12 +253,19 @@ const PricingPlans: React.FC<PricingPlansProps> = ({
           const discount = getDiscountForPlan(plan.tier, billingCycle);
           const discountedPrice = discount ? price * (100 - discount.discount_percentage) / 100 : price;
           
+          const isSelected = isSelectedFromUrl(plan.tier);
+          
           return (
             <Card 
               key={plan.tier}
+              ref={(el) => {
+                planRefs.current[plan.tier] = el;
+              }}
               className={`trading-card relative ${
                 plan.popular ? 'ring-2 ring-primary scale-105' : ''
-              } ${isCurrentPlan ? 'ring-2 ring-green-500' : ''}`}
+              } ${isCurrentPlan ? 'ring-2 ring-green-500' : ''} ${
+                isSelected ? 'ring-4 ring-blue-500 shadow-lg scale-105 z-10' : ''
+              }`}
             >
               {plan.popular && (
                 <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
@@ -243,6 +280,14 @@ const PricingPlans: React.FC<PricingPlansProps> = ({
                   <Badge className="bg-red-500 text-white">
                     <Percent className="h-3 w-3 mr-1" />
                     {discount.discount_percentage}% OFF
+                  </Badge>
+                </div>
+              )}
+              
+              {isSelected && !isCurrentPlan && (
+                <div className="absolute -top-3 left-1/2 transform -translate-x-1/2 z-20">
+                  <Badge className="bg-blue-500 text-white animate-pulse">
+                    Selected Plan
                   </Badge>
                 </div>
               )}

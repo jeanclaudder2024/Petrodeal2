@@ -769,7 +769,13 @@ const MultiStepRegistration = () => {
             // Continue anyway as the user is registered
           }
 
-          navigate('/dashboard');
+          // If user selected a plan during registration, redirect to subscription page with plan selected
+          // Otherwise, go to dashboard
+          if (formData.selectedPlan) {
+            navigate(`/subscription?plan=${formData.selectedPlan}`);
+          } else {
+            navigate('/dashboard');
+          }
         }
       }
     } catch (error) {
