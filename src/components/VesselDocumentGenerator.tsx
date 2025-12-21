@@ -885,8 +885,8 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
         const templateName = template.file_name || template.name || 'template';
         const apiTemplateName = templateName.replace('.docx', '');
         
-        // Get filename from Content-Disposition header, default to zip filename
-        let filename = `${apiTemplateName}_${vesselImo}_images.zip`;
+        // Get filename from Content-Disposition header, default to PDF filename
+        let filename = `${apiTemplateName}_${vesselImo}.pdf`;
         
         if (contentDisposition) {
           const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
@@ -898,25 +898,20 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
         // Get the blob directly from response - it should already have correct Content-Type
         const blob = await response.blob();
         
-        // Verify Content-Type header
+        // Verify Content-Type header is set correctly for PDF
         const contentType = response.headers.get('Content-Type');
-        if (contentType) {
-          // Support both zip (images) and pdf formats
-          if (!contentType.includes('application/zip') && !contentType.includes('application/pdf')) {
-            console.warn('Unexpected Content-Type:', contentType);
-          }
+        if (contentType && !contentType.includes('application/pdf')) {
+          console.warn('Unexpected Content-Type:', contentType);
         }
         
-        // Ensure filename has correct extension based on content type
-        const downloadFilename = contentType?.includes('application/zip') 
-          ? (filename.endsWith('.zip') ? filename : `${filename}.zip`)
-          : (filename.endsWith('.pdf') ? filename : `${filename}.pdf`);
+        // Ensure filename ends with .pdf
+        const pdfFilename = filename.endsWith('.pdf') ? filename : `${filename}.pdf`;
         
         // Create download URL from blob (blob already has correct type from response)
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = downloadFilename;
+        a.download = pdfFilename;
         document.body.appendChild(a);
         a.click();
         
