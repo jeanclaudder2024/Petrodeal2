@@ -893,11 +893,16 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
           }
         }
         
+        // Get Content-Type from response headers, default to application/pdf for PDF files
+        const contentType = response.headers.get('Content-Type') || 'application/pdf';
         const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
+        
+        // Create blob with explicit MIME type to ensure browser recognizes it as PDF
+        const pdfBlob = new Blob([blob], { type: contentType });
+        const url = window.URL.createObjectURL(pdfBlob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = filename;
+        a.download = filename.endsWith('.pdf') ? filename : `${filename}.pdf`;
         document.body.appendChild(a);
         a.click();
         window.URL.revokeObjectURL(url);
