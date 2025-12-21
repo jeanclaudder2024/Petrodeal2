@@ -893,20 +893,31 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
           }
         }
         
-        // Get Content-Type from response headers, default to application/pdf for PDF files
-        const contentType = response.headers.get('Content-Type') || 'application/pdf';
+        // Get the blob directly from response - it should already have correct Content-Type
         const blob = await response.blob();
         
-        // Create blob with explicit MIME type to ensure browser recognizes it as PDF
-        const pdfBlob = new Blob([blob], { type: contentType });
-        const url = window.URL.createObjectURL(pdfBlob);
+        // Verify Content-Type header is set correctly
+        const contentType = response.headers.get('Content-Type');
+        if (contentType && !contentType.includes('application/pdf')) {
+          console.warn('Unexpected Content-Type:', contentType);
+        }
+        
+        // Ensure filename ends with .pdf
+        const pdfFilename = filename.endsWith('.pdf') ? filename : `${filename}.pdf`;
+        
+        // Create download URL from blob (blob already has correct type from response)
+        const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = filename.endsWith('.pdf') ? filename : `${filename}.pdf`;
+        a.download = pdfFilename;
         document.body.appendChild(a);
         a.click();
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(a);
+        
+        // Cleanup
+        setTimeout(() => {
+          window.URL.revokeObjectURL(url);
+          document.body.removeChild(a);
+        }, 100);
         
         setProcessingStatus(prev => ({
           ...prev,
