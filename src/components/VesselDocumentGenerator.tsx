@@ -885,8 +885,8 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
         const templateName = template.file_name || template.name || 'template';
         const apiTemplateName = templateName.replace('.docx', '');
         
-        // Get filename from Content-Disposition header, default to PDF filename
-        let filename = `${apiTemplateName}_${vesselImo}.pdf`;
+        // Get filename from Content-Disposition header, default to ZIP filename
+        let filename = `${apiTemplateName}_${vesselImo}_images.zip`;
         
         if (contentDisposition) {
           const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
@@ -898,20 +898,20 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
         // Get the blob directly from response - it should already have correct Content-Type
         const blob = await response.blob();
         
-        // Verify Content-Type header is set correctly for PDF
+        // Verify Content-Type header - should be application/zip for images
         const contentType = response.headers.get('Content-Type');
-        if (contentType && !contentType.includes('application/pdf')) {
-          console.warn('Unexpected Content-Type:', contentType);
+        if (contentType && !contentType.includes('application/zip')) {
+          console.warn('Unexpected Content-Type:', contentType, 'Expected application/zip');
         }
         
-        // Ensure filename ends with .pdf
-        const pdfFilename = filename.endsWith('.pdf') ? filename : `${filename}.pdf`;
+        // Ensure filename ends with .zip (ZIP folder containing PNG images)
+        const zipFilename = filename.endsWith('.zip') ? filename : `${filename}.zip`;
         
         // Create download URL from blob (blob already has correct type from response)
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = pdfFilename;
+        a.download = zipFilename;
         document.body.appendChild(a);
         a.click();
         
