@@ -1,10 +1,20 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { z } from "https://deno.land/x/zod@v3.21.4/mod.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
+
+// Input validation schema
+const vesselPortSearchSchema = z.object({
+  vessel_name: z.string().max(200).optional(),
+  imo: z.string().max(20).optional(),
+  vessel_type: z.string().max(100).optional(),
+}).refine((data) => data.vessel_name || data.imo, {
+  message: "Vessel name or IMO is required"
+});
 
 serve(async (req) => {
   // Handle CORS preflight requests
@@ -13,16 +23,20 @@ serve(async (req) => {
   }
 
   try {
-    const { vessel_name, imo, vessel_type } = await req.json();
-
-    if (!vessel_name && !imo) {
+    const rawBody = await req.json();
+    
+    // Validate input
+    const validation = vesselPortSearchSchema.safeParse(rawBody);
+    if (!validation.success) {
       return new Response(
-        JSON.stringify({ error: 'Vessel name or IMO is required' }),
+        JSON.stringify({ error: 'Invalid input', details: validation.error.issues }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+    
+    const { vessel_name, imo, vessel_type } = validation.data;
 
-    console.log(`[AI-VESSEL-PORT-SEARCH] Searching for vessel: ${vessel_name} (IMO: ${imo})`);
+    console.log(`[AI-VESSEL-PORT-SEARCH] Searching for vessel: ${vessel_name || 'N/A'}`);
 
     const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
     if (!openAIApiKey) {

@@ -30,6 +30,7 @@ const primaryNavItems = [
 const secondaryNavItems = [
   { title: 'Map', url: '/map', icon: Map },
   { title: 'Oil Prices', url: '/oil-prices', icon: TrendingUp },
+  { title: 'Subscription', url: '/subscription', icon: Crown },
   { title: 'Broker', url: '/broker-dashboard', icon: Shield },
   { title: 'Support', url: '/support', icon: HelpCircle },
   { title: 'Tutorials', url: '/tutorials', icon: BookOpen },

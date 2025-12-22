@@ -31,18 +31,14 @@ const UserDocumentStorage: React.FC<UserDocumentStorageProps> = ({ vesselId }) =
 
   useEffect(() => {
     if (user) {
-      console.log('UserDocumentStorage useEffect triggered with user:', user.id, 'vesselId:', vesselId);
       fetchStoredDocuments();
       fetchUserSubscription();
-    } else {
-      console.log('UserDocumentStorage: No user, skipping fetch');
     }
   }, [user, vesselId]);
 
   // Add a function to refresh the documents
   const refreshDocuments = () => {
     if (user) {
-      console.log('Refreshing stored documents');
       fetchStoredDocuments();
     }
   };
@@ -52,22 +48,17 @@ const UserDocumentStorage: React.FC<UserDocumentStorageProps> = ({ vesselId }) =
 
   const fetchStoredDocuments = async () => {
     try {
-      console.log('Fetching stored documents for user:', user!.id, 'vessel:', vesselId);
-      
       const { data, error } = await db
         .from('user_document_storage')
         .select('*')
         .eq('user_id', user!.id)
         .eq('vessel_id', vesselId);
 
-      console.log('Stored documents query result:', { data, error, userIdUsed: user!.id, vesselIdUsed: vesselId });
-
       if (error) {
         console.error('Error fetching stored documents:', error);
         throw error;
       }
       
-      console.log('Setting stored documents:', data?.length || 0, 'documents found');
       setStoredDocuments(data || []);
     } catch (error) {
       console.error('Error fetching stored documents:', error);

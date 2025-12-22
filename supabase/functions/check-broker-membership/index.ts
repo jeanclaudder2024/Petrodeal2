@@ -41,7 +41,28 @@ serve(async (req) => {
 
     const stripe = new Stripe(stripeKey, { apiVersion: "2023-10-16" });
 
-    // Get broker membership from database
+    // FIRST: Check if user has broker subscription activated in subscribers table (admin manual activation)
+    const { data: subscriberData } = await supabaseClient
+      .from("subscribers")
+      .select("has_broker_subscription")
+      .eq("user_id", user.id)
+      .maybeSingle();
+
+    if (subscriberData?.has_broker_subscription === true) {
+      logStep("Broker subscription active via admin activation");
+      return new Response(JSON.stringify({
+        has_membership: true,
+        payment_status: 'paid',
+        membership_status: 'active',
+        verification_status: 'pending',
+        source: 'admin_activation'
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 200,
+      });
+    }
+
+    // SECOND: Check broker_memberships table for payment-based membership
     const { data: membership } = await supabaseClient
       .from("broker_memberships")
       .select("*")
@@ -76,6 +97,15 @@ serve(async (req) => {
               membership_status: 'active',
               payment_date: new Date().toISOString(),
               updated_at: new Date().toISOString(),
+            })
+            .eq("user_id", user.id);
+
+          // Also update subscribers table
+          await supabaseClient
+            .from("subscribers")
+            .update({
+              has_broker_subscription: true,
+              updated_at: new Date().toISOString()
             })
             .eq("user_id", user.id);
 

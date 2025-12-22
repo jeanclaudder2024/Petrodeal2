@@ -4,8 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { Settings, Save } from 'lucide-react';
-import { db } from '@/lib/supabase-helper';
+import { Settings, Save, Plus } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 
@@ -30,20 +30,21 @@ const SystemSettings = () => {
   const fetchSettings = async () => {
     setLoading(true);
     try {
-      const { data, error } = await db
+      const { data, error } = await supabase
         .from('system_settings')
         .select('*')
         .order('setting_key');
 
-      if (error) throw error;
-      setSettings(data || []);
+      if (error) {
+        console.error('Settings table error:', error);
+        // If table doesn't exist or is empty, show empty state
+        setSettings([]);
+      } else {
+        setSettings(data || []);
+      }
     } catch (error) {
       console.error('Failed to fetch settings:', error);
-      toast({
-        title: "Error",
-        description: "Failed to load system settings",
-        variant: "destructive"
-      });
+      setSettings([]);
     } finally {
       setLoading(false);
     }
@@ -52,7 +53,7 @@ const SystemSettings = () => {
   const updateSetting = async (settingKey: string, newValue: any) => {
     setSaving(true);
     try {
-      const { error } = await db
+      const { error } = await supabase
         .from('system_settings')
         .update({
           setting_value: newValue,
@@ -63,7 +64,6 @@ const SystemSettings = () => {
 
       if (error) throw error;
 
-      // Update local state
       setSettings(prev => prev.map(setting => 
         setting.setting_key === settingKey 
           ? { ...setting, setting_value: newValue }
@@ -81,6 +81,30 @@ const SystemSettings = () => {
         description: "Failed to update setting",
         variant: "destructive"
       });
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const createDefaultSettings = async () => {
+    setSaving(true);
+    try {
+      const defaultSettings = [
+        { setting_key: 'maintenance_mode', setting_value: false, description: 'Enable maintenance mode' },
+        { setting_key: 'allow_registrations', setting_value: true, description: 'Allow new user registrations' },
+        { setting_key: 'default_trial_days', setting_value: 14, description: 'Default trial period in days' },
+        { setting_key: 'email_notifications_enabled', setting_value: true, description: 'Enable email notifications' },
+      ];
+
+      for (const setting of defaultSettings) {
+        await supabase.from('system_settings').upsert(setting, { onConflict: 'setting_key' });
+      }
+
+      toast({ title: "Success", description: "Default settings created" });
+      fetchSettings();
+    } catch (error) {
+      console.error('Failed to create settings:', error);
+      toast({ title: "Error", description: "Failed to create settings", variant: "destructive" });
     } finally {
       setSaving(false);
     }
@@ -161,8 +185,12 @@ const SystemSettings = () => {
           ))}
 
           {settings.length === 0 && (
-            <div className="text-center text-muted-foreground py-8">
-              No system settings found
+            <div className="text-center py-8">
+              <p className="text-muted-foreground mb-4">No system settings found</p>
+              <Button onClick={createDefaultSettings} disabled={saving}>
+                <Plus className="h-4 w-4 mr-2" />
+                Create Default Settings
+              </Button>
             </div>
           )}
         </CardContent>

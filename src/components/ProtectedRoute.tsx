@@ -1,9 +1,11 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAccess } from '@/contexts/AccessContext';
 import { useNavigate } from 'react-router-dom';
 import LoadingFallback from '@/components/LoadingFallback';
 import AccessGate from '@/components/AccessGate';
+import LockedAccountOverlay from '@/components/LockedAccountOverlay';
+import { supabase } from '@/lib/supabase-helper';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
@@ -19,6 +21,43 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   const { user, loading: authLoading } = useAuth();
   const { hasAccess, accessType, loading: accessLoading } = useAccess();
   const navigate = useNavigate();
+  const [isLocked, setIsLocked] = useState(false);
+  const [lockReason, setLockReason] = useState<string>('');
+  const [checkingLock, setCheckingLock] = useState(true);
+
+  // Check if account is locked
+  useEffect(() => {
+    const checkLockStatus = async () => {
+      if (!user?.email) {
+        setCheckingLock(false);
+        return;
+      }
+
+      try {
+        const { data, error } = await supabase.functions.invoke('check-subscription');
+        
+        if (!error && data) {
+          if (data.is_locked || data.access_type === 'locked') {
+            setIsLocked(true);
+            setLockReason(data.locked_reason || 'Your trial has expired. Please subscribe to continue.');
+          } else {
+            setIsLocked(false);
+            setLockReason('');
+          }
+        }
+      } catch (err) {
+        console.error('Error checking lock status:', err);
+      } finally {
+        setCheckingLock(false);
+      }
+    };
+
+    if (!authLoading && user) {
+      checkLockStatus();
+    } else if (!authLoading && !user) {
+      setCheckingLock(false);
+    }
+  }, [user, authLoading]);
 
   // Debug logging
   useEffect(() => {
@@ -29,26 +68,33 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
       accessType,
       authLoading,
       accessLoading,
+      isLocked,
+      checkingLock,
       requireSubscription
     });
-  }, [user, hasAccess, accessType, authLoading, accessLoading, requireSubscription]);
+  }, [user, hasAccess, accessType, authLoading, accessLoading, isLocked, checkingLock, requireSubscription]);
 
-  // Redirect to auth if not authenticated
+  // Redirect to auth if not authenticated - only after loading is complete
   useEffect(() => {
-    if (!authLoading && !user) {
+    if (!authLoading && !accessLoading && !checkingLock && !user) {
       console.log('Redirecting to auth - no user');
       navigate('/auth');
     }
-  }, [user, authLoading, navigate]);
+  }, [user, authLoading, accessLoading, checkingLock, navigate]);
 
-  // Show loading while checking auth or access
-  if (authLoading || accessLoading) {
+  // Show loading while checking auth, access, or lock status
+  if (authLoading || accessLoading || checkingLock) {
     return <LoadingFallback />;
   }
 
   // Not authenticated
   if (!user) {
     return null; // Will redirect via useEffect
+  }
+
+  // Account is locked - show overlay
+  if (isLocked) {
+    return <LockedAccountOverlay reason={lockReason} />;
   }
 
   // Subscription required but user doesn't have it

@@ -92,22 +92,9 @@ const Auth = () => {
           }
         }
       } else {
-        // User exists, check if trial needs to be reactivated
-        const now = new Date();
-        const trialEndDate = data.trial_end_date ? new Date(data.trial_end_date) : null;
-        
-        // If trial is expired but user is not subscribed, give them a new trial
-        if (!data.subscribed && (!data.is_trial_active || (trialEndDate && trialEndDate < now))) {
-          const newTrialEnd = new Date(now.getTime() + 5 * 24 * 60 * 60 * 1000);
-          await supabase.from('subscribers').update({
-            is_trial_active: true,
-            trial_start_date: now.toISOString(),
-            trial_end_date: newTrialEnd.toISOString(),
-            unified_trial_end_date: newTrialEnd.toISOString(),
-            trial_used: false,
-            updated_at: now.toISOString()
-          }).eq('email', signInData.email);
-        }
+        // User exists - DO NOT auto-renew trial
+        // Expired trials require admin intervention or payment
+        console.log('User subscription status:', data);
       }
     } catch (err) {
       // Don't block login for this error

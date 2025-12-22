@@ -1,33 +1,27 @@
 /**
  * Utility functions for converting DOCX files to PDF using ConvertAPI
+ * Now uses server-side edge function to protect API secret
  */
 
-// You may need to install axios if not already installed: npm install axios
-import axios from 'axios';
+import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
-// ConvertAPI configuration
-const CONVERT_API_SECRET = import.meta.env.VITE_CONVERT_API_SECRET || '';
-const CONVERT_API_BASE_URL = 'https://v2.convertapi.com';
-
 /**
- * Test the connection to ConvertAPI
+ * Test the connection to ConvertAPI via edge function
  * @returns {Promise<{success: boolean, error?: string}>}
  */
 export async function testConvertApiConnection(): Promise<{success: boolean, error?: string}> {
   try {
-    if (!CONVERT_API_SECRET) {
-      return { success: false, error: 'ConvertAPI secret is not configured' };
+    const { data, error } = await supabase.functions.invoke('convert-document', {
+      body: { action: 'test' },
+    });
+
+    if (error) {
+      console.error('ConvertAPI connection test failed:', error);
+      return { success: false, error: error.message };
     }
 
-    // Simple test call to ConvertAPI
-    const response = await axios.get(`${CONVERT_API_BASE_URL}/user?Secret=${CONVERT_API_SECRET}`);
-    
-    if (response.status === 200) {
-      return { success: true };
-    } else {
-      return { success: false, error: `Unexpected status: ${response.status}` };
-    }
+    return { success: data?.success ?? false, error: data?.error };
   } catch (error) {
     console.error('ConvertAPI connection test failed:', error);
     return { 
@@ -38,58 +32,73 @@ export async function testConvertApiConnection(): Promise<{success: boolean, err
 }
 
 /**
- * Convert a DOCX file to PDF and download it
+ * Convert a DOCX file to PDF and download it via edge function
  * @param {Blob} docxBlob - The DOCX file as a Blob
  * @param {string} fileName - The name to use for the downloaded file
  * @returns {Promise<boolean>} - Whether the conversion was successful
  */
 export async function convertAndDownloadPdf(docxBlob: Blob, fileName: string): Promise<boolean> {
   try {
-    if (!CONVERT_API_SECRET) {
-      toast.error('ConvertAPI secret is not configured');
+    // Convert blob to base64
+    const arrayBuffer = await docxBlob.arrayBuffer();
+    const uint8Array = new Uint8Array(arrayBuffer);
+    let binary = '';
+    for (let i = 0; i < uint8Array.length; i++) {
+      binary += String.fromCharCode(uint8Array[i]);
+    }
+    const docxBase64 = btoa(binary);
+
+    const { data, error } = await supabase.functions.invoke('convert-document', {
+      body: { 
+        action: 'convert',
+        docxBase64,
+        fileName,
+      },
+    });
+
+    if (error) {
+      console.error('PDF conversion error:', error);
+      toast.error(`PDF conversion failed: ${error.message}`);
       return false;
     }
 
-    // Create form data for the API request
-    const formData = new FormData();
-    formData.append('File', docxBlob, 'document.docx');
-    formData.append('StoreFile', 'true');
-    
-    // Call ConvertAPI to convert DOCX to PDF
-    const response = await axios.post(
-      `${CONVERT_API_BASE_URL}/convert/docx/to/pdf?Secret=${CONVERT_API_SECRET}`,
-      formData,
-      {
-        headers: {
-          'Content-Type': 'multipart/form-data',
-        },
-      }
-    );
+    if (!data?.success) {
+      toast.error(data?.error || 'PDF conversion failed');
+      return false;
+    }
 
-    if (response.status === 200 && response.data && response.data.Files && response.data.Files.length > 0) {
-      // Get the URL of the converted PDF
-      const pdfUrl = response.data.Files[0].Url;
+    // Download PDF from the URL or use base64 data
+    if (data.pdfUrl) {
+      const pdfResponse = await fetch(data.pdfUrl);
+      const pdfBlob = await pdfResponse.blob();
       
-      // Download the PDF
-      const pdfResponse = await axios.get(pdfUrl, { responseType: 'blob' });
-      const pdfBlob = new Blob([pdfResponse.data], { type: 'application/pdf' });
-      
-      // Create a download link and trigger the download
       const downloadUrl = URL.createObjectURL(pdfBlob);
       const link = document.createElement('a');
       link.href = downloadUrl;
-      link.download = fileName.replace('.docx', '.pdf');
+      link.download = data.fileName || fileName.replace('.docx', '.pdf');
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(downloadUrl);
+    } else if (data.pdfBase64) {
+      // Fallback to base64 if URL not available
+      const pdfBlob = new Blob(
+        [Uint8Array.from(atob(data.pdfBase64), c => c.charCodeAt(0))],
+        { type: 'application/pdf' }
+      );
       
-      toast.success('PDF conversion successful');
-      return true;
-    } else {
-      toast.error('PDF conversion failed: Invalid response from ConvertAPI');
-      return false;
+      const downloadUrl = URL.createObjectURL(pdfBlob);
+      const link = document.createElement('a');
+      link.href = downloadUrl;
+      link.download = data.fileName || fileName.replace('.docx', '.pdf');
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(downloadUrl);
     }
+
+    toast.success('PDF conversion successful');
+    return true;
   } catch (error) {
     console.error('PDF conversion error:', error);
     toast.error(`PDF conversion failed: ${error instanceof Error ? error.message : 'Unknown error'}`);

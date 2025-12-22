@@ -28,14 +28,16 @@ serve(async (req) => {
 
     const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
     if (!stripeKey) {
-      logStep("STRIPE_SECRET_KEY not found, returning trial status");
+      logStep("STRIPE_SECRET_KEY not found, returning no access");
       return new Response(JSON.stringify({ 
         subscribed: false,
-        subscription_tier: 'trial',
-        trial_active: true,
-        trial_days_left: 5,
-        vessel_limit: 10,
-        port_limit: 20
+        subscription_tier: null,
+        trial_active: false,
+        trial_days_left: 0,
+        access_type: 'none',
+        is_locked: false,
+        vessel_limit: 0,
+        port_limit: 0
       }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 200,
@@ -48,7 +50,8 @@ serve(async (req) => {
       return new Response(JSON.stringify({ 
         subscribed: false,
         trial_active: false,
-        access_type: 'none'
+        access_type: 'none',
+        is_locked: false
       }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 200,
@@ -72,7 +75,8 @@ serve(async (req) => {
       return new Response(JSON.stringify({ 
         subscribed: false,
         trial_active: false,
-        access_type: 'none'
+        access_type: 'none',
+        is_locked: false
       }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 200,
@@ -81,114 +85,137 @@ serve(async (req) => {
 
     logStep("User authenticated", { email: user.email });
 
-    // استخدام الدالة المحسنة للتحقق من الوصول
-    const { data: accessData, error: accessError } = await supabaseClient.rpc('check_user_access_enhanced', {
+    // Use the new function that includes lock status
+    const { data: accessData, error: accessError } = await supabaseClient.rpc('check_user_access_with_lock', {
       user_email: user.email
     });
 
+    // If error or no data found, DO NOT create new trial - return locked/expired status
     if (accessError) {
-      logStep("Error checking access, creating new trial", { error: accessError.message });
-      // إنشاء trial للمستخدم الجديد إذا لم يكن موجوداً
-      const { error: trialError } = await supabaseClient.rpc('start_trial_with_plan', {
-        user_email: user.email,
-        user_id_param: user.id,
-        plan_tier_param: 'basic',
-        trial_days: 5
-      });
-      if (trialError) {
-        logStep("Error creating trial", { error: trialError.message });
-      }
+      logStep("Error checking access", { error: accessError.message });
       return new Response(JSON.stringify({ 
         subscribed: false,
-        subscription_tier: 'trial',
-        trial_active: true,
-        trial_days_left: 5,
-        access_type: 'trial',
-        vessel_limit: 10,
-        port_limit: 20
+        subscription_tier: null,
+        trial_active: false,
+        trial_days_left: 0,
+        access_type: 'none',
+        is_locked: false,
+        vessel_limit: 0,
+        port_limit: 0
       }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 200,
       });
     }
 
-    if (accessData && accessData.length > 0) {
-      const access = accessData[0];
-      logStep("Access data found", { 
-        access_type: access.access_type,
-        trial_days_left: access.trial_days_left,
-        is_subscribed: access.is_subscribed
-      });
-      // تحديث التجارب المنتهية تلقائياً
-      if (access.access_type === 'expired') {
-        await supabaseClient.rpc('update_expired_trials');
-      }
-      // تحديد حدود الخطة
-      let vesselLimit = 10, portLimit = 20, regionLimit = 1, refineryLimit = 5;
-      let documentAccess = ['basic'], supportLevel = 'email', userSeats = 1;
-      let apiAccess = false, realTimeAnalytics = false;
-      if (access.subscription_tier === 'professional') {
-        vesselLimit = 180; portLimit = 100; regionLimit = 6; refineryLimit = 70;
-        documentAccess = ['basic', 'advanced']; supportLevel = 'priority';
-        userSeats = 5; realTimeAnalytics = true;
-      } else if (access.subscription_tier === 'enterprise') {
-        vesselLimit = 500; portLimit = 120; regionLimit = 7; refineryLimit = 999;
-        documentAccess = ['basic', 'advanced', 'complete']; supportLevel = 'dedicated';
-        userSeats = 20; apiAccess = true; realTimeAnalytics = true;
-      }
-      return new Response(JSON.stringify({
-        subscribed: access.is_subscribed,
-        subscription_tier: access.subscription_tier,
-        trial_active: access.access_type === 'trial',
-        trial_days_left: access.trial_days_left,
-        access_type: access.access_type,
-        can_upgrade: access.can_upgrade,
-        trial_end_date: access.trial_end_date,
-        vessel_limit: vesselLimit,
-        port_limit: portLimit,
-        regions_limit: regionLimit,
-        refinery_limit: refineryLimit,
-        document_access: documentAccess,
-        support_level: supportLevel,
-        user_seats: userSeats,
-        api_access: apiAccess,
-        real_time_analytics: realTimeAnalytics
+    // If no subscriber record found - user needs to be added by admin or complete registration
+    if (!accessData || accessData.length === 0) {
+      logStep("No subscriber record found - DO NOT auto-create trial");
+      return new Response(JSON.stringify({ 
+        subscribed: false,
+        subscription_tier: null,
+        trial_active: false,
+        trial_days_left: 0,
+        access_type: 'no_subscription',
+        is_locked: false,
+        vessel_limit: 0,
+        port_limit: 0,
+        message: 'No subscription found. Please contact admin or subscribe.'
       }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 200,
       });
     }
 
-    // إذا لم يتم العثور على بيانات، إنشاء trial جديد
-    logStep("No access data found, creating new trial");
-    const { error: trialError } = await supabaseClient.rpc('start_trial_with_plan', {
-      user_email: user.email,
-      user_id_param: user.id,
-      plan_tier_param: 'basic',
-      trial_days: 5
+    const access = accessData[0];
+    logStep("Access data found", { 
+      access_type: access.access_type,
+      trial_days_left: access.trial_days_left,
+      is_subscribed: access.is_subscribed,
+      is_locked: access.is_locked
     });
-    if (trialError) {
-      logStep("Error creating trial", { error: trialError.message });
+
+    // If account is locked, return immediately with locked status
+    if (access.is_locked) {
+      logStep("Account is locked", { reason: access.locked_reason });
+      return new Response(JSON.stringify({
+        subscribed: false,
+        subscription_tier: access.subscription_tier,
+        trial_active: false,
+        trial_days_left: 0,
+        access_type: 'locked',
+        is_locked: true,
+        locked_reason: access.locked_reason,
+        vessel_limit: 0,
+        port_limit: 0,
+        regions_limit: 0,
+        refinery_limit: 0
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 200,
+      });
     }
-    return new Response(JSON.stringify({ 
-      subscribed: false,
-      subscription_tier: 'trial',
-      trial_active: true,
-      trial_days_left: 5,
-      access_type: 'trial',
-      vessel_limit: 10,
-      port_limit: 20,
-      regions_limit: 1,
-      refinery_limit: 5,
-      document_access: ['basic'],
-      support_level: 'email',
-      user_seats: 1,
-      api_access: false,
-      real_time_analytics: false
+
+    // If trial expired and not subscribed, lock the account automatically
+    if (access.access_type === 'expired' && !access.is_subscribed) {
+      logStep("Trial expired - locking account");
+      await supabaseClient.rpc('lock_expired_accounts');
+      
+      return new Response(JSON.stringify({
+        subscribed: false,
+        subscription_tier: access.subscription_tier,
+        trial_active: false,
+        trial_days_left: 0,
+        access_type: 'locked',
+        is_locked: true,
+        locked_reason: 'Trial expired - payment required',
+        vessel_limit: 0,
+        port_limit: 0,
+        regions_limit: 0,
+        refinery_limit: 0
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 200,
+      });
+    }
+
+    // Set limits based on subscription tier
+    let vesselLimit = 10, portLimit = 20, regionLimit = 1, refineryLimit = 5;
+    let documentAccess = ['basic'], supportLevel = 'email', userSeats = 1;
+    let apiAccess = false, realTimeAnalytics = false;
+
+    if (access.subscription_tier === 'professional') {
+      vesselLimit = 180; portLimit = 100; regionLimit = 6; refineryLimit = 70;
+      documentAccess = ['basic', 'advanced']; supportLevel = 'priority';
+      userSeats = 5; realTimeAnalytics = true;
+    } else if (access.subscription_tier === 'enterprise') {
+      vesselLimit = 500; portLimit = 120; regionLimit = 7; refineryLimit = 999;
+      documentAccess = ['basic', 'advanced', 'complete']; supportLevel = 'dedicated';
+      userSeats = 20; apiAccess = true; realTimeAnalytics = true;
+    }
+
+    return new Response(JSON.stringify({
+      subscribed: access.is_subscribed,
+      subscription_tier: access.subscription_tier,
+      trial_active: access.access_type === 'trial',
+      trial_days_left: access.trial_days_left,
+      access_type: access.access_type,
+      trial_end_date: access.trial_end_date,
+      is_locked: false,
+      vessel_limit: vesselLimit,
+      port_limit: portLimit,
+      regions_limit: regionLimit,
+      refinery_limit: refineryLimit,
+      document_access: documentAccess,
+      support_level: supportLevel,
+      user_seats: userSeats,
+      api_access: apiAccess,
+      real_time_analytics: realTimeAnalytics
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 200,
     });
+
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
     logStep("Error in check-subscription", { error: errorMessage });
@@ -196,7 +223,8 @@ serve(async (req) => {
       error: 'Internal server error',
       subscribed: false,
       trial_active: false,
-      access_type: 'error'
+      access_type: 'error',
+      is_locked: false
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 500,

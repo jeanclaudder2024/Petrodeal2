@@ -3,6 +3,8 @@ import Footer from "@/components/Footer";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { 
   Mail,
   MapPin,
@@ -11,10 +13,91 @@ import {
   Handshake,
   HeadphonesIcon,
   MessageSquare,
-  Globe
+  Globe,
+  Calculator,
+  Loader2
 } from "lucide-react";
+import { useState, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 
 const ContactUs = () => {
+  const { toast } = useToast();
+  const [formData, setFormData] = useState({
+    name: "",
+    email: "",
+    subject: "",
+    message: "",
+    securityAnswer: ""
+  });
+  const [submitting, setSubmitting] = useState(false);
+  const [securityQuestion, setSecurityQuestion] = useState({ num1: 0, num2: 0 });
+  const [contactEmail, setContactEmail] = useState("support@petrodealhub.com");
+
+  useEffect(() => {
+    generateSecurityQuestion();
+    fetchContactEmail();
+  }, []);
+
+  const generateSecurityQuestion = () => {
+    const num1 = Math.floor(Math.random() * 10) + 1;
+    const num2 = Math.floor(Math.random() * 10) + 1;
+    setSecurityQuestion({ num1, num2 });
+  };
+
+  const fetchContactEmail = async () => {
+    try {
+      const { data } = await supabase
+        .from('cms_settings')
+        .select('value_en')
+        .eq('key', 'contact_form_email')
+        .single();
+      if (data?.value_en) setContactEmail(data.value_en);
+    } catch (error) {
+      // Use default
+    }
+  };
+
+  const isSecurityAnswerCorrect = () => {
+    return parseInt(formData.securityAnswer) === securityQuestion.num1 + securityQuestion.num2;
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!isSecurityAnswerCorrect()) {
+      toast({ title: "Security check failed", description: "Please enter the correct answer.", variant: "destructive" });
+      generateSecurityQuestion();
+      setFormData(prev => ({ ...prev, securityAnswer: "" }));
+      return;
+    }
+
+    setSubmitting(true);
+    try {
+      // Send email via edge function
+      await supabase.functions.invoke('send-smtp-email', {
+        body: {
+          to: contactEmail,
+          subject: `Contact Form: ${formData.subject}`,
+          html: `
+            <h2>New Contact Form Submission</h2>
+            <p><strong>From:</strong> ${formData.name} (${formData.email})</p>
+            <p><strong>Subject:</strong> ${formData.subject}</p>
+            <p><strong>Message:</strong></p>
+            <p>${formData.message.replace(/\n/g, '<br>')}</p>
+          `
+        }
+      });
+      
+      toast({ title: "Message sent!", description: "We'll get back to you within 1-2 business days." });
+      setFormData({ name: "", email: "", subject: "", message: "", securityAnswer: "" });
+      generateSecurityQuestion();
+    } catch (error) {
+      toast({ title: "Error", description: "Failed to send message. Please try again.", variant: "destructive" });
+    } finally {
+      setSubmitting(false);
+    }
+  };
   const contactSections = [
     {
       icon: Mail,
@@ -225,63 +308,102 @@ const ContactUs = () => {
             </div>
 
             <Card className="p-8 bg-gray-900/80 backdrop-blur-sm border border-gray-700 shadow-lg">
-              <form className="space-y-6">
+              <form className="space-y-6" onSubmit={handleSubmit}>
                 {/* Name & Email */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                   <div>
-                    <label className="block text-sm font-medium text-white mb-2">
-                      Full Name
-                    </label>
-                    <input 
+                    <Label className="block text-sm font-medium text-white mb-2">
+                      Full Name *
+                    </Label>
+                    <Input 
                       type="text" 
                       placeholder="Your name"
-                      className="w-full px-4 py-3 rounded-xl border border-gray-700 bg-gray-800 text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                      required
+                      value={formData.name}
+                      onChange={(e) => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                      className="w-full px-4 py-3 rounded-xl border border-gray-700 bg-gray-800 text-white focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-white mb-2">
-                      Email Address
-                    </label>
-                    <input 
+                    <Label className="block text-sm font-medium text-white mb-2">
+                      Email Address *
+                    </Label>
+                    <Input 
                       type="email" 
                       placeholder="your@email.com"
-                      className="w-full px-4 py-3 rounded-xl border border-gray-700 bg-gray-800 text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                      required
+                      value={formData.email}
+                      onChange={(e) => setFormData(prev => ({ ...prev, email: e.target.value }))}
+                      className="w-full px-4 py-3 rounded-xl border border-gray-700 bg-gray-800 text-white focus:ring-2 focus:ring-blue-500"
                     />
                   </div>
                 </div>
 
                 {/* Subject */}
                 <div>
-                  <label className="block text-sm font-medium text-white mb-2">
-                    Subject
-                  </label>
-                  <input 
+                  <Label className="block text-sm font-medium text-white mb-2">
+                    Subject *
+                  </Label>
+                  <Input 
                     type="text" 
                     placeholder="Subject of your message"
-                    className="w-full px-4 py-3 rounded-xl border border-gray-700 bg-gray-800 text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                    required
+                    value={formData.subject}
+                    onChange={(e) => setFormData(prev => ({ ...prev, subject: e.target.value }))}
+                    className="w-full px-4 py-3 rounded-xl border border-gray-700 bg-gray-800 text-white focus:ring-2 focus:ring-blue-500"
                   />
                 </div>
 
                 {/* Message */}
                 <div>
-                  <label className="block text-sm font-medium text-white mb-2">
-                    Message
-                  </label>
+                  <Label className="block text-sm font-medium text-white mb-2">
+                    Message *
+                  </Label>
                   <textarea 
                     rows={5}
                     placeholder="Write your message here..."
+                    required
+                    value={formData.message}
+                    onChange={(e) => setFormData(prev => ({ ...prev, message: e.target.value }))}
                     className="w-full px-4 py-3 rounded-xl border border-gray-700 bg-gray-800 text-white focus:ring-2 focus:ring-blue-500 outline-none resize-none"
                   />
+                </div>
+
+                {/* Security Verification */}
+                <div className="p-4 bg-gray-800/50 rounded-lg border border-gray-700">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Calculator className="h-5 w-5 text-blue-400" />
+                    <Label className="font-semibold text-white">Security Verification</Label>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className="text-lg font-mono text-white">
+                      {securityQuestion.num1} + {securityQuestion.num2} = ?
+                    </span>
+                    <Input
+                      type="number"
+                      placeholder="Answer"
+                      required
+                      value={formData.securityAnswer}
+                      onChange={(e) => setFormData(prev => ({ ...prev, securityAnswer: e.target.value }))}
+                      className="w-24 bg-gray-800 border-gray-700 text-white"
+                    />
+                  </div>
                 </div>
 
                 {/* Submit */}
                 <div className="text-center">
                   <Button 
+                    type="submit"
                     size="lg"
+                    disabled={submitting}
                     className="bg-gradient-to-r from-blue-600 to-green-600 hover:shadow-lg px-8 py-4 text-white"
                   >
-                    <Mail className="w-5 h-5 mr-2" />
-                    Send Message
+                    {submitting ? (
+                      <Loader2 className="w-5 h-5 mr-2 animate-spin" />
+                    ) : (
+                      <Mail className="w-5 h-5 mr-2" />
+                    )}
+                    {submitting ? "Sending..." : "Send Message"}
                   </Button>
                 </div>
               </form>

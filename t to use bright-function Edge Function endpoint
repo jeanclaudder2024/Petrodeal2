@@ -1,0 +1,28 @@
+[1mdiff --git a/src/pages/admin/EmailConfiguration.tsx b/src/pages/admin/EmailConfiguration.tsx[m
+[1mindex 1eb1716a..e06c4d29 100644[m
+[1m--- a/src/pages/admin/EmailConfiguration.tsx[m
+[1m+++ b/src/pages/admin/EmailConfiguration.tsx[m
+[36m@@ -263,9 +263,9 @@[m [mexport default function EmailConfiguration() {[m
+       } catch (backendError) {[m
+         // Backend not available, use Supabase Edge Function instead[m
+         console.log('⚠️ Python backend not available, using Supabase Edge Function');[m
+[31m-        console.log('Calling Supabase Edge Function: test-email-connection');[m
+[32m+[m[32m        console.log('Calling Supabase Edge Function: bright-function');[m
+         [m
+[31m-        const edgeFunctionResult = await supabase.functions.invoke('test-email-connection', {[m
+[32m+[m[32m        const edgeFunctionResult = await supabase.functions.invoke('bright-function', {[m
+           body: {[m
+             type: 'smtp',[m
+             ...testConfig,[m
+[36m@@ -400,9 +400,9 @@[m [mexport default function EmailConfiguration() {[m
+       } catch (backendError) {[m
+         // Backend not available, use Supabase Edge Function instead[m
+         console.log('⚠️ Python backend not available, using Supabase Edge Function');[m
+[31m-        console.log('Calling Supabase Edge Function: test-email-connection');[m
+[32m+[m[32m        console.log('Calling Supabase Edge Function: bright-function');[m
+         [m
+[31m-        const edgeFunctionResult = await supabase.functions.invoke('test-email-connection', {[m
+[32m+[m[32m        const edgeFunctionResult = await supabase.functions.invoke('bright-function', {[m
+           body: {[m
+             type: 'imap',[m
+             ...testConfig,[m

@@ -1,13 +1,28 @@
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAccess } from '@/contexts/AccessContext';
-import { useSearchParams } from 'react-router-dom';
-import { Loader2 } from 'lucide-react';
+import { useSearchParams, useNavigate, Link } from 'react-router-dom';
+import { Loader2, Clock, Sparkles } from 'lucide-react';
 import { db, supabase } from '@/lib/supabase-helper';
 import { toast } from 'sonner';
 import PricingPlans from '@/components/PricingPlans';
 import SubscriptionStatus from '@/components/SubscriptionStatus';
-import TrialCountdown from '@/components/TrialCountdown';
+import FuturisticTrialCountdown from '@/components/FuturisticTrialCountdown';
+import UnsubscribeRequest from '@/components/UnsubscribeRequest';
+import { Badge } from '@/components/ui/badge';
+interface PromotionFrame {
+  id: string;
+  title: string;
+  description: string;
+  eligible_plans: string[];
+  discount_type: string;
+  discount_value: number;
+  start_date: string;
+  end_date: string | null;
+  is_active: boolean;
+  show_countdown: boolean;
+  show_on_subscription: boolean;
+}
 
 interface SubscriptionData {
   subscribed: boolean;
@@ -22,27 +37,52 @@ interface SubscriptionData {
   user_seats?: number;
   api_access?: boolean;
   real_time_analytics?: boolean;
+  selected_plan_tier?: string;
+  is_trial_active?: boolean;
 }
 
 const Subscription = () => {
   const { user } = useAuth();
   const { accessType, trialDaysLeft } = useAccess();
   const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const [subscriptionData, setSubscriptionData] = useState<SubscriptionData | null>(null);
   const [loading, setLoading] = useState(true);
   const [checkingSubscription, setCheckingSubscription] = useState(false);
   const [processingCheckout, setProcessingCheckout] = useState(false);
   
-  // Get plan from URL parameter (for auto-selection after registration)
   const selectedPlanFromUrl = searchParams.get('plan') || searchParams.get('tier');
+  const [promotionFrame, setPromotionFrame] = useState<PromotionFrame | null>(null);
 
   useEffect(() => {
     checkSubscription();
-  }, [user]); // Check subscription whenever user changes
+    fetchPromotionFrame();
+  }, [user]);
+
+  const fetchPromotionFrame = async () => {
+    try {
+      const now = new Date().toISOString();
+      const { data, error } = await db
+        .from('promotion_frames')
+        .select('*')
+        .eq('is_active', true)
+        .eq('show_on_subscription', true)
+        .lte('start_date', now)
+        .or(`end_date.is.null,end_date.gt.${now}`)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (!error && data) {
+        setPromotionFrame(data as PromotionFrame);
+      }
+    } catch (err) {
+      console.warn('Error fetching promotion frame:', err);
+    }
+  };
 
   const checkSubscription = async () => {
     if (!user?.email) {
-      console.log('No user or email, using default values');
       setSubscriptionData({
         subscribed: false,
         subscription_tier: 'trial',
@@ -63,11 +103,9 @@ const Subscription = () => {
 
     setCheckingSubscription(true);
     try {
-      console.log('Checking subscription for user:', user.email);
       const { data, error } = await supabase.functions.invoke('check-subscription');
       
       if (error) {
-        console.warn('Subscription check failed, using defaults:', error);
         setSubscriptionData({
           subscribed: false,
           subscription_tier: 'trial',
@@ -85,9 +123,7 @@ const Subscription = () => {
         return;
       }
 
-      console.log('Subscription data received:', data);
-
-      // Try to get enhanced subscription data from database
+      // Get enhanced data from subscribers table including subscription_end
       let enhancedData: Partial<SubscriptionData> = {};
       try {
         const { data: subData } = await db
@@ -101,7 +137,11 @@ const Subscription = () => {
             support_level,
             user_seats,
             api_access,
-            real_time_analytics
+            real_time_analytics,
+            selected_plan_tier,
+            is_trial_active,
+            subscription_tier,
+            subscription_end
           `)
           .eq('email', user?.email)
           .maybeSingle();
@@ -116,9 +156,11 @@ const Subscription = () => {
             support_level: subData.support_level || 'email',
             user_seats: subData.user_seats || 1,
             api_access: subData.api_access || false,
-            real_time_analytics: subData.real_time_analytics || false
+            real_time_analytics: subData.real_time_analytics || false,
+            selected_plan_tier: subData.selected_plan_tier || subData.subscription_tier,
+            is_trial_active: subData.is_trial_active,
+            subscription_end: subData.subscription_end
           };
-          console.log('Enhanced subscription data found:', enhancedData);
         }
       } catch (dbError) {
         console.warn('Error fetching enhanced subscription data:', dbError);
@@ -134,10 +176,13 @@ const Subscription = () => {
         support_level: enhancedData.support_level || data?.support_level || 'email',
         user_seats: enhancedData.user_seats || data?.user_seats || 1,
         api_access: enhancedData.api_access || data?.api_access || false,
-        real_time_analytics: enhancedData.real_time_analytics || data?.real_time_analytics || false
+        real_time_analytics: enhancedData.real_time_analytics || data?.real_time_analytics || false,
+        selected_plan_tier: enhancedData.selected_plan_tier,
+        is_trial_active: enhancedData.is_trial_active,
+        subscription_end: enhancedData.subscription_end || data?.subscription_end || null
       });
     } catch (error) {
-      console.error('Error checking subscription, using defaults:', error);
+      console.error('Error checking subscription:', error);
       setSubscriptionData({
         subscribed: false,
         subscription_tier: 'trial',
@@ -177,7 +222,6 @@ const Subscription = () => {
       }
 
       if (data?.url) {
-        // Open Stripe checkout in new tab
         window.open(data.url, '_blank');
         toast.success('Opening Stripe checkout...');
       } else {
@@ -193,20 +237,23 @@ const Subscription = () => {
 
   const handleManageSubscription = async () => {
     try {
+      toast.info('Opening subscription management...');
       const { data, error } = await supabase.functions.invoke('customer-portal');
       
       if (error) {
         console.error('Error accessing customer portal:', error);
-        toast.error('Failed to access subscription management');
+        toast.error(`Failed to access subscription management: ${error.message || 'Please try again or contact support.'}`);
         return;
       }
 
-      if (data.url) {
+      if (data?.url) {
         window.location.href = data.url;
+      } else {
+        toast.error('Could not open subscription management. Please try again or contact support.');
       }
     } catch (error) {
       console.error('Error accessing customer portal:', error);
-      toast.error('Failed to access subscription management');
+      toast.error('Failed to access subscription management. Please contact support.');
     }
   };
 
@@ -223,22 +270,43 @@ const Subscription = () => {
   return (
     <div className="container mx-auto px-4 py-8">
       <div className="mb-8 text-center">
-        <h1 className="text-4xl md:text-5xl font-bold mb-6">
+        <h1 className="text-4xl md:text-5xl font-bold mb-4 text-foreground">
           Choose Your <br />
-          <span className="gradient-gold bg-clip-text text-transparent">
-            Trading Advantage
+          <span className="text-foreground">
+            Market Visibility Plan
           </span>
         </h1>
-        <p className="text-xl text-muted-foreground max-w-3xl mx-auto leading-relaxed">
-          From exploration to professional trading, we have the perfect plan to 
-          accelerate your maritime trading success.
+        <p className="text-xl text-foreground max-w-3xl mx-auto leading-relaxed mb-2">
+          See the Market. Track the Assets. Act with Confidence.
+        </p>
+        <p className="text-muted-foreground max-w-2xl mx-auto">
+          Professional subscription plans for real-time vessel tracking, port activity, refinery intelligence, and trade operations.
         </p>
       </div>
+
+      {/* Promotion Frame */}
+      {promotionFrame && (
+        <div className="mb-6 p-6 bg-gradient-to-r from-red-500/10 via-orange-500/10 to-red-500/10 border-2 border-red-500/30 rounded-xl text-center animate-pulse">
+          <div className="flex items-center justify-center gap-2 mb-2">
+            <Sparkles className="h-6 w-6 text-red-500" />
+            <h3 className="text-xl font-bold text-foreground">{promotionFrame.title}</h3>
+            <Sparkles className="h-6 w-6 text-red-500" />
+          </div>
+          <p className="text-muted-foreground text-sm mb-3">{promotionFrame.description}</p>
+          {promotionFrame.discount_value > 0 && (
+            <Badge className="text-lg px-4 py-2 bg-red-500 text-white font-bold">
+              {promotionFrame.discount_type === 'percentage' 
+                ? `${promotionFrame.discount_value}% OFF` 
+                : `$${promotionFrame.discount_value} OFF`} on {promotionFrame.eligible_plans?.join(', ') || 'selected plans'}
+            </Badge>
+          )}
+        </div>
+      )}
 
       {/* Show trial countdown if user is in trial */}
       {user && (
         <div className="mb-6">
-          <TrialCountdown />
+          <FuturisticTrialCountdown />
         </div>
       )}
 
@@ -252,7 +320,7 @@ const Subscription = () => {
         />
       )}
 
-      {/* Always show pricing plans - even for non-logged in users */}
+      {/* Always show pricing plans */}
       <PricingPlans
         onSubscribe={handleCheckout}
         currentTier={subscriptionData?.subscription_tier || undefined}
@@ -267,12 +335,22 @@ const Subscription = () => {
           <p className="text-sm text-muted-foreground mb-4">
             Log in or create an account to subscribe to any plan and start trading.
           </p>
-          <a 
-            href="/auth" 
+          <Link 
+            to="/auth" 
             className="inline-flex items-center px-6 py-3 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 transition-colors"
           >
             Get Started
-          </a>
+          </Link>
+        </div>
+      )}
+
+      {/* Cancel Subscription Section - Moved to end */}
+      {user && subscriptionData?.subscribed && (
+        <div className="mt-12">
+          <UnsubscribeRequest 
+            subscriptionEndDate={subscriptionData.subscription_end}
+            isTrialActive={accessType === 'trial'}
+          />
         </div>
       )}
     </div>

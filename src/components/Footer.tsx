@@ -1,12 +1,89 @@
-import { Mail, Linkedin, Twitter, Github } from "lucide-react";
+import { Mail, Linkedin, Twitter, Facebook, Instagram } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input"; // shadcn/ui input
-import { Label } from "@/components/ui/label"; // shadcn/ui label
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import SponsorBanner from "@/components/SponsorBanner";
+import { useState, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
+
+interface SocialLinks {
+  linkedin_url: string;
+  twitter_url: string;
+  facebook_url: string;
+  instagram_url: string;
+}
 
 const Footer = () => {
+  const { toast } = useToast();
+  const [newsletterEmail, setNewsletterEmail] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [socialLinks, setSocialLinks] = useState<SocialLinks>({
+    linkedin_url: "",
+    twitter_url: "",
+    facebook_url: "",
+    instagram_url: ""
+  });
+
+  useEffect(() => {
+    fetchSocialLinks();
+  }, []);
+
+  const fetchSocialLinks = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('cms_settings')
+        .select('key, value_en')
+        .in('key', ['linkedin_url', 'twitter_url', 'facebook_url', 'instagram_url']);
+      
+      if (data && !error) {
+        const links: SocialLinks = { linkedin_url: "", twitter_url: "", facebook_url: "", instagram_url: "" };
+        data.forEach(item => {
+          if (item.key in links) {
+            links[item.key as keyof SocialLinks] = item.value_en || "";
+          }
+        });
+        setSocialLinks(links);
+      }
+    } catch (error) {
+      // Silent fail
+    }
+  };
+
+  const handleNewsletterSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newsletterEmail) return;
+    
+    setSubmitting(true);
+    try {
+      const { error } = await supabase
+        .from('newsletter_subscribers')
+        .insert({ email: newsletterEmail, source: 'footer' });
+      
+      if (error) {
+        if (error.code === '23505') {
+          toast({ title: "Already subscribed", description: "This email is already on our list." });
+        } else {
+          throw error;
+        }
+      } else {
+        toast({ title: "Subscribed!", description: "Thank you for subscribing to our newsletter." });
+        setNewsletterEmail("");
+      }
+    } catch (error) {
+      toast({ title: "Error", description: "Failed to subscribe. Please try again.", variant: "destructive" });
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
   return (
     <footer className="relative border-t border-border/50 bg-slate-900 text-zinc-100">
+      {/* Sponsor Partners Section */}
+      <div className="border-b border-border/30 bg-gradient-to-b from-slate-800/80 to-slate-900">
+        <SponsorBanner location="footer" className="" />
+      </div>
       <div className="container mx-auto px-4 py-16">
         <div className="grid gap-12 md:grid-cols-4">
           {/* Brand + Newsletter */}
@@ -20,59 +97,57 @@ const Footer = () => {
             </Link>
 
             <p className="text-sm leading-relaxed text-zinc-300">
-              The world&apos;s most advanced AI-powered oil vessel tracking and trading platform.
-              Connecting tankers, refineries, and deals through intelligent technology.
+              A next-generation oil vessel tracking and trading platform.
+              Connecting tankers, refineries, and deals through intelligent market technology.
             </p>
 
-            {/* Newsletter */}
-            <div className="space-y-3">
-              <h4 className="text-sm font-semibold tracking-wide text-zinc-200 uppercase">
-                Subscribe to updates
-              </h4>
-              <form
-                className="flex w-full max-w-md items-center gap-2"
-                onSubmit={(e) => {
-                  e.preventDefault();
-                  // TODO: hook up to your newsletter endpoint / service
-                }}
-              >
-                <div className="grid w-full gap-1.5">
-                  <Label htmlFor="footer-email" className="sr-only">
-                    Email address
-                  </Label>
-                  <Input
-                    id="footer-email"
-                    type="email"
-                    required
-                    placeholder="you@company.com"
-                    className="bg-zinc-800/60 border-zinc-700/80 placeholder:text-zinc-500 focus-visible:ring-primary"
-                  />
-                </div>
-                <Button
-                  type="submit"
-                  className="bg-primary hover:bg-primary/90"
-                  aria-label="Subscribe"
-                >
-                  Subscribe
-                </Button>
-              </form>
-              <p className="text-xs text-zinc-400">
-                We care about your privacy. Unsubscribe anytime.
-              </p>
-            </div>
 
             {/* Socials */}
             <div className="flex gap-4 pt-2" aria-label="Social media">
-              <a
-                href="https://linkedin.com"
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label="LinkedIn"
-                className="text-zinc-400 hover:text-primary transition-colors"
-              >
-                <Linkedin className="h-5 w-5" />
-              </a>
-             
+              {socialLinks.linkedin_url && (
+                <a
+                  href={socialLinks.linkedin_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="LinkedIn"
+                  className="text-zinc-400 hover:text-primary transition-colors"
+                >
+                  <Linkedin className="h-5 w-5" />
+                </a>
+              )}
+              {socialLinks.twitter_url && (
+                <a
+                  href={socialLinks.twitter_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="Twitter"
+                  className="text-zinc-400 hover:text-primary transition-colors"
+                >
+                  <Twitter className="h-5 w-5" />
+                </a>
+              )}
+              {socialLinks.facebook_url && (
+                <a
+                  href={socialLinks.facebook_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="Facebook"
+                  className="text-zinc-400 hover:text-primary transition-colors"
+                >
+                  <Facebook className="h-5 w-5" />
+                </a>
+              )}
+              {socialLinks.instagram_url && (
+                <a
+                  href={socialLinks.instagram_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="Instagram"
+                  className="text-zinc-400 hover:text-primary transition-colors"
+                >
+                  <Instagram className="h-5 w-5" />
+                </a>
+              )}
             </div>
           </div>
 
@@ -126,7 +201,7 @@ const Footer = () => {
             </ul>
           </nav>
 
-          {/* Company */}
+          {/* Company & Contact */}
           <div className="space-y-4">
             <h3 className="text-sm font-semibold text-zinc-200 uppercase tracking-wide">Company</h3>
             <ul className="space-y-2">
@@ -147,7 +222,7 @@ const Footer = () => {
               </li>
             </ul>
 
-            {/* Contact block */}
+            {/* Contact & Newsletter */}
             <address className="not-italic space-y-3 pt-2">
               <div className="flex items-center gap-3 text-zinc-300">
                 <Mail className="h-4 w-4 text-zinc-400" />
@@ -159,13 +234,49 @@ const Footer = () => {
                 </a>
               </div>
             </address>
+
+            {/* Newsletter - moved here */}
+            <div className="space-y-2 pt-3 border-t border-zinc-700/50">
+              <h4 className="text-xs font-semibold tracking-wide text-zinc-400 uppercase">
+                Subscribe to updates
+              </h4>
+              <form
+                className="flex items-center gap-2"
+                onSubmit={handleNewsletterSubmit}
+              >
+                <Input
+                  type="email"
+                  required
+                  value={newsletterEmail}
+                  onChange={(e) => setNewsletterEmail(e.target.value)}
+                  placeholder="your@email.com"
+                  className="bg-zinc-800/60 border-zinc-700/80 placeholder:text-zinc-500 focus-visible:ring-primary h-9 text-sm"
+                />
+                <Button
+                  type="submit"
+                  disabled={submitting}
+                  size="sm"
+                  className="bg-primary hover:bg-primary/90 h-9"
+                  aria-label="Subscribe"
+                >
+                  {submitting ? "..." : "Go"}
+                </Button>
+              </form>
+            </div>
           </div>
         </div>
 
+        {/* Disclaimer */}
+        <div className="mt-8 text-center">
+          <p className="text-xs text-zinc-500">
+            Information provided on PetroDealHub is for informational purposes only and does not constitute legal or financial advice.
+          </p>
+        </div>
+
         {/* Bottom Bar */}
-        <div className="mt-12 border-t border-border/50 pt-8 flex flex-col items-center justify-between gap-4 md:flex-row">
-          <div className="text-sm text-zinc-400">
-            © {new Date().getFullYear()} PetroDealHub. All rights reserved.
+        <div className="mt-6 border-t border-border/50 pt-8 flex flex-col items-center justify-between gap-4 md:flex-row">
+          <div className="text-sm text-zinc-400 text-center md:text-left">
+            © {new Date().getFullYear()} PetroDealHub. All rights reserved. Operated by PetroDealHub. Registered Company in the United States.
           </div>
 
           <ul className="flex flex-wrap items-center gap-6 text-sm">

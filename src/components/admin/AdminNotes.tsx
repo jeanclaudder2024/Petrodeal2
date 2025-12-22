@@ -8,7 +8,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { FileText, Plus, Edit, Trash2 } from 'lucide-react';
-import { db } from '@/lib/supabase-helper';
+import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 
@@ -43,20 +43,20 @@ const AdminNotes = () => {
   const fetchNotes = async () => {
     setLoading(true);
     try {
-      const { data, error } = await db
+      const { data, error } = await supabase
         .from('admin_notes')
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
-      setNotes(data || []);
+      if (error) {
+        console.error('Admin notes table error:', error);
+        setNotes([]);
+      } else {
+        setNotes(data || []);
+      }
     } catch (error) {
       console.error('Failed to fetch admin notes:', error);
-      toast({
-        title: "Error",
-        description: "Failed to load admin notes",
-        variant: "destructive"
-      });
+      setNotes([]);
     } finally {
       setLoading(false);
     }
@@ -66,7 +66,7 @@ const AdminNotes = () => {
     e.preventDefault();
     
     try {
-      const { error } = await db
+      const { error } = await supabase
         .from('admin_notes')
         .insert({
           ...newNote,
@@ -100,7 +100,7 @@ const AdminNotes = () => {
 
   const handleDeleteNote = async (noteId: string) => {
     try {
-      const { error } = await db
+      const { error } = await supabase
         .from('admin_notes')
         .delete()
         .eq('id', noteId);

@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Users, Crown, Shield, TrendingUp, User } from 'lucide-react';
+import { Users, Crown, Shield, TrendingUp, User, Briefcase, Rocket, Building2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { db } from '@/lib/supabase-helper';
 import { useToast } from '@/hooks/use-toast';
@@ -20,13 +20,21 @@ interface UserWithRole {
   last_sign_in_at?: string;
 }
 
+interface SubscriberStats {
+  basic: number;
+  professional: number;
+  enterprise: number;
+}
+
 const UserManagement = () => {
   const [users, setUsers] = useState<UserWithRole[]>([]);
+  const [subscriberStats, setSubscriberStats] = useState<SubscriberStats>({ basic: 0, professional: 0, enterprise: 0 });
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
 
   useEffect(() => {
     fetchUsers();
+    fetchSubscriberStats();
   }, []);
 
   const fetchUsers = async () => {
@@ -47,6 +55,28 @@ const UserManagement = () => {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchSubscriberStats = async () => {
+    try {
+      const { data, error } = await db
+        .from('subscribers')
+        .select('subscription_tier');
+
+      if (error) throw error;
+
+      const stats: SubscriberStats = { basic: 0, professional: 0, enterprise: 0 };
+      
+      (data || []).forEach((sub: { subscription_tier: string | null }) => {
+        if (sub.subscription_tier === 'basic') stats.basic++;
+        else if (sub.subscription_tier === 'professional') stats.professional++;
+        else if (sub.subscription_tier === 'enterprise') stats.enterprise++;
+      });
+
+      setSubscriberStats(stats);
+    } catch (error) {
+      console.error('Failed to fetch subscriber stats:', error);
     }
   };
 
@@ -123,31 +153,56 @@ const UserManagement = () => {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {/* Stats Overview */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-            <div className="text-center">
+          {/* Stats Overview - Row 1: User Roles */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+            <div className="text-center p-3 bg-muted/30 rounded-lg">
               <div className="text-2xl font-bold text-primary">
                 {users.length}
               </div>
               <div className="text-sm text-muted-foreground">Total Users</div>
             </div>
-            <div className="text-center">
+            <div className="text-center p-3 bg-red-50 dark:bg-red-950/30 rounded-lg">
               <div className="text-2xl font-bold text-red-500">
                 {users.filter(u => u.role === 'admin').length}
               </div>
               <div className="text-sm text-muted-foreground">Admins</div>
             </div>
-            <div className="text-center">
+            <div className="text-center p-3 bg-yellow-50 dark:bg-yellow-950/30 rounded-lg">
               <div className="text-2xl font-bold text-gold">
                 {users.filter(u => u.role === 'broker').length}
               </div>
               <div className="text-sm text-muted-foreground">Brokers</div>
             </div>
-            <div className="text-center">
+            <div className="text-center p-3 bg-blue-50 dark:bg-blue-950/30 rounded-lg">
               <div className="text-2xl font-bold text-blue-500">
                 {users.filter(u => u.role === 'trader').length}
               </div>
               <div className="text-sm text-muted-foreground">Traders</div>
+            </div>
+          </div>
+
+          {/* Stats Overview - Row 2: Subscription Tiers */}
+          <div className="grid grid-cols-3 gap-4 mb-6">
+            <div className="flex items-center gap-3 p-3 bg-sky-50 dark:bg-sky-950/30 rounded-lg">
+              <Briefcase className="h-5 w-5 text-sky-600" />
+              <div>
+                <div className="text-xl font-bold text-sky-600">{subscriberStats.basic}</div>
+                <div className="text-xs text-muted-foreground">Traders Basic</div>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 p-3 bg-purple-50 dark:bg-purple-950/30 rounded-lg">
+              <Rocket className="h-5 w-5 text-purple-600" />
+              <div>
+                <div className="text-xl font-bold text-purple-600">{subscriberStats.professional}</div>
+                <div className="text-xs text-muted-foreground">Traders Professional</div>
+              </div>
+            </div>
+            <div className="flex items-center gap-3 p-3 bg-amber-50 dark:bg-amber-950/30 rounded-lg">
+              <Building2 className="h-5 w-5 text-amber-600" />
+              <div>
+                <div className="text-xl font-bold text-amber-600">{subscriberStats.enterprise}</div>
+                <div className="text-xs text-muted-foreground">Traders Enterprise</div>
+              </div>
             </div>
           </div>
 

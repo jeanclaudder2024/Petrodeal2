@@ -7,7 +7,7 @@ import { componentTagger } from "lovable-tagger";
 export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
-    port: 5173,
+    port: 8080,
   },
   plugins: [
     react(),
@@ -18,6 +18,7 @@ export default defineConfig(({ mode }) => ({
     alias: {
       "@": path.resolve(__dirname, "./src"),
     },
+    dedupe: ['react', 'react-dom'],
   },
   build: {
     commonjsOptions: {

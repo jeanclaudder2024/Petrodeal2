@@ -102,6 +102,7 @@ serve(async (req) => {
 
     let discountPercentage = 0;
     try {
+      // First check subscription_discounts
       const { data: discountData } = await supabaseService
         .from('subscription_discounts')
         .select('discount_percentage')
@@ -114,7 +115,28 @@ serve(async (req) => {
 
       if (discountData) {
         discountPercentage = discountData.discount_percentage;
-        logStep("Discount found", { discountPercentage });
+        logStep("Subscription discount found", { discountPercentage });
+      }
+
+      // Also check promotion_frames for higher discounts
+      const now = new Date().toISOString();
+      const { data: promoData } = await supabaseService
+        .from('promotion_frames')
+        .select('discount_type, discount_value, eligible_plans, billing_cycle')
+        .eq('is_active', true)
+        .eq('show_on_subscription', true)
+        .lte('start_date', now)
+        .or(`end_date.is.null,end_date.gt.${now}`)
+        .order('discount_value', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (promoData && promoData.eligible_plans?.includes(tier)) {
+        const promoDiscount = promoData.discount_type === 'percentage' ? promoData.discount_value : 0;
+        if (promoDiscount > discountPercentage) {
+          discountPercentage = promoDiscount;
+          logStep("Promotion frame discount found (higher)", { discountPercentage });
+        }
       }
     } catch (discountError) {
       logStep("Error fetching discount, continuing without", { error: discountError instanceof Error ? discountError.message : 'Discount error' });

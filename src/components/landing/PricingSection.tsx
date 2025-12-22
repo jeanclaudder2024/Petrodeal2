@@ -3,7 +3,6 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Check, ArrowRight, Zap, Crown, Star, Percent } from "lucide-react";
 import { useNavigate } from "react-router-dom";
-import { useLandingPageContent } from "@/hooks/useLandingPageContent";
 import { useState, useEffect, useRef } from "react";
 import { db } from '@/lib/supabase-helper';
 
@@ -11,7 +10,19 @@ interface Discount {
   discount_percentage: number;
   discount_name: string | null;
   plan_tier: string;
-  billing_cycle: 'monthly' | 'annual';
+  billing_cycle: 'monthly' | 'annual' | 'both';
+}
+
+interface PromotionFrame {
+  id: string;
+  title: string;
+  description: string;
+  eligible_plans: string[];
+  billing_cycle: string;
+  discount_type: string;
+  discount_value: number;
+  is_active: boolean;
+  show_on_home: boolean;
 }
 
 interface DatabasePlan {
@@ -29,21 +40,22 @@ interface DatabasePlan {
 const PricingSection = () => {
   const navigate = useNavigate();
   const [discounts, setDiscounts] = useState<Discount[]>([]);
-  const [isAnnual, setIsAnnual] = useState(true); // Default to annual
+  const [promotionFrames, setPromotionFrames] = useState<PromotionFrame[]>([]);
+  const [isAnnual, setIsAnnual] = useState(true);
   const [dbPlans, setDbPlans] = useState<DatabasePlan[]>([]);
   const pollingIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     fetchActiveDiscounts();
     fetchDynamicPlans();
+    fetchPromotionFrames();
     
-    // Set up polling to refresh prices every 30 seconds
     pollingIntervalRef.current = setInterval(() => {
       fetchActiveDiscounts();
       fetchDynamicPlans();
+      fetchPromotionFrames();
     }, 30000);
     
-    // Cleanup interval on unmount
     return () => {
       if (pollingIntervalRef.current) {
         clearInterval(pollingIntervalRef.current);
@@ -51,16 +63,16 @@ const PricingSection = () => {
     };
   }, []);
 
-  // Refresh discounts when billing cycle changes
   useEffect(() => {
     fetchActiveDiscounts();
+    fetchPromotionFrames();
   }, [isAnnual]);
 
   const fetchActiveDiscounts = async () => {
     try {
       const { data, error } = await db
         .from('subscription_discounts')
-        .select('discount_percentage, discount_name, plan_tier, billing_cycle')
+        .select('discount_percentage, discount_name, plan_tier')
         .eq('is_active', true)
         .or(`valid_until.is.null,valid_until.gt.${new Date().toISOString()}`);
 
@@ -69,9 +81,34 @@ const PricingSection = () => {
         return;
       }
 
-      setDiscounts(data || []);
+      const mappedDiscounts = (data || []).map(d => ({
+        ...d,
+        billing_cycle: 'both' as const
+      }));
+      setDiscounts(mappedDiscounts);
     } catch (error) {
       console.error('Error fetching discounts:', error);
+    }
+  };
+
+  const fetchPromotionFrames = async () => {
+    try {
+      const { data, error } = await db
+        .from('promotion_frames')
+        .select('*')
+        .eq('is_active', true)
+        .eq('show_on_home', true)
+        .lte('start_date', new Date().toISOString())
+        .gte('end_date', new Date().toISOString());
+
+      if (error) {
+        console.error('Error fetching promotion frames:', error);
+        return;
+      }
+
+      setPromotionFrames(data || []);
+    } catch (error) {
+      console.error('Error fetching promotion frames:', error);
     }
   };
 
@@ -94,18 +131,44 @@ const PricingSection = () => {
     }
   };
 
-  const getDiscountForPlan = (planTier: string): Discount | null => {
+  const getDiscountForPlan = (planTier: string): { percentage: number; name: string | null; source: 'promotion' | 'discount' } | null => {
     const billingCycle = isAnnual ? 'annual' : 'monthly';
-    return discounts.find(discount => 
-      discount.plan_tier === planTier && discount.billing_cycle === billingCycle
-    ) || null;
+    
+    // Check promotion frames first (higher priority)
+    const promotion = promotionFrames.find(p => 
+      p.eligible_plans?.includes(planTier) && 
+      (p.billing_cycle === billingCycle || p.billing_cycle === 'both')
+    );
+    
+    if (promotion) {
+      return {
+        percentage: promotion.discount_value,
+        name: promotion.title,
+        source: 'promotion'
+      };
+    }
+    
+    // Fall back to subscription discounts
+    const discount = discounts.find(d => 
+      d.plan_tier === planTier && 
+      (d.billing_cycle === 'both' || d.billing_cycle === billingCycle)
+    );
+    
+    if (discount) {
+      return {
+        percentage: discount.discount_percentage,
+        name: discount.discount_name,
+        source: 'discount'
+      };
+    }
+    
+    return null;
   };
 
   const calculateDiscountedPrice = (originalPrice: number, discountPercentage: number) => {
     return originalPrice * (1 - discountPercentage / 100);
   };
 
-  // Static plans as fallback
   const staticPlans = [{
     name: "Basic Plan",
     tier: "basic",
@@ -176,7 +239,6 @@ const PricingSection = () => {
     onClick: () => navigate("/auth")
   }];
 
-  // Use dynamic plans from database or fallback to static plans
   const displayPlans = dbPlans.length > 0 ? dbPlans.map(dbPlan => ({
     name: dbPlan.plan_name,
     tier: dbPlan.plan_tier,
@@ -193,13 +255,11 @@ const PricingSection = () => {
   })) : staticPlans;
 
   return <section className="py-32 relative overflow-hidden">
-      {/* Background Elements */}
       <div className="absolute inset-0 bg-gradient-to-br from-background via-muted/20 to-background bg-slate-700" />
       <div className="absolute top-0 right-1/4 w-96 h-96 bg-gradient-to-br from-accent/10 to-transparent rounded-full blur-3xl" />
       <div className="absolute bottom-0 left-1/4 w-64 h-64 bg-gradient-to-bl from-primary/10 to-transparent rounded-full blur-3xl" />
       
       <div className="container mx-auto px-6 relative z-10">
-        {/* Section Header */}
         <div className="text-center mb-20">
           <div className="inline-flex items-center px-4 py-2 rounded-full bg-accent/10 border border-accent/20 mb-6 animate-fade-in-up">
             <Crown className="w-4 h-4 text-accent mr-2" />
@@ -214,7 +274,6 @@ const PricingSection = () => {
             Scale your oil trading operations with flexible plans designed for every level of business, from independent traders to global enterprises.
           </p>
           
-          {/* Billing Toggle */}
           <div className="flex items-center justify-center gap-4 mt-12 mb-8 animate-fade-in-up animation-delay-600">
             <span className={`text-sm font-medium ${!isAnnual ? 'text-primary' : 'text-muted-foreground'}`}>
               Monthly
@@ -242,13 +301,12 @@ const PricingSection = () => {
           </div>
         </div>
 
-        {/* Pricing Cards */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-7xl mx-auto">
           {displayPlans.map((plan, index) => {
             const price = isAnnual ? plan.annualPrice : plan.monthlyPrice;
             const period = isAnnual ? 'year' : 'month';
-            const discount = getDiscountForPlan(plan.tier);
-            const discountedPrice = discount ? calculateDiscountedPrice(price, discount.discount_percentage) : price;
+            const discountInfo = getDiscountForPlan(plan.tier);
+            const discountedPrice = discountInfo ? calculateDiscountedPrice(price, discountInfo.percentage) : price;
             
             return <Card key={index} className={`group relative p-8 border-0 bg-gradient-to-br from-card/90 to-card/60 backdrop-blur-xl hover:shadow-2xl transition-all duration-500 hover:scale-[1.02] animate-fade-in-up ${plan.popular ? 'ring-2 ring-accent/50 shadow-accent/20' : ''}`} style={{
             animationDelay: `${index * 0.2}s`
@@ -259,30 +317,27 @@ const PricingSection = () => {
                     </Badge>
                   </div>}
                   
-                {discount && <div className={`absolute -top-4 ${plan.popular ? 'right-4' : 'right-4'} z-20`}>
-                    <Badge className="bg-red-500 text-white px-4 py-1 shadow-lg">
+                {discountInfo && <div className={`absolute -top-4 ${plan.popular ? 'right-4' : 'right-4'} z-20`}>
+                    <Badge className={`${discountInfo.source === 'promotion' ? 'bg-gradient-to-r from-red-500 to-orange-500' : 'bg-red-500'} text-white px-4 py-1 shadow-lg`}>
                       <Percent className="h-3 w-3 mr-1" />
-                      {discount.discount_percentage}% OFF
+                      {discountInfo.percentage}% OFF
                     </Badge>
                   </div>}
 
-              {/* Gradient Border Effect */}
               <div className={`absolute inset-0 rounded-xl bg-gradient-to-r ${plan.gradient} opacity-0 group-hover:opacity-100 transition-opacity duration-300 blur-sm`} />
               <div className="absolute inset-[1px] rounded-xl bg-card" />
               
               <div className="relative z-10">
-                {/* Plan Icon */}
                 <div className={`w-16 h-16 mx-auto mb-6 rounded-2xl bg-gradient-to-br ${plan.gradient} flex items-center justify-center group-hover:scale-110 transition-transform duration-300 shadow-lg`}>
                   <plan.icon className="w-8 h-8 text-white" />
                 </div>
 
-                {/* Plan Details */}
                 <div className="text-center mb-8">
                   <h3 className="text-2xl font-bold mb-2">{plan.name}</h3>
                   <p className="text-muted-foreground mb-4">{plan.description}</p>
                   
                   <div className="mb-4">
-                    {discount ? (
+                    {discountInfo ? (
                       <div className="space-y-1">
                         <div className="text-2xl line-through text-muted-foreground">
                           ${price.toFixed(2)}
@@ -291,9 +346,9 @@ const PricingSection = () => {
                           <span className="text-4xl font-bold text-primary">${discountedPrice.toFixed(2)}</span>
                           <span className="text-muted-foreground ml-2">/ {period}</span>
                         </div>
-                        {discount.discount_name && (
+                        {discountInfo.name && (
                           <div className="text-sm text-red-600 font-medium mt-1">
-                            {discount.discount_name}
+                            {discountInfo.name}
                           </div>
                         )}
                       </div>
@@ -306,7 +361,6 @@ const PricingSection = () => {
                   </div>
                 </div>
 
-                {/* Features */}
                 <div className="space-y-4 mb-8">
                   {plan.features.map((feature, featureIndex) => <div key={featureIndex} className="flex items-center gap-3">
                       <div className={`w-5 h-5 rounded-full bg-gradient-to-r ${plan.gradient} flex items-center justify-center flex-shrink-0`}>
@@ -316,13 +370,11 @@ const PricingSection = () => {
                     </div>)}
                 </div>
 
-                {/* CTA Button */}
                 <Button onClick={plan.onClick} className={`w-full py-3 text-lg font-semibold bg-gradient-to-r ${plan.gradient} hover:shadow-2xl transition-all duration-300 hover:scale-105 group`}>
                   {plan.cta}
                   <ArrowRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" />
                 </Button>
                 
-                {/* 5-Day Free Trial Text */}
                 <div className="mt-4 text-center">
                   <p className="text-sm text-muted-foreground font-medium">
                     Includes 5-day free trial period
@@ -333,7 +385,6 @@ const PricingSection = () => {
           })}
         </div>
 
-        {/* Additional Info */}
         <div className="text-center mt-16 animate-fade-in-up animation-delay-800">
           <p className="text-muted-foreground mb-4">
             All plans include 30-day money-back guarantee and secure payment processing

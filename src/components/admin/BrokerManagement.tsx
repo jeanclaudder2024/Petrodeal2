@@ -26,8 +26,12 @@ import {
   XCircle, 
   Eye, 
   Send,
-  User
+  User,
+  Settings,
+  DollarSign
 } from 'lucide-react';
+import DealStepTemplates from './DealStepTemplates';
+import BrokerPricingManagement from './BrokerPricingManagement';
 import { db, supabase } from '@/lib/supabase-helper';
 import { useToast } from '@/hooks/use-toast';
 
@@ -407,11 +411,17 @@ const BrokerManagement = () => {
       </Card>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="brokers">Brokers</TabsTrigger>
-          <TabsTrigger value="deals">Deals & Approvals</TabsTrigger>
-          <TabsTrigger value="chat">Chat Messages</TabsTrigger>
-          <TabsTrigger value="steps">Deal Steps</TabsTrigger>
+        <TabsList className="flex flex-nowrap overflow-x-auto w-full">
+          <TabsTrigger value="brokers" className="text-xs md:text-sm whitespace-nowrap">Brokers</TabsTrigger>
+          <TabsTrigger value="deals" className="text-xs md:text-sm whitespace-nowrap">Deals</TabsTrigger>
+          <TabsTrigger value="chat" className="text-xs md:text-sm whitespace-nowrap">Chat</TabsTrigger>
+          <TabsTrigger value="steps" className="text-xs md:text-sm whitespace-nowrap">Steps</TabsTrigger>
+          <TabsTrigger value="templates" className="flex items-center gap-1 text-xs md:text-sm whitespace-nowrap">
+            <Settings className="h-3 w-3" /> Templates
+          </TabsTrigger>
+          <TabsTrigger value="pricing" className="flex items-center gap-1 text-xs md:text-sm whitespace-nowrap">
+            <DollarSign className="h-3 w-3" /> Pricing
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="brokers">
@@ -917,6 +927,10 @@ const BrokerManagement = () => {
               </div>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="templates">
+          <DealStepTemplates />
         </TabsContent>
       </Tabs>
 
@@ -1482,6 +1496,11 @@ const BrokerManagement = () => {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Broker Pricing Tab */}
+      <TabsContent value="pricing">
+        <BrokerPricingManagement />
+      </TabsContent>
     </div>
   );
 };

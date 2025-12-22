@@ -1,9 +1,23 @@
 import { useState, useEffect } from "react";
 import { X, Sparkles } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { supabase } from "@/integrations/supabase/client";
+
+interface BannerConfig {
+  id: string;
+  title: string;
+  subtitle: string;
+  start_date: string;
+  end_date: string;
+  show_countdown: boolean;
+  cta_text: string;
+  cta_link: string;
+  is_active: boolean;
+}
 
 const BlackFridayCountdown = () => {
-  const [isVisible, setIsVisible] = useState(true);
+  const [isVisible, setIsVisible] = useState(false);
+  const [bannerConfig, setBannerConfig] = useState<BannerConfig | null>(null);
   const [timeLeft, setTimeLeft] = useState({
     days: 0,
     hours: 0,
@@ -11,26 +25,47 @@ const BlackFridayCountdown = () => {
     seconds: 0,
   });
 
-  // Countdown 7 days from now
-  const getCountdownDate = () => {
-    const now = new Date();
-    // Add 7 days (7 * 24 * 60 * 60 * 1000 milliseconds)
-    const countdownDate = new Date(now.getTime() + (7 * 24 * 60 * 60 * 1000));
-    // Set to end of day (23:59:59)
-    countdownDate.setHours(23, 59, 59, 999);
-    return countdownDate.getTime();
+  useEffect(() => {
+    fetchBannerConfig();
+  }, []);
+
+  const fetchBannerConfig = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('banner_configs')
+        .select('*')
+        .eq('is_active', true)
+        .lte('start_date', new Date().toISOString())
+        .gte('end_date', new Date().toISOString())
+        .limit(1)
+        .single();
+
+      if (data && !error) {
+        setBannerConfig(data);
+        // Check if user dismissed this banner
+        const dismissedBanner = localStorage.getItem(`banner_dismissed_${data.id}`);
+        if (!dismissedBanner) {
+          setIsVisible(true);
+        }
+      }
+    } catch (error) {
+      // No active banner or error - stay hidden
+      setIsVisible(false);
+    }
   };
-  
-  const countdownDate = getCountdownDate();
 
   useEffect(() => {
+    if (!bannerConfig?.end_date || !bannerConfig.show_countdown) return;
+
+    const countdownDate = new Date(bannerConfig.end_date).getTime();
+
     const timer = setInterval(() => {
       const now = new Date().getTime();
       const distance = countdownDate - now;
 
       if (distance < 0) {
-        // Countdown finished, hide the bar or set to next year
-        setTimeLeft({ days: 0, hours: 0, minutes: 0, seconds: 0 });
+        setIsVisible(false);
+        clearInterval(timer);
         return;
       }
 
@@ -43,9 +78,26 @@ const BlackFridayCountdown = () => {
     }, 1000);
 
     return () => clearInterval(timer);
-  }, []);
+  }, [bannerConfig]);
 
-  if (!isVisible) return null;
+  const handleDismiss = () => {
+    if (bannerConfig) {
+      localStorage.setItem(`banner_dismissed_${bannerConfig.id}`, 'true');
+    }
+    setIsVisible(false);
+  };
+
+  const handleCTAClick = () => {
+    if (bannerConfig?.cta_link) {
+      if (bannerConfig.cta_link.startsWith('#')) {
+        document.querySelector(bannerConfig.cta_link)?.scrollIntoView({ behavior: "smooth" });
+      } else {
+        window.location.href = bannerConfig.cta_link;
+      }
+    }
+  };
+
+  if (!isVisible || !bannerConfig) return null;
 
   return (
     <div className="fixed top-16 sm:top-20 md:top-24 lg:top-[130px] left-0 right-0 z-40 bg-gradient-to-r from-black via-red-950 to-black border-b border-red-500/30 shadow-lg">
@@ -56,69 +108,71 @@ const BlackFridayCountdown = () => {
             <Sparkles className="h-4 w-4 sm:h-5 sm:w-5 text-yellow-400 animate-pulse flex-shrink-0" />
             <div className="flex items-center gap-2 sm:gap-3 flex-wrap">
               <span className="text-white font-bold text-xs sm:text-sm whitespace-nowrap">
-                🎉 BLACK FRIDAY SALE
+                🎉 {bannerConfig.title}
               </span>
               <span className="hidden sm:inline text-yellow-400 font-semibold text-xs sm:text-sm">
-                Up to 70% OFF
+                {bannerConfig.subtitle}
               </span>
             </div>
           </div>
 
           {/* Center - Countdown Timer */}
-          <div className="hidden md:flex items-center gap-2 sm:gap-3">
-            <div className="flex items-center gap-1 sm:gap-2">
-              <div className="bg-black/50 rounded px-2 py-1 min-w-[50px] text-center border border-red-500/30">
-                <div className="text-yellow-400 font-bold text-sm sm:text-base">
-                  {String(timeLeft.days).padStart(2, "0")}
+          {bannerConfig.show_countdown && (
+            <div className="hidden md:flex items-center gap-2 sm:gap-3">
+              <div className="flex items-center gap-1 sm:gap-2">
+                <div className="bg-black/50 rounded px-2 py-1 min-w-[50px] text-center border border-red-500/30">
+                  <div className="text-yellow-400 font-bold text-sm sm:text-base">
+                    {String(timeLeft.days).padStart(2, "0")}
+                  </div>
+                  <div className="text-[10px] text-gray-400 uppercase">Days</div>
                 </div>
-                <div className="text-[10px] text-gray-400 uppercase">Days</div>
-              </div>
-              <span className="text-red-500 font-bold text-lg">:</span>
-              <div className="bg-black/50 rounded px-2 py-1 min-w-[50px] text-center border border-red-500/30">
-                <div className="text-yellow-400 font-bold text-sm sm:text-base">
-                  {String(timeLeft.hours).padStart(2, "0")}
+                <span className="text-red-500 font-bold text-lg">:</span>
+                <div className="bg-black/50 rounded px-2 py-1 min-w-[50px] text-center border border-red-500/30">
+                  <div className="text-yellow-400 font-bold text-sm sm:text-base">
+                    {String(timeLeft.hours).padStart(2, "0")}
+                  </div>
+                  <div className="text-[10px] text-gray-400 uppercase">Hours</div>
                 </div>
-                <div className="text-[10px] text-gray-400 uppercase">Hours</div>
-              </div>
-              <span className="text-red-500 font-bold text-lg">:</span>
-              <div className="bg-black/50 rounded px-2 py-1 min-w-[50px] text-center border border-red-500/30">
-                <div className="text-yellow-400 font-bold text-sm sm:text-base">
-                  {String(timeLeft.minutes).padStart(2, "0")}
+                <span className="text-red-500 font-bold text-lg">:</span>
+                <div className="bg-black/50 rounded px-2 py-1 min-w-[50px] text-center border border-red-500/30">
+                  <div className="text-yellow-400 font-bold text-sm sm:text-base">
+                    {String(timeLeft.minutes).padStart(2, "0")}
+                  </div>
+                  <div className="text-[10px] text-gray-400 uppercase">Mins</div>
                 </div>
-                <div className="text-[10px] text-gray-400 uppercase">Mins</div>
-              </div>
-              <span className="text-red-500 font-bold text-lg">:</span>
-              <div className="bg-black/50 rounded px-2 py-1 min-w-[50px] text-center border border-red-500/30">
-                <div className="text-yellow-400 font-bold text-sm sm:text-base">
-                  {String(timeLeft.seconds).padStart(2, "0")}
+                <span className="text-red-500 font-bold text-lg">:</span>
+                <div className="bg-black/50 rounded px-2 py-1 min-w-[50px] text-center border border-red-500/30">
+                  <div className="text-yellow-400 font-bold text-sm sm:text-base">
+                    {String(timeLeft.seconds).padStart(2, "0")}
+                  </div>
+                  <div className="text-[10px] text-gray-400 uppercase">Secs</div>
                 </div>
-                <div className="text-[10px] text-gray-400 uppercase">Secs</div>
               </div>
             </div>
-          </div>
+          )}
 
           {/* Mobile Countdown - Simplified */}
-          <div className="md:hidden flex items-center gap-1">
-            <div className="bg-black/50 rounded px-2 py-1 text-center border border-red-500/30">
-              <div className="text-yellow-400 font-bold text-xs">
-                {String(timeLeft.days)}d {String(timeLeft.hours).padStart(2, "0")}h {String(timeLeft.minutes).padStart(2, "0")}m
+          {bannerConfig.show_countdown && (
+            <div className="md:hidden flex items-center gap-1">
+              <div className="bg-black/50 rounded px-2 py-1 text-center border border-red-500/30">
+                <div className="text-yellow-400 font-bold text-xs">
+                  {String(timeLeft.days)}d {String(timeLeft.hours).padStart(2, "0")}h {String(timeLeft.minutes).padStart(2, "0")}m
+                </div>
               </div>
             </div>
-          </div>
+          )}
 
           {/* Right side - CTA Button and Close */}
           <div className="flex items-center gap-2 flex-shrink-0">
             <Button
               size="sm"
               className="bg-red-600 hover:bg-red-700 text-white text-xs sm:text-sm px-2 sm:px-4 h-7 sm:h-8 hidden sm:flex"
-              onClick={() => {
-                document.getElementById("pricing")?.scrollIntoView({ behavior: "smooth" });
-              }}
+              onClick={handleCTAClick}
             >
-              Shop Now
+              {bannerConfig.cta_text}
             </Button>
             <button
-              onClick={() => setIsVisible(false)}
+              onClick={handleDismiss}
               className="text-white/70 hover:text-white transition-colors p-1"
               aria-label="Close banner"
             >
@@ -132,4 +186,3 @@ const BlackFridayCountdown = () => {
 };
 
 export default BlackFridayCountdown;
-

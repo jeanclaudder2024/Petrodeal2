@@ -8,6 +8,7 @@ interface MapData {
   vessels: any[];
   ports: any[];
   refineries: any[];
+  companies?: any[];
 }
 
 interface InteractiveMapProps {
@@ -367,6 +368,148 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ data, height = "400px",
       }
     });
 
+    // Add companies to map with vessel counts
+    data.companies?.forEach((company: any) => {
+      // Use company headquarters coordinates, or derive from country
+      let lat = company.lat || company.headquarters_lat;
+      let lng = company.lng || company.headquarters_lng;
+      
+      // If no coordinates, try to place near a major trading hub based on country
+      if (!lat || !lng) {
+        const countryCoords: Record<string, { lat: number; lng: number }> = {
+          'United Arab Emirates': { lat: 25.2, lng: 55.3 },
+          'UAE': { lat: 25.2, lng: 55.3 },
+          'Saudi Arabia': { lat: 24.7, lng: 46.7 },
+          'Qatar': { lat: 25.3, lng: 51.5 },
+          'Kuwait': { lat: 29.4, lng: 47.9 },
+          'USA': { lat: 29.8, lng: -95.4 },
+          'United States': { lat: 29.8, lng: -95.4 },
+          'UK': { lat: 51.5, lng: -0.1 },
+          'United Kingdom': { lat: 51.5, lng: -0.1 },
+          'Singapore': { lat: 1.3, lng: 103.8 },
+          'China': { lat: 31.2, lng: 121.5 },
+          'Japan': { lat: 35.7, lng: 139.8 },
+          'Netherlands': { lat: 51.9, lng: 4.5 },
+          'Norway': { lat: 59.9, lng: 10.7 },
+        };
+        
+        const coords = countryCoords[company.country] || countryCoords[company.registration_country];
+        if (coords) {
+          lat = coords.lat + (Math.random() * 0.5 - 0.25);
+          lng = coords.lng + (Math.random() * 0.5 - 0.25);
+        }
+      }
+      
+      if (lat && lng && !isNaN(lat) && !isNaN(lng)) {
+        // Create company icon with vessel count badge
+        const vesselCount = company.vessel_count || 0;
+        const companyIcon = L.divIcon({
+          className: 'custom-marker company-marker',
+          html: `
+            <div style="
+              position: relative;
+              background-color: #8b5cf6;
+              width: 24px;
+              height: 24px;
+              border-radius: 50%;
+              border: 2px solid white;
+              box-shadow: 0 2px 6px rgba(0,0,0,0.4);
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              ${company.logo_url ? `background-image: url('${company.logo_url}'); background-size: cover; background-position: center;` : ''}
+            ">
+              ${!company.logo_url ? `
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="white" stroke-width="2">
+                  <path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/>
+                  <path d="M6 12H4a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2h2"/>
+                  <path d="M18 9h2a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2h-2"/>
+                </svg>
+              ` : ''}
+              ${vesselCount > 0 ? `
+                <div style="
+                  position: absolute;
+                  top: -8px;
+                  right: -8px;
+                  background: #ef4444;
+                  color: white;
+                  font-size: 10px;
+                  font-weight: bold;
+                  width: 18px;
+                  height: 18px;
+                  border-radius: 50%;
+                  display: flex;
+                  align-items: center;
+                  justify-content: center;
+                  border: 2px solid white;
+                ">${vesselCount}</div>
+              ` : ''}
+            </div>
+          `,
+          iconSize: [24, 24],
+          iconAnchor: [12, 12]
+        });
+
+        const marker = L.marker([lat, lng], {
+          icon: companyIcon
+        }).addTo(map);
+        
+        const connectedVesselsHtml = company.connected_vessels?.slice(0, 5).map((v: any) => 
+          `<div class="text-xs py-1 border-b border-gray-100 last:border-0">🚢 ${v.name}</div>`
+        ).join('') || '<div class="text-xs text-gray-500">No vessels connected</div>';
+        
+        const popupContent = `
+          <div class="p-4 min-w-[300px]">
+            <div class="flex items-center gap-3 mb-3">
+              ${company.logo_url ? `<img src="${company.logo_url}" alt="${company.name}" class="w-10 h-10 rounded-full object-cover border-2 border-purple-200" />` : 
+                `<div class="w-10 h-10 bg-purple-500 rounded-full flex items-center justify-center text-white font-bold">${company.name?.charAt(0) || 'C'}</div>`
+              }
+              <div>
+                <h3 class="font-bold text-lg text-purple-600">${company.name || 'Unknown Company'}</h3>
+                <div class="text-xs text-gray-500">${company.company_type || 'Oil Company'}</div>
+              </div>
+            </div>
+            <div class="space-y-2 text-sm">
+              <div class="grid grid-cols-2 gap-2">
+                <div><strong>Country:</strong> ${company.country || company.registration_country || 'N/A'}</div>
+                <div><strong>Industry:</strong> ${company.industry || 'Oil & Gas'}</div>
+              </div>
+              <div class="grid grid-cols-2 gap-2">
+                <div><strong>Type:</strong> ${company.company_type || 'N/A'}</div>
+                <div><strong>Vessels:</strong> <span class="text-purple-600 font-bold">${vesselCount}</span></div>
+              </div>
+              ${company.email ? `<div><strong>Email:</strong> ${company.email}</div>` : ''}
+              ${company.phone ? `<div><strong>Phone:</strong> ${company.phone}</div>` : ''}
+            </div>
+            ${vesselCount > 0 ? `
+              <div class="mt-3 pt-3 border-t border-gray-200">
+                <div class="font-semibold text-sm mb-2">Connected Vessels:</div>
+                <div class="max-h-24 overflow-y-auto">
+                  ${connectedVesselsHtml}
+                </div>
+              </div>
+            ` : ''}
+            <div class="mt-4 pt-3 border-t border-gray-200">
+              <button 
+                onclick="window.dispatchEvent(new CustomEvent('navigate', {detail: '/companies/${company.id}'}))"
+                class="w-full bg-purple-500 hover:bg-purple-600 text-white font-medium py-2 px-4 rounded-lg transition-colors duration-200 flex items-center justify-center gap-2"
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M7 17L17 7M17 7H7M17 7V17"/>
+                </svg>
+                View Company Details
+              </button>
+            </div>
+          </div>
+        `;
+        
+        marker.bindPopup(popupContent, {
+          maxWidth: 350,
+          className: 'custom-popup'
+        });
+      }
+    });
+
 
     // Listen for navigation events from popups
     const handleNavigation = (event: any) => {
@@ -410,6 +553,10 @@ const InteractiveMap: React.FC<InteractiveMapProps> = ({ data, height = "400px",
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 bg-orange-500 rounded-full"></div>
             <span>Refineries ({data.refineries?.length || 0})</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-3 h-3 bg-purple-500 rounded-full"></div>
+            <span>Companies ({data.companies?.length || 0})</span>
           </div>
         </div>
       </div>

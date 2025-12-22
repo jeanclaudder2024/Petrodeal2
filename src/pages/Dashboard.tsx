@@ -5,9 +5,10 @@ import { useLanguage } from '@/contexts/LanguageContext';
 import LoadingFallback from '@/components/LoadingFallback';
 import AccessControlledDashboard from '@/components/dashboard/AccessControlledDashboard';
 import AccessGate from '@/components/AccessGate';
-import TrialCountdown from '@/components/TrialCountdown';
+import FuturisticTrialCountdown from '@/components/FuturisticTrialCountdown';
 import { MobileDashboard } from '@/components/MobileDashboard';
 import LanguageIndicator from '@/components/LanguageTest';
+import NotificationBell from '@/components/NotificationBell';
 import { useNavigate } from 'react-router-dom';
 import { useIsMobile } from '@/hooks/use-mobile';
 
@@ -55,7 +56,7 @@ const Dashboard = () => {
         <LanguageIndicator />
         {/* Show trial countdown at the top of dashboard */}
         <div className="mb-4">
-          <TrialCountdown />
+          <FuturisticTrialCountdown />
         </div>
         <AccessControlledDashboard />
       </MobileDashboard>
@@ -64,13 +65,16 @@ const Dashboard = () => {
 
   return (
     <div>
-      {/* Language Indicator */}
+      {/* Header with Notifications */}
       <div className="container mx-auto px-4 pt-4">
-        <LanguageIndicator />
+        <div className="flex items-center justify-between">
+          <LanguageIndicator />
+          <NotificationBell />
+        </div>
       </div>
       {/* Show trial countdown at the top of dashboard */}
       <div className="container mx-auto px-4 pt-4">
-        <TrialCountdown />
+        <FuturisticTrialCountdown />
       </div>
       <AccessControlledDashboard />
     </div>

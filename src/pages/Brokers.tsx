@@ -126,49 +126,49 @@ const Brokers = () => {
         </p>
       </div>
 
-      {/* Stats Overview */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
+      {/* Stats Overview - Mobile optimized */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-6 mb-8">
         <Card className="trading-card">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Brokers</CardTitle>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-3 md:p-6">
+            <CardTitle className="text-xs md:text-sm font-medium">Total Brokers</CardTitle>
             <Users className="h-4 w-4 text-primary" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{brokers.length}</div>
+          <CardContent className="p-3 md:p-6 pt-0">
+            <div className="text-xl md:text-2xl font-bold">{brokers.length}</div>
           </CardContent>
         </Card>
         
         <Card className="trading-card">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Verified</CardTitle>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-3 md:p-6">
+            <CardTitle className="text-xs md:text-sm font-medium">Verified</CardTitle>
             <Award className="h-4 w-4 text-green-500" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
+          <CardContent className="p-3 md:p-6 pt-0">
+            <div className="text-xl md:text-2xl font-bold">
               {brokers.filter(b => b.verified).length}
             </div>
           </CardContent>
         </Card>
         
         <Card className="trading-card">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Deals</CardTitle>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-3 md:p-6">
+            <CardTitle className="text-xs md:text-sm font-medium">Total Deals</CardTitle>
             <TrendingUp className="h-4 w-4 text-blue-500" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
+          <CardContent className="p-3 md:p-6 pt-0">
+            <div className="text-xl md:text-2xl font-bold">
               {brokers.reduce((sum, b) => sum + (b.total_deals || 0), 0)}
             </div>
           </CardContent>
         </Card>
         
         <Card className="trading-card">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Avg Rating</CardTitle>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 p-3 md:p-6">
+            <CardTitle className="text-xs md:text-sm font-medium">Avg Rating</CardTitle>
             <Star className="h-4 w-4 text-yellow-500" />
           </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
+          <CardContent className="p-3 md:p-6 pt-0">
+            <div className="text-xl md:text-2xl font-bold">
               {brokers.length > 0 
                 ? (brokers.reduce((sum, b) => sum + (b.rating || 0), 0) / brokers.length).toFixed(1)
                 : '0.0'

@@ -56,6 +56,7 @@ import SupportNews from "./pages/SupportNews";
 import Policies from "./pages/Policies";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import Support from "./pages/Support";
+import Documentation from "./pages/Documentation";
 import SupportCenter from "./pages/SupportCenter";
 import MyTickets from "./pages/MyTickets";
 import NewTicket from "./pages/NewTicket";
@@ -151,6 +152,7 @@ const App = () => (
             <Route path="/support-news" element={<SupportNews />} />
             <Route path="/policies" element={<Policies />} />
             <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+          <Route path="/documentation" element={<Documentation />} />
           <Route 
             path="/support" 
             element={

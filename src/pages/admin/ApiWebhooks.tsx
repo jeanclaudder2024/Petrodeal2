@@ -36,28 +36,28 @@ interface ApiKey {
   name: string;
   key_prefix: string;
   description: string | null;
-  permissions: Record<string, any>;
-  rate_limit_per_minute: number;
-  rate_limit_per_hour: number;
-  rate_limit_per_day: number;
-  is_active: boolean;
+  permissions: Record<string, any> | unknown;
+  rate_limit_per_minute: number | null;
+  rate_limit_per_hour: number | null;
+  rate_limit_per_day: number | null;
+  is_active: boolean | null;
   expires_at: string | null;
   last_used_at: string | null;
-  created_at: string;
+  created_at: string | null;
 }
 
-interface Webhook {
+interface WebhookType {
   id: string;
   name: string;
   url: string;
   secret: string | null;
-  events: string[];
-  is_active: boolean;
-  timeout_seconds: number;
-  retry_count: number;
-  headers: Record<string, any>;
+  events: string[] | unknown;
+  is_active: boolean | null;
+  timeout_seconds: number | null;
+  retry_count: number | null;
+  headers: Record<string, any> | unknown;
   description: string | null;
-  created_at: string;
+  created_at: string | null;
 }
 
 interface WebhookDelivery {
@@ -76,7 +76,7 @@ export default function ApiWebhooks() {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [apiKeys, setApiKeys] = useState<ApiKey[]>([]);
-  const [webhooks, setWebhooks] = useState<Webhook[]>([]);
+  const [webhooks, setWebhooks] = useState<WebhookType[]>([]);
   const [webhookDeliveries, setWebhookDeliveries] = useState<WebhookDelivery[]>([]);
   const [selectedWebhookId, setSelectedWebhookId] = useState<string | null>(null);
   const [newApiKey, setNewApiKey] = useState({ name: '', description: '' });

@@ -7,23 +7,31 @@ import { useState, useEffect, useRef } from "react";
 import { useToast } from "@/hooks/use-toast";
 import { useNavigate } from "react-router-dom";
 import { useLandingPageContent } from "@/hooks/useLandingPageContent";
+import { supabase } from "@/integrations/supabase/client";
+import { Calculator } from "lucide-react";
+
 const FinalCTA = () => {
   const [formData, setFormData] = useState({
     name: "",
     email: "",
     company: "",
-    message: ""
+    message: "",
+    securityAnswer: ""
   });
   const [submitting, setSubmitting] = useState(false);
-  const {
-    toast
-  } = useToast();
+  const [securityQuestion, setSecurityQuestion] = useState({ num1: 0, num2: 0 });
+  const [quickContactEmail, setQuickContactEmail] = useState("support@petrodealhub.com");
+  const { toast } = useToast();
   const navigate = useNavigate();
   const sectionRef = useRef<HTMLElement | null>(null);
   const [visible, setVisible] = useState(false);
-  const {
-    content
-  } = useLandingPageContent('final_cta');
+  const { content } = useLandingPageContent('final_cta');
+
+  useEffect(() => {
+    generateSecurityQuestion();
+    fetchQuickContactEmail();
+  }, []);
+
   useEffect(() => {
     if (!sectionRef.current) return;
     const io = new IntersectionObserver(([entry]) => setVisible(entry.isIntersecting), {
@@ -32,23 +40,69 @@ const FinalCTA = () => {
     io.observe(sectionRef.current);
     return () => io.disconnect();
   }, []);
-  const handleSubmit = (e: React.FormEvent) => {
+
+  const generateSecurityQuestion = () => {
+    const num1 = Math.floor(Math.random() * 10) + 1;
+    const num2 = Math.floor(Math.random() * 10) + 1;
+    setSecurityQuestion({ num1, num2 });
+  };
+
+  const fetchQuickContactEmail = async () => {
+    try {
+      const { data } = await supabase
+        .from('cms_settings')
+        .select('value_en')
+        .eq('key', 'quick_contact_email')
+        .single();
+      if (data?.value_en) setQuickContactEmail(data.value_en);
+    } catch (error) {
+      // Use default
+    }
+  };
+
+  const isSecurityAnswerCorrect = () => {
+    return parseInt(formData.securityAnswer) === securityQuestion.num1 + securityQuestion.num2;
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!isSecurityAnswerCorrect()) {
+      toast({ title: "Security check failed", description: "Please enter the correct answer.", variant: "destructive" });
+      generateSecurityQuestion();
+      setFormData(prev => ({ ...prev, securityAnswer: "" }));
+      return;
+    }
+
     setSubmitting(true);
-    setTimeout(() => {
+    try {
+      await supabase.functions.invoke('send-smtp-email', {
+        body: {
+          to: quickContactEmail,
+          subject: `Quick Contact: Demo Request from ${formData.name}`,
+          html: `
+            <h2>New Quick Contact Submission</h2>
+            <p><strong>From:</strong> ${formData.name} (${formData.email})</p>
+            <p><strong>Company:</strong> ${formData.company || 'Not provided'}</p>
+            <p><strong>Message:</strong></p>
+            <p>${formData.message.replace(/\n/g, '<br>')}</p>
+          `
+        }
+      });
+      
       toast({
         title: "Demo Request Submitted",
         description: "We'll contact you within 24 hours to schedule your demo."
       });
-      setFormData({
-        name: "",
-        email: "",
-        company: "",
-        message: ""
-      });
+      setFormData({ name: "", email: "", company: "", message: "", securityAnswer: "" });
+      generateSecurityQuestion();
+    } catch (error) {
+      toast({ title: "Error", description: "Failed to submit. Please try again.", variant: "destructive" });
+    } finally {
       setSubmitting(false);
-    }, 900);
+    }
   };
+
   const handleInputChange = (field: keyof typeof formData, value: string) => setFormData(prev => ({
     ...prev,
     [field]: value
@@ -155,11 +209,31 @@ const FinalCTA = () => {
                 <Textarea id="message" value={formData.message} onChange={e => handleInputChange("message", e.target.value)} placeholder="Describe your current trading challenges and what you're looking for..." className="mt-1 min-h-[110px] focus-visible:ring-2 focus-visible:ring-accent" />
               </div>
 
+              {/* Security Verification */}
+              <div className="p-3 bg-muted/50 rounded-lg border border-border">
+                <div className="flex items-center gap-2 mb-2">
+                  <Calculator className="h-4 w-4 text-primary" />
+                  <Label className="text-sm font-medium">Security Verification</Label>
+                </div>
+                <div className="flex items-center gap-3">
+                  <span className="text-sm font-mono">
+                    {securityQuestion.num1} + {securityQuestion.num2} = ?
+                  </span>
+                  <Input
+                    type="number"
+                    placeholder="Answer"
+                    required
+                    value={formData.securityAnswer}
+                    onChange={(e) => handleInputChange("securityAnswer", e.target.value)}
+                    className="w-20 h-8 text-sm"
+                  />
+                </div>
+              </div>
+
               <Button type="submit" disabled={submitting} className="w-full hero-button py-3 text-base md:text-lg relative overflow-hidden bg-orange-500 hover:bg-orange-400">
                 <span className={`transition-opacity ${submitting ? "opacity-0" : "opacity-100"}`}>
                   Submit Request
                 </span>
-                {/* loading shimmer */}
                 {submitting && <span className="absolute inset-0 flex items-center justify-center text-sm">
                     Processing…
                   </span>}

@@ -14,6 +14,13 @@ const Navigation = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
 
+  const scrollToSection = (sectionId: string) => {
+    const element = document.getElementById(sectionId);
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth' });
+    }
+  };
+
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-md border-b border-border/50">
       <div className="container mx-auto px-4">
@@ -29,18 +36,27 @@ const Navigation = () => {
 
           {/* Navigation Links */}
           <div className="hidden md:flex items-center gap-8">
-            <a href="#features" className="text-muted-foreground hover:text-primary transition-fast flex items-center gap-2">
+            <button 
+              onClick={() => scrollToSection('features')} 
+              className="text-muted-foreground hover:text-primary transition-fast flex items-center gap-2"
+            >
               <TrendingUp className="h-4 w-4" />
               Features
-            </a>
-            <a href="#pricing" className="text-muted-foreground hover:text-primary transition-fast flex items-center gap-2">
+            </button>
+            <button 
+              onClick={() => scrollToSection('pricing')} 
+              className="text-muted-foreground hover:text-primary transition-fast flex items-center gap-2"
+            >
               <Anchor className="h-4 w-4" />
               Pricing
-            </a>
-            <a href="#brokers" className="text-muted-foreground hover:text-primary transition-fast flex items-center gap-2">
+            </button>
+            <button 
+              onClick={() => scrollToSection('brokers')} 
+              className="text-muted-foreground hover:text-primary transition-fast flex items-center gap-2"
+            >
               <Users className="h-4 w-4" />
               Brokers
-            </a>
+            </button>
             <DropdownMenu>
               <DropdownMenuTrigger className="text-muted-foreground hover:text-primary transition-fast flex items-center gap-2">
                 <Newspaper className="h-4 w-4" />

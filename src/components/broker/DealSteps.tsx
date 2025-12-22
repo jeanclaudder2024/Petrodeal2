@@ -14,7 +14,8 @@ import {
   FileText, 
   Download,
   RefreshCw,
-  Eye
+  Eye,
+  RotateCcw
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -30,12 +31,21 @@ interface DealStep {
   file_url?: string;
 }
 
+interface DealStepTemplate {
+  id?: string;
+  step_number: number;
+  step_name: string;
+  step_description: string | null;
+  requires_file: boolean | null;
+  is_active?: boolean | null;
+}
+
 interface DealStepsProps {
   dealId: string;
   onClose: () => void;
 }
 
-const DEAL_STEPS_TEMPLATE = [
+const DEFAULT_DEAL_STEPS_TEMPLATE: DealStepTemplate[] = [
   {
     step_number: 1,
     step_name: "Buyer Acceptance",
@@ -89,10 +99,12 @@ const DEAL_STEPS_TEMPLATE = [
 const DealSteps: React.FC<DealStepsProps> = ({ dealId, onClose }) => {
   const { toast } = useToast();
   const [steps, setSteps] = useState<DealStep[]>([]);
+  const [templates, setTemplates] = useState<DealStepTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [uploadingStep, setUploadingStep] = useState<string | null>(null);
   const [notes, setNotes] = useState<{ [key: string]: string }>({});
   const [savingStep, setSavingStep] = useState<string | null>(null);
+  const [syncingTemplates, setSyncingTemplates] = useState(false);
 
   useEffect(() => {
     fetchDealSteps();
@@ -100,6 +112,20 @@ const DealSteps: React.FC<DealStepsProps> = ({ dealId, onClose }) => {
 
   const fetchDealSteps = async () => {
     try {
+      // Load configurable step templates from database (admin can edit these)
+      const { data: templateRows, error: templateError } = await supabase
+        .from('deal_step_templates')
+        .select('*')
+        .eq('is_active', true)
+        .order('step_number');
+
+      if (!templateError && templateRows && templateRows.length > 0) {
+        setTemplates(templateRows as DealStepTemplate[]);
+      } else {
+        // Fallback to default hardcoded template if DB is empty
+        setTemplates(DEFAULT_DEAL_STEPS_TEMPLATE);
+      }
+
       // First check if steps exist for this deal
       const { data: existingSteps, error: fetchError } = await supabase
         .from('deal_steps')
@@ -110,12 +136,16 @@ const DealSteps: React.FC<DealStepsProps> = ({ dealId, onClose }) => {
       if (fetchError) throw fetchError;
 
       if (!existingSteps || existingSteps.length === 0) {
-        // Create default steps if they don't exist
-        const newSteps = DEAL_STEPS_TEMPLATE.map((template, index) => ({
+        // Create steps based on current templates
+        const baseTemplates = (templateRows && templateRows.length > 0)
+          ? (templateRows as DealStepTemplate[])
+          : DEFAULT_DEAL_STEPS_TEMPLATE;
+
+        const newSteps = baseTemplates.map((template) => ({
           deal_id: dealId,
           step_number: template.step_number,
           step_name: template.step_name,
-          step_description: template.step_description,
+          step_description: template.step_description || '',
           status: 'not_started' // All steps start as not_started, brokers activate them by saving
         }));
 
@@ -127,7 +157,7 @@ const DealSteps: React.FC<DealStepsProps> = ({ dealId, onClose }) => {
         if (createError) throw createError;
         setSteps(createdSteps || []);
       } else {
-        setSteps(existingSteps);
+        setSteps(existingSteps as DealStep[]);
       }
 
     } catch (error) {
@@ -142,6 +172,48 @@ const DealSteps: React.FC<DealStepsProps> = ({ dealId, onClose }) => {
     }
   };
 
+  // Sync existing deal steps with current templates (update names/descriptions only)
+  const handleSyncTemplates = async () => {
+    if (!confirm('This will update step names and descriptions from the current templates. Your progress, files, and notes will be preserved. Continue?')) {
+      return;
+    }
+
+    setSyncingTemplates(true);
+    try {
+      // Get current templates
+      const currentTemplates = templates.length > 0 ? templates : DEFAULT_DEAL_STEPS_TEMPLATE;
+
+      // Update each step with matching template data
+      for (const step of steps) {
+        const template = currentTemplates.find(t => t.step_number === step.step_number);
+        if (template) {
+          await supabase
+            .from('deal_steps')
+            .update({
+              step_name: template.step_name,
+              step_description: template.step_description || ''
+            })
+            .eq('id', step.id);
+        }
+      }
+
+      toast({
+        title: "Success",
+        description: "Deal steps synced with current templates"
+      });
+
+      await fetchDealSteps();
+    } catch (error) {
+      console.error('Error syncing templates:', error);
+      toast({
+        title: "Error",
+        description: "Failed to sync templates",
+        variant: "destructive"
+      });
+    } finally {
+      setSyncingTemplates(false);
+    }
+  };
   const handleFileUpload = async (stepId: string, file: File) => {
     setUploadingStep(stepId);
     try {
@@ -264,8 +336,9 @@ const DealSteps: React.FC<DealStepsProps> = ({ dealId, onClose }) => {
       if (!step) {
         throw new Error('Step not found');
       }
-      // Validate required fields
-      const template = DEAL_STEPS_TEMPLATE.find(t => t.step_number === step.step_number);
+      // Validate required fields based on current templates
+      const template = templates.find(t => t.step_number === step.step_number) ||
+        DEFAULT_DEAL_STEPS_TEMPLATE.find(t => t.step_number === step.step_number);
       const requiresFile = template?.requires_file || false;
       const hasNotes = notes[stepId]?.trim();
       if (requiresFile && !step.file_url && !hasNotes) {
@@ -418,8 +491,9 @@ const DealSteps: React.FC<DealStepsProps> = ({ dealId, onClose }) => {
         </div>
 
         {/* Completed Steps */}
-        {steps.filter(step => step.status === 'completed').map((step, index) => {
-          const template = DEAL_STEPS_TEMPLATE.find(t => t.step_number === step.step_number);
+        {steps.filter(step => step.status === 'completed').map((step) => {
+          const template = templates.find(t => t.step_number === step.step_number) ||
+            DEFAULT_DEAL_STEPS_TEMPLATE.find(t => t.step_number === step.step_number);
           const requiresFile = template?.requires_file || false;
           
           return (
@@ -477,8 +551,8 @@ const DealSteps: React.FC<DealStepsProps> = ({ dealId, onClose }) => {
         {/* Current Active Step and Rejected Steps */}
         {steps.filter(step => step.step_number === currentStepNumber || step.status === 'rejected')
           .map(step => {
-            
-            const template = DEAL_STEPS_TEMPLATE.find(t => t.step_number === step.step_number);
+            const template = templates.find(t => t.step_number === step.step_number) ||
+              DEFAULT_DEAL_STEPS_TEMPLATE.find(t => t.step_number === step.step_number);
             const requiresFile = template?.requires_file || false;
             const canEdit = step.status !== 'pending';
             

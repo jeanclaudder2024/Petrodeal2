@@ -2,16 +2,12 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Network, Ship, MapPin, Factory, Plus, Edit, Trash2, Search, Eye, Bot, Loader2 } from 'lucide-react';
+import { Network, Ship, MapPin, Factory, Edit, Trash2, Search, Route, CheckCircle, AlertTriangle } from 'lucide-react';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { db } from '@/lib/supabase-helper';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
-import { supabase } from '@/integrations/supabase/client';
 
 interface Vessel {
   id: number;
@@ -22,6 +18,8 @@ interface Vessel {
   destination_port?: number;
   target_refinery?: string;
   status?: string;
+  eta?: string;
+  departure_date?: string;
 }
 
 interface Port {
@@ -45,17 +43,17 @@ interface Connection {
   targetRefinery?: Refinery;
 }
 
-const ConnectionManagement = () => {
+interface ConnectionManagementProps {
+  onEditVessel?: (vesselId: number) => void;
+}
+
+const ConnectionManagement = ({ onEditVessel }: ConnectionManagementProps) => {
   const [connections, setConnections] = useState<Connection[]>([]);
   const [vessels, setVessels] = useState<Vessel[]>([]);
   const [ports, setPorts] = useState<Port[]>([]);
   const [refineries, setRefineries] = useState<Refinery[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingVessel, setEditingVessel] = useState<Vessel | null>(null);
-  const [formData, setFormData] = useState<Partial<Vessel>>({});
-  const [aiLoading, setAiLoading] = useState(false);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -67,7 +65,7 @@ const ConnectionManagement = () => {
     try {
       // Fetch all data in parallel
       const [vesselsResponse, portsResponse, refineriesResponse] = await Promise.all([
-        db.from('vessels').select('id, name, imo, vessel_type, departure_port, destination_port, target_refinery, status').order('name'),
+        db.from('vessels').select('id, name, imo, vessel_type, departure_port, destination_port, target_refinery, status, eta, departure_date').order('name'),
         db.from('ports').select('id, name, country, city').order('name'),
         db.from('refineries').select('id, name, country, city').order('name')
       ]);
@@ -111,126 +109,8 @@ const ConnectionManagement = () => {
     }
   };
 
-  const handleUpdateConnection = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!editingVessel) return;
-
-    try {
-      const { error } = await db
-        .from('vessels')
-        .update({
-          departure_port: formData.departure_port || null,
-          destination_port: formData.destination_port || null,
-          target_refinery: formData.target_refinery || null
-        })
-        .eq('id', editingVessel.id);
-
-      if (error) throw error;
-
-      toast({ title: "Success", description: "Connection updated successfully" });
-      setIsDialogOpen(false);
-      setEditingVessel(null);
-      setFormData({});
-      fetchData();
-    } catch (error) {
-      console.error('Failed to update connection:', error);
-      toast({
-        title: "Error",
-        description: "Failed to update connection",
-        variant: "destructive"
-      });
-    }
-  };
-
-  const handleAiAutoFill = async () => {
-    if (!editingVessel) return;
-    
-    setAiLoading(true);
-    try {
-      console.log('Starting AI auto-fill for vessel:', editingVessel.name);
-      
-      const { data, error } = await supabase.functions.invoke('ai-vessel-port-search', {
-        body: {
-          vessel_name: editingVessel.name,
-          imo: editingVessel.imo,
-          vessel_type: editingVessel.vessel_type
-        }
-      });
-
-      if (error) {
-        console.error('AI auto-fill error:', error);
-        throw new Error(error.message || 'Failed to get AI suggestions');
-      }
-
-      if (data?.success && data?.data) {
-        const aiSuggestions = data.data;
-        console.log('AI suggestions received:', aiSuggestions);
-
-        // Find matching ports in our database
-        const departurePort = findMatchingPort(aiSuggestions.departure_ports);
-        const destinationPort = findMatchingPort(aiSuggestions.destination_ports);
-        const targetRefinery = findMatchingRefinery(aiSuggestions.refineries);
-
-        // Update form data with AI suggestions
-        setFormData({
-          ...formData,
-          departure_port: departurePort?.id,
-          destination_port: destinationPort?.id,
-          target_refinery: targetRefinery?.name || targetRefinery?.id
-        });
-
-        let message = "AI suggestions applied successfully!";
-        if (aiSuggestions.confidence === 'low') {
-          message += " (Low confidence - please verify the connections)";
-        }
-        if (aiSuggestions.notes) {
-          message += `\n\nNotes: ${aiSuggestions.notes}`;
-        }
-
-        toast({
-          title: "AI Auto-Fill Complete",
-          description: message,
-        });
-      } else {
-        throw new Error('No AI suggestions available');
-      }
-    } catch (error) {
-      console.error('Failed to get AI suggestions:', error);
-      toast({
-        title: "AI Auto-Fill Failed",
-        description: error instanceof Error ? error.message : "Failed to get AI suggestions for vessel connections",
-        variant: "destructive"
-      });
-    } finally {
-      setAiLoading(false);
-    }
-  };
-
-  const findMatchingPort = (suggestedPorts: string[]) => {
-    if (!suggestedPorts?.length) return null;
-    
-    for (const suggestedPort of suggestedPorts) {
-      const match = ports.find(port => 
-        port.name.toLowerCase().includes(suggestedPort.toLowerCase()) ||
-        suggestedPort.toLowerCase().includes(port.name.toLowerCase())
-      );
-      if (match) return match;
-    }
-    return null;
-  };
-
-  const findMatchingRefinery = (suggestedRefineries: string[]) => {
-    if (!suggestedRefineries?.length) return null;
-    
-    for (const suggestedRefinery of suggestedRefineries) {
-      const match = refineries.find(refinery => 
-        refinery.name?.toLowerCase().includes(suggestedRefinery.toLowerCase()) ||
-        suggestedRefinery.toLowerCase().includes(refinery.name?.toLowerCase() || '')
-      );
-      if (match) return match;
-    }
-    return null;
-  };
+  // Note: handleUpdateConnection, handleAiAutoFill, findMatchingPort, findMatchingRefinery
+  // have been removed - vessel editing is now done in VesselManagement
 
   const handleDisconnect = async (vesselId: number, type: 'departure' | 'destination' | 'refinery') => {
     if (!confirm(`Are you sure you want to remove this ${type} connection?`)) return;
@@ -279,11 +159,53 @@ const ConnectionManagement = () => {
     }
   };
 
+  // Check if vessel has arrived (current date >= ETA)
+  const isVesselArrived = (vessel: Vessel): boolean => {
+    if (!vessel.eta) return false;
+    const eta = new Date(vessel.eta);
+    const now = new Date();
+    return now >= eta;
+  };
+
+  const arrivedVessels = connections.filter(c => isVesselArrived(c.vessel) && c.destinationPort);
+
   const connectionStats = {
     totalVessels: vessels.length,
     connectedToPorts: connections.filter(c => c.departurePort || c.destinationPort).length,
     connectedToRefineries: connections.filter(c => c.targetRefinery).length,
-    fullyConnected: connections.filter(c => c.departurePort && c.destinationPort && c.targetRefinery).length
+    fullyConnected: connections.filter(c => c.departurePort && c.destinationPort && c.targetRefinery).length,
+    arrivedVessels: arrivedVessels.length
+  };
+
+  const handleMarkAsArrived = async (vesselId: number) => {
+    try {
+      const { error } = await db
+        .from('vessels')
+        .update({ 
+          status: 'in port',
+          arrival_date: new Date().toISOString()
+        })
+        .eq('id', vesselId);
+
+      if (error) throw error;
+
+      toast({ title: "Success", description: "Vessel marked as arrived" });
+      fetchData();
+    } catch (error) {
+      console.error('Failed to mark as arrived:', error);
+      toast({ title: "Error", description: "Failed to update vessel status", variant: "destructive" });
+    }
+  };
+
+  const handleCreateNewRoute = (vessel: Vessel, currentDestinationPort?: Port) => {
+    // Navigate to vessel edit page instead of opening dialog
+    if (onEditVessel) {
+      onEditVessel(vessel.id);
+      toast({
+        title: "Opening Vessel Editor",
+        description: `Editing vessel ${vessel.name} - create new route from ${currentDestinationPort?.name || 'previous destination'}`,
+      });
+    }
   };
 
   if (loading) {
@@ -346,6 +268,51 @@ const ConnectionManagement = () => {
               </CardContent>
             </Card>
           </div>
+
+          {/* Arrival Alerts */}
+          {arrivedVessels.length > 0 && (
+            <Alert variant="destructive" className="mb-6">
+              <AlertTriangle className="h-4 w-4" />
+              <AlertTitle className="flex items-center gap-2">
+                {arrivedVessels.length} Vessel(s) Have Arrived!
+              </AlertTitle>
+              <AlertDescription>
+                <div className="mt-2 space-y-2">
+                  {arrivedVessels.map(c => (
+                    <div key={c.vessel.id} className="flex items-center justify-between bg-destructive/10 p-2 rounded">
+                      <div>
+                        <span className="font-medium">{c.vessel.name}</span>
+                        <span className="text-sm ml-2">at {c.destinationPort?.name}</span>
+                        {c.vessel.eta && (
+                          <span className="text-xs ml-2 opacity-75">
+                            (ETA: {new Date(c.vessel.eta).toLocaleDateString()})
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex gap-2">
+                        <Button 
+                          size="sm" 
+                          variant="outline"
+                          onClick={() => handleCreateNewRoute(c.vessel, c.destinationPort)}
+                        >
+                          <Route className="h-3 w-3 mr-1" />
+                          New Route
+                        </Button>
+                        <Button 
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => handleMarkAsArrived(c.vessel.id)}
+                        >
+                          <CheckCircle className="h-3 w-3 mr-1" />
+                          Mark Arrived
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </AlertDescription>
+            </Alert>
+          )}
 
           {/* Controls */}
           <div className="flex flex-col sm:flex-row gap-4 mb-6">
@@ -448,17 +415,13 @@ const ConnectionManagement = () => {
                         variant="outline"
                         size="sm"
                         onClick={() => {
-                          setEditingVessel(connection.vessel);
-                          setFormData({
-                            departure_port: connection.vessel.departure_port,
-                            destination_port: connection.vessel.destination_port,
-                            target_refinery: connection.vessel.target_refinery
-                          });
-                          setIsDialogOpen(true);
+                          if (onEditVessel) {
+                            onEditVessel(connection.vessel.id);
+                          }
                         }}
                       >
                         <Edit className="h-3 w-3 mr-1" />
-                        Edit
+                        Edit Vessel
                       </Button>
                     </TableCell>
                   </TableRow>
@@ -474,123 +437,6 @@ const ConnectionManagement = () => {
           )}
         </CardContent>
       </Card>
-
-      {/* Edit Connection Dialog */}
-      <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Edit Connections</DialogTitle>
-            <DialogDescription>
-              Update connections for {editingVessel?.name}
-            </DialogDescription>
-          </DialogHeader>
-          <form onSubmit={handleUpdateConnection} className="space-y-4">
-            <div>
-              <Label htmlFor="departure_port">Departure Port</Label>
-              <Select
-                value={formData.departure_port?.toString() || 'none'}
-                onValueChange={(value) => setFormData({...formData, departure_port: value === 'none' ? undefined : parseInt(value)})}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select departure port" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">No departure port</SelectItem>
-                  {ports.map((port) => (
-                    <SelectItem key={port.id} value={port.id.toString()}>
-                      {port.name} ({port.country})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <Label htmlFor="destination_port">Destination Port</Label>
-              <Select
-                value={formData.destination_port?.toString() || 'none'}
-                onValueChange={(value) => setFormData({...formData, destination_port: value === 'none' ? undefined : parseInt(value)})}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select destination port" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">No destination port</SelectItem>
-                  {ports.map((port) => (
-                    <SelectItem key={port.id} value={port.id.toString()}>
-                      {port.name} ({port.country})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <div>
-              <Label htmlFor="target_refinery">Target Refinery</Label>
-              <Select
-                value={formData.target_refinery || 'none'}
-                onValueChange={(value) => setFormData({...formData, target_refinery: value === 'none' ? undefined : value})}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select target refinery" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">No target refinery</SelectItem>
-                  {refineries.map((refinery) => (
-                    <SelectItem key={refinery.id} value={refinery.name || refinery.id}>
-                      {refinery.name} ({refinery.country})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* AI Auto-Fill Section */}
-            <div className="border-t pt-4">
-              <div className="flex items-center justify-between mb-2">
-                <Label className="text-sm font-medium">AI Port Suggestions</Label>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={handleAiAutoFill}
-                  disabled={aiLoading || !editingVessel?.imo}
-                  className="gap-2"
-                >
-                  {aiLoading ? (
-                    <>
-                      <Loader2 className="h-3 w-3 animate-spin" />
-                      Searching...
-                    </>
-                  ) : (
-                    <>
-                      <Bot className="h-3 w-3" />
-                      Auto-Fill Ports
-                    </>
-                  )}
-                </Button>
-              </div>
-              {!editingVessel?.imo && (
-                <p className="text-xs text-muted-foreground">
-                  IMO number required for AI suggestions
-                </p>
-              )}
-              {editingVessel?.imo && (
-                <p className="text-xs text-muted-foreground">
-                  AI will search for port connections based on vessel name and IMO: {editingVessel.imo}
-                </p>
-              )}
-            </div>
-
-            <div className="flex justify-end gap-2">
-              <Button type="button" variant="outline" onClick={() => setIsDialogOpen(false)}>
-                Cancel
-              </Button>
-              <Button type="submit">Update Connections</Button>
-            </div>
-          </form>
-        </DialogContent>
-      </Dialog>
     </div>
   );
 };

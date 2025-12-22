@@ -2,7 +2,6 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Switch } from '@/components/ui/switch';
 import { 
   Check, 
   Crown, 
@@ -17,7 +16,9 @@ import {
   Globe,
   Zap,
   CreditCard,
-  Percent
+  Percent,
+  Shield,
+  Clock
 } from 'lucide-react';
 import { db } from '@/lib/supabase-helper';
 
@@ -25,7 +26,7 @@ interface PricingPlansProps {
   onSubscribe: (tier: string, billingCycle: string) => void;
   currentTier?: string;
   isProcessing?: boolean;
-  selectedPlan?: string; // Plan to highlight/scroll to from URL parameter
+  selectedPlan?: string;
 }
 
 interface Discount {
@@ -33,6 +34,15 @@ interface Discount {
   discount_name: string | null;
   plan_tier: string;
   billing_cycle: string;
+}
+
+interface PromotionFrame {
+  id: string;
+  discount_type: string;
+  discount_value: number;
+  eligible_plans: string[];
+  billing_cycle: string;
+  show_on_subscription: boolean;
 }
 
 interface DatabasePlan {
@@ -53,39 +63,33 @@ const PricingPlans: React.FC<PricingPlansProps> = ({
   isProcessing = false,
   selectedPlan 
 }) => {
-  const [isAnnual, setIsAnnual] = useState(false);
+  const [isAnnual, setIsAnnual] = useState(true);
   const [discounts, setDiscounts] = useState<Discount[]>([]);
+  const [promotionFrames, setPromotionFrames] = useState<PromotionFrame[]>([]);
   const [dbPlans, setDbPlans] = useState<DatabasePlan[]>([]);
   const planRefs = React.useRef<{ [key: string]: HTMLDivElement | null }>({});
 
   useEffect(() => {
     fetchActiveDiscounts();
+    fetchPromotionFrames();
     fetchDynamicPlans();
   }, []);
 
-  // Scroll to and highlight selected plan from URL
   useEffect(() => {
     if (!selectedPlan || dbPlans.length === 0) return;
     
-    // Wait for DOM to update with plans
     const timeoutId = setTimeout(() => {
       const planTier = selectedPlan.toLowerCase();
       const planElement = planRefs.current[planTier];
       
       if (planElement) {
-        // Scroll to plan with smooth behavior
-        planElement.scrollIntoView({ 
-          behavior: 'smooth', 
-          block: 'center' 
-        });
-        
-        // Add highlight animation
+        planElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
         planElement.classList.add('animate-pulse');
         setTimeout(() => {
           planElement.classList.remove('animate-pulse');
         }, 2000);
       }
-    }, 500); // Wait for plans to render
+    }, 500);
     
     return () => clearTimeout(timeoutId);
   }, [selectedPlan, dbPlans]);
@@ -104,15 +108,33 @@ const PricingPlans: React.FC<PricingPlansProps> = ({
         .or(`valid_until.is.null,valid_until.gt.${new Date().toISOString()}`);
 
       if (error) {
-        console.warn('Error fetching discounts, using none:', error);
         setDiscounts([]);
         return;
       }
-
       setDiscounts(data || []);
     } catch (error) {
-      console.warn('Error fetching discounts, using none:', error);
       setDiscounts([]);
+    }
+  };
+
+  const fetchPromotionFrames = async () => {
+    try {
+      const now = new Date().toISOString();
+      const { data, error } = await db
+        .from('promotion_frames')
+        .select('id, discount_type, discount_value, eligible_plans, billing_cycle, show_on_subscription')
+        .eq('is_active', true)
+        .eq('show_on_subscription', true)
+        .lte('start_date', now)
+        .or(`end_date.is.null,end_date.gt.${now}`);
+
+      if (error) {
+        setPromotionFrames([]);
+        return;
+      }
+      setPromotionFrames(data || []);
+    } catch (error) {
+      setPromotionFrames([]);
     }
   };
 
@@ -124,20 +146,41 @@ const PricingPlans: React.FC<PricingPlansProps> = ({
         .eq('is_active', true)
         .order('sort_order', { ascending: true });
 
-      if (error) {
-        console.warn('Error fetching plans, using static plans:', error);
-        return [];
-      }
-
+      if (error) return [];
       return data || [];
     } catch (error) {
-      console.warn('Error fetching plans, using static plans:', error);
       return [];
     }
   };
 
+  // Check if discount applies to current billing cycle
   const getDiscountForPlan = (planTier: string, billingCycle: string) => {
-    return discounts.find(d => d.plan_tier === planTier && d.billing_cycle === billingCycle);
+    // Check subscription_discounts first - filter by billing_cycle
+    const subscriptionDiscount = discounts.find(d => 
+      d.plan_tier === planTier && 
+      (d.billing_cycle === billingCycle || d.billing_cycle === 'both')
+    );
+    
+    // Check promotion_frames - filter by billing_cycle
+    const promoFrame = promotionFrames.find(p => 
+      p.eligible_plans?.includes(planTier) && 
+      (p.billing_cycle === billingCycle || p.billing_cycle === 'both')
+    );
+    
+    // If promotion frame has a higher discount and matches billing cycle, use it
+    if (promoFrame && promoFrame.discount_value > 0) {
+      const promoDiscount = promoFrame.discount_type === 'percentage' ? promoFrame.discount_value : 0;
+      if (!subscriptionDiscount || promoDiscount > subscriptionDiscount.discount_percentage) {
+        return {
+          discount_percentage: promoDiscount,
+          discount_name: 'Limited Time Offer',
+          plan_tier: planTier,
+          billing_cycle: promoFrame.billing_cycle
+        };
+      }
+    }
+    
+    return subscriptionDiscount;
   };
 
   const handleSubscribe = (tier: string) => {
@@ -145,80 +188,69 @@ const PricingPlans: React.FC<PricingPlansProps> = ({
     onSubscribe(tier, billingCycle);
   };
 
-  // Use dynamic plans from database or fallback to static plans
-  const staticPlans = [
-    {
-      tier: 'basic',
-      name: 'Basic Plan',
-      subtitle: 'Perfect for newcomers and small brokers stepping into global oil trading',
-      monthlyPrice: 29.99,
-      annualPrice: 299.90,
-      icon: Ship,
-      popular: false,
-      features: [
-        { icon: MapPin, text: 'Geographic Coverage: 4 Regions' },
-        { icon: Anchor, text: 'Ports Access: 30 Global Ports' },
-        { icon: Ship, text: 'Vessel Tracking: Up to 90 Vessels' },
-        { icon: Factory, text: 'Refinery Database: 15 Major Refineries' },
-        { icon: FileText, text: 'Core Documents: LOI, ICPO, BDN, Invoice Templates' },
-        { icon: BarChart3, text: 'Reports: Monthly Basic Reports' },
-        { icon: Phone, text: 'Support: Email Support' },
-        { icon: Globe, text: 'Deals: Direct Access to Oil Trading Deals' }
-      ],
-      highlight: 'Ideal for testing the market with balanced access to core data and essential documents.'
-    },
-    {
-      tier: 'professional',
-      name: 'Professional Plan',
-      subtitle: 'Designed for active brokers and medium-sized companies needing broader coverage',
-      monthlyPrice: 89.99,
-      annualPrice: 899.90,
-      icon: Crown,
-      popular: true,
-      features: [
-        { icon: MapPin, text: 'Geographic Coverage: 6 Regions' },
-        { icon: Anchor, text: 'Ports Access: 100+ Global Ports' },
-        { icon: Ship, text: 'Vessel Tracking: 180+ Vessels' },
-        { icon: Factory, text: 'Refinery Database: 70 Active Refineries' },
-        { icon: FileText, text: 'Advanced Documents: ICPO, SPA, B/L, SGS, CIF Templates' },
-        { icon: BarChart3, text: 'Reports: Weekly Detailed Reports + Smart Alerts' },
-        { icon: Phone, text: 'Support: Priority Email & Live Chat' },
-        { icon: Users, text: 'Multi-User Access: Up to 5 Seats' },
-        { icon: Globe, text: 'Deals: Direct Global Oil Trading Opportunities' },
-        { icon: Zap, text: 'Networking: Connect with International Energy Companies' }
-      ],
-      highlight: 'Best for growing firms seeking speed, diversity, and real deal opportunities with global partners.'
-    },
-    {
-      tier: 'enterprise',
-      name: 'Enterprise Plan',
-      subtitle: 'The ultimate solution for large corporations, global brokerage firms, and integrated trading networks',
-      monthlyPrice: 199.99,
-      annualPrice: 1999.90,
-      icon: Zap,
-      popular: false,
-      features: [
-        { icon: MapPin, text: 'Geographic Coverage: 7 Global Regions' },
-        { icon: Anchor, text: 'Ports Access: 120+ Global Ports' },
-        { icon: Ship, text: 'Vessel Tracking: 500+ Vessels in Real-Time' },
-        { icon: Factory, text: 'Refinery Database: Full Global Refinery Access' },
-        { icon: FileText, text: 'Complete Documentation Suite: All Templates + API Sync' },
-        { icon: BarChart3, text: 'Reports: Real-Time Analytics & Forecasting' },
-        { icon: Zap, text: 'Integration: API Keys for Direct System-to-System Connectivity' },
-        { icon: Phone, text: 'Support: Dedicated Account Manager + 24/7 Support' },
-        { icon: Users, text: 'Corporate Access: 20+ Users with Teams Management' },
-        { icon: Globe, text: 'Deals: Direct Global Oil Trading Opportunities' },
-        { icon: Crown, text: 'Networking: Advanced Access to Global Energy & Trading Companies' }
-      ],
-      highlight: 'Perfect for enterprises needing real-time data, advanced analytics, and international deal-making power.'
-    }
-  ];
-
-  // Check if plan is selected from URL parameter (define before use)
   const isSelectedFromUrl = useCallback((tier: string) => {
     if (!selectedPlan || !tier) return false;
     return tier.toLowerCase() === selectedPlan.toLowerCase();
   }, [selectedPlan]);
+
+  const staticPlans = [
+    {
+      tier: 'basic',
+      name: 'Basic Plan',
+      subtitle: 'Individual brokers and analysts',
+      monthlyPrice: 1999,
+      annualPrice: 19990,
+      icon: Ship,
+      popular: false,
+      features: [
+        { icon: MapPin, text: 'Geographic coverage (4 regions)' },
+        { icon: Anchor, text: 'Port access (2 ports)' },
+        { icon: Ship, text: 'Vessel tracking (up to 10 vessels)' },
+        { icon: Factory, text: 'Refinery database access' },
+        { icon: FileText, text: 'Basic document library' },
+        { icon: Phone, text: 'Support during business hours' },
+      ],
+      highlight: 'Perfect for individual brokers and analysts getting started.'
+    },
+    {
+      tier: 'professional',
+      name: 'Professional Plan',
+      subtitle: 'Professional traders, brokers, and firms',
+      monthlyPrice: 189.99,
+      annualPrice: 1899.90,
+      icon: Crown,
+      popular: true,
+      features: [
+        { icon: MapPin, text: 'Geographic coverage (7 regions)' },
+        { icon: Anchor, text: 'Port access (8 ports)' },
+        { icon: Ship, text: 'Vessel tracking (up to 25 vessels)' },
+        { icon: FileText, text: 'Advanced document templates (SPA, B/L, SGS, etc.)' },
+        { icon: Zap, text: 'AI-assisted market alerts' },
+        { icon: Phone, text: 'Priority email & chat support' },
+        { icon: BarChart3, text: 'Advanced dashboard & analytics' },
+      ],
+      highlight: 'Best for growing firms seeking speed and real deal opportunities.'
+    },
+    {
+      tier: 'enterprise',
+      name: 'Enterprise Plan',
+      subtitle: 'Institutions, large trading desks, enterprises',
+      monthlyPrice: 599.99,
+      annualPrice: 5999.90,
+      icon: Zap,
+      popular: false,
+      features: [
+        { icon: Globe, text: 'Global geographic coverage' },
+        { icon: Anchor, text: 'Unlimited port access' },
+        { icon: Ship, text: 'Unlimited vessel tracking' },
+        { icon: FileText, text: 'Full document automation & AI insights' },
+        { icon: BarChart3, text: 'Custom alerts & reporting' },
+        { icon: Users, text: 'Dedicated account manager' },
+        { icon: Zap, text: 'API & system integrations' },
+      ],
+      highlight: 'Perfect for enterprises needing real-time data and advanced analytics.'
+    }
+  ];
 
   const displayPlans = useMemo(() => {
     if (dbPlans.length > 0) {
@@ -237,7 +269,6 @@ const PricingPlans: React.FC<PricingPlansProps> = ({
     return staticPlans;
   }, [dbPlans]);
 
-  // Safety check: ensure displayPlans is always an array
   if (!displayPlans || displayPlans.length === 0) {
     return (
       <div className="flex items-center justify-center p-8">
@@ -248,180 +279,201 @@ const PricingPlans: React.FC<PricingPlansProps> = ({
     );
   }
 
+  const currentBillingCycle = isAnnual ? 'annual' : 'monthly';
+
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       {/* Billing Toggle */}
-      <div className="flex items-center justify-center gap-4">
-        <span className={`text-sm font-medium ${!isAnnual ? 'text-primary' : 'text-muted-foreground'}`}>
-          Monthly
-        </span>
-        <Switch 
-          checked={isAnnual} 
-          onCheckedChange={setIsAnnual}
-          className="data-[state=checked]:bg-primary"
-        />
-        <span className={`text-sm font-medium ${isAnnual ? 'text-primary' : 'text-muted-foreground'}`}>
-          Annual
-        </span>
+      <div className="flex flex-col items-center gap-4">
+        <div className="relative flex items-center p-1 bg-gradient-to-r from-muted/80 via-muted to-muted/80 rounded-full shadow-inner border border-border/50">
+          <button
+            className={`relative px-6 py-2.5 rounded-full text-sm font-semibold transition-all duration-300 ${
+              !isAnnual 
+                ? 'bg-gradient-to-r from-primary to-primary/90 text-primary-foreground shadow-lg transform scale-[1.02]' 
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+            onClick={() => setIsAnnual(false)}
+          >
+            Monthly
+          </button>
+          <button
+            className={`relative px-6 py-2.5 rounded-full text-sm font-semibold transition-all duration-300 flex items-center gap-2 ${
+              isAnnual 
+                ? 'bg-gradient-to-r from-primary to-primary/90 text-primary-foreground shadow-lg transform scale-[1.02]' 
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+            onClick={() => setIsAnnual(true)}
+          >
+            Annual
+            <span className="px-2 py-0.5 text-xs font-bold bg-green-500 text-white rounded-full animate-pulse">
+              -20%
+            </span>
+          </button>
+        </div>
+        <p className="text-sm text-muted-foreground">
+          {isAnnual ? '✨ You save 20% with annual billing!' : 'Switch to annual to save 20%'}
+        </p>
       </div>
 
-      {/* Pricing Cards */}
-      <div className="grid md:grid-cols-3 gap-8">
-        {displayPlans.map((plan) => {
-          const price = isAnnual ? plan.annualPrice : plan.monthlyPrice;
-          const period = isAnnual ? 'year' : 'month';
-          const isCurrentPlan = currentTier === plan.tier;
-          const billingCycle = isAnnual ? 'annual' : 'monthly';
-          const discount = getDiscountForPlan(plan.tier, billingCycle);
-          const discountedPrice = discount ? price * (100 - discount.discount_percentage) / 100 : price;
-          
-          const isSelected = isSelectedFromUrl(plan.tier);
-          
-          return (
-            <Card 
-              key={plan.tier}
-              ref={(el) => {
-                planRefs.current[plan.tier] = el;
-              }}
-              className={`trading-card relative ${
-                plan.popular ? 'ring-2 ring-primary scale-105' : ''
-              } ${isCurrentPlan ? 'ring-2 ring-green-500' : ''} ${
-                isSelected ? 'ring-4 ring-blue-500 shadow-lg scale-105 z-10' : ''
-              }`}
-            >
-              {plan.popular && (
-                <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
-                  <Badge className="bg-primary text-primary-foreground">
-                    Most Popular
-                  </Badge>
-                </div>
-              )}
-              
-              {discount && (
-                <div className="absolute -top-3 right-4">
-                  <Badge className="bg-red-500 text-white">
-                    <Percent className="h-3 w-3 mr-1" />
-                    {discount.discount_percentage}% OFF
-                  </Badge>
-                </div>
-              )}
-              
-              {isSelected && !isCurrentPlan && (
-                <div className="absolute -top-3 left-1/2 transform -translate-x-1/2 z-20">
-                  <Badge className="bg-blue-500 text-white animate-pulse">
-                    Selected Plan
-                  </Badge>
-                </div>
-              )}
-              
-              {isCurrentPlan && (
-                <div className="absolute -top-3 right-4" style={{ right: discount ? '120px' : '16px' }}>
-                  <Badge className="bg-green-500 text-white">
-                    Current Plan
-                  </Badge>
-                </div>
-              )}
+      {/* Connected Plans Container */}
+      <div className="relative">
+        <div className="absolute top-1/2 left-0 right-0 h-0.5 bg-gradient-to-r from-transparent via-primary/20 to-transparent hidden md:block" />
+        
+        {/* Pricing Cards */}
+        <div className="grid md:grid-cols-3 gap-6 relative">
+          {displayPlans.map((plan, index) => {
+            const price = isAnnual ? plan.annualPrice : plan.monthlyPrice;
+            const period = isAnnual ? 'year' : 'month';
+            const isCurrentPlan = currentTier === plan.tier;
+            const discount = getDiscountForPlan(plan.tier, currentBillingCycle);
+            const discountedPrice = discount ? price * (100 - discount.discount_percentage) / 100 : price;
+            const isSelected = isSelectedFromUrl(plan.tier);
+            
+            return (
+              <Card 
+                key={plan.tier}
+                ref={(el) => { planRefs.current[plan.tier] = el; }}
+                className={`relative transition-all duration-300 ${
+                  plan.popular ? 'ring-2 ring-primary md:scale-105 md:-mt-4 md:mb-4 z-10' : ''
+                } ${isCurrentPlan ? 'ring-2 ring-green-500' : ''} ${
+                  isSelected ? 'ring-4 ring-blue-500 shadow-xl scale-105 z-20' : ''
+                } hover:shadow-lg hover:-translate-y-1`}
+              >
+                {plan.popular && (
+                  <div className="absolute -top-3 left-1/2 transform -translate-x-1/2">
+                    <Badge className="bg-primary text-primary-foreground shadow-lg">
+                      <Crown className="h-3 w-3 mr-1" />
+                      Most Popular
+                    </Badge>
+                  </div>
+                )}
+                
+                {discount && (
+                  <div className="absolute -top-3 right-4">
+                    <Badge className="bg-red-500 text-white">
+                      <Percent className="h-3 w-3 mr-1" />
+                      {discount.discount_percentage}% OFF
+                      {discount.billing_cycle !== 'both' && ` (${discount.billing_cycle})`}
+                    </Badge>
+                  </div>
+                )}
+                
+                {isSelected && !isCurrentPlan && (
+                  <div className="absolute -top-3 left-4">
+                    <Badge className="bg-blue-500 text-white animate-pulse">
+                      Selected Plan
+                    </Badge>
+                  </div>
+                )}
+                
+                {isCurrentPlan && (
+                  <div className="absolute -top-3 right-4" style={{ right: discount ? '120px' : '16px' }}>
+                    <Badge className="bg-green-500 text-white">
+                      Current Plan
+                    </Badge>
+                  </div>
+                )}
 
-              <CardHeader className="text-center space-y-4">
-                <div className={`w-16 h-16 mx-auto rounded-2xl ${
-                  plan.tier === 'enterprise' ? 'gradient-gold' : 'gradient-hero'
-                } flex items-center justify-center shadow-glow`}>
-                  <plan.icon className="h-8 w-8 text-white" />
-                </div>
-                
-                <CardTitle className="text-2xl">{plan.name}</CardTitle>
-                <p className="text-sm text-muted-foreground">
-                  {plan.subtitle}
-                </p>
-                
-                <div className="space-y-2">
-                  {discount ? (
-                    <div className="space-y-1">
-                      <div className="text-2xl line-through text-muted-foreground">
+                <CardHeader className="text-center space-y-4 pb-2">
+                  <div className={`w-16 h-16 mx-auto rounded-2xl ${
+                    plan.tier === 'enterprise' ? 'gradient-gold' : plan.popular ? 'gradient-hero' : 'bg-primary/10'
+                  } flex items-center justify-center shadow-lg`}>
+                    <plan.icon className={`h-8 w-8 ${plan.tier === 'enterprise' || plan.popular ? 'text-white' : 'text-primary'}`} />
+                  </div>
+                  
+                  <div>
+                    <CardTitle className="text-xl">{plan.name}</CardTitle>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Best for: {plan.subtitle}
+                    </p>
+                  </div>
+                  
+                  <div className="space-y-1">
+                    {discount ? (
+                      <>
+                        <div className="text-lg line-through text-muted-foreground">
+                          ${price.toFixed(2)}
+                        </div>
+                        <div className="text-3xl font-bold text-foreground">
+                          ${discountedPrice.toFixed(2)}
+                          <span className="text-base text-muted-foreground font-normal">
+                            /{period}
+                          </span>
+                        </div>
+                        {discount.discount_name && (
+                          <div className="text-xs text-red-600 font-medium">
+                            {discount.discount_name}
+                          </div>
+                        )}
+                      </>
+                    ) : (
+                      <div className="text-3xl font-bold text-foreground">
                         ${price.toFixed(2)}
-                      </div>
-                      <div className="text-4xl font-bold text-foreground">
-                        ${discountedPrice.toFixed(2)}
-                        <span className="text-lg text-muted-foreground font-normal">
+                        <span className="text-base text-muted-foreground font-normal">
                           /{period}
                         </span>
                       </div>
-                      {discount.discount_name && (
-                        <div className="text-sm text-red-600 font-medium">
-                          {discount.discount_name}
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="text-4xl font-bold text-foreground">
-                      ${price.toFixed(2)}
-                      <span className="text-lg text-muted-foreground font-normal">
-                        /{period}
-                      </span>
-                    </div>
-                  )}
-                  {isAnnual && (
-                    <div className="text-sm text-muted-foreground">
-                      ${plan.monthlyPrice}/month when billed annually
-                    </div>
-                  )}
-                </div>
-              </CardHeader>
+                    )}
+                  </div>
 
-              <CardContent className="space-y-6">
-                {/* Action Button */}
-                <Button
-                  className={`w-full ${plan.popular ? 'hero-button' : ''} ${
-                    plan.tier === 'enterprise' ? 'premium-button' : ''
-                  }`}
-                  onClick={() => handleSubscribe(plan.tier)}
-                  disabled={isCurrentPlan || isProcessing}
-                  variant={isCurrentPlan ? 'secondary' : 'default'}
-                >
-                  {isProcessing ? (
-                    <>Processing...</>
-                  ) : isCurrentPlan ? (
-                    <>
-                      <Crown className="h-4 w-4 mr-2" />
-                      Current Plan
-                    </>
-                  ) : (
-                    <>
-                      <CreditCard className="h-4 w-4 mr-2" />
-                      Get Started
-                    </>
-                  )}
-                </Button>
+                  <Badge variant="outline" className="bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border-green-200">
+                    <Clock className="h-3 w-3 mr-1" />
+                    5-day free trial included
+                  </Badge>
+                </CardHeader>
 
-                {/* Features */}
-                <div className="space-y-3">
-                  {plan.features.map((feature, index) => (
-                    <div key={index} className="flex items-start gap-3">
-                      <feature.icon className="h-4 w-4 text-primary flex-shrink-0 mt-1" />
-                      <span className="text-sm leading-relaxed">{feature.text}</span>
-                    </div>
-                  ))}
-                </div>
+                <CardContent className="space-y-4">
+                  <Button
+                    className={`w-full h-12 text-base font-semibold ${plan.popular ? 'hero-button' : ''} ${
+                      plan.tier === 'enterprise' ? 'premium-button' : ''
+                    }`}
+                    onClick={() => handleSubscribe(plan.tier)}
+                    disabled={isCurrentPlan || isProcessing}
+                    variant={isCurrentPlan ? 'secondary' : 'default'}
+                  >
+                    {isProcessing ? (
+                      <>Processing...</>
+                    ) : isCurrentPlan ? (
+                      <>
+                        <Crown className="h-4 w-4 mr-2" />
+                        Current Plan
+                      </>
+                    ) : (
+                      <>
+                        <CreditCard className="h-4 w-4 mr-2" />
+                        Get Started
+                      </>
+                    )}
+                  </Button>
 
-                {/* Highlight */}
-                <div className="p-3 bg-muted/50 rounded-lg border-l-4 border-primary">
-                  <p className="text-sm text-muted-foreground italic">
-                    💡 {plan.highlight}
-                  </p>
-                </div>
-              </CardContent>
-            </Card>
-          );
-        })}
+                  <div className="space-y-2 pt-2">
+                    {plan.features.map((feature, idx) => (
+                      <div key={idx} className="flex items-start gap-2">
+                        <feature.icon className="h-4 w-4 text-green-600 flex-shrink-0 mt-0.5" />
+                        <span className="text-sm leading-relaxed">{feature.text}</span>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div className="p-3 bg-muted/50 rounded-lg border-l-4 border-primary mt-4">
+                    <p className="text-xs text-muted-foreground italic">
+                      💡 {plan.highlight}
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
       </div>
 
-      {/* Feature Comparison Note */}
-      <div className="text-center p-6 bg-muted/30 rounded-lg">
-        <h3 className="text-lg font-semibold mb-2">🛢️ PetroDealHub Subscription Plans</h3>
-        <p className="text-sm text-muted-foreground">
-          All plans include access to our AI-powered trading insights and real-time market data. 
-          Upgrade or downgrade anytime with no commitments.
-        </p>
+      {/* Stripe Security Badge */}
+      <div className="flex items-center justify-center gap-3 py-6">
+        <div className="flex items-center gap-2 px-4 py-2 bg-muted/50 rounded-lg border">
+          <Shield className="h-5 w-5 text-green-600" />
+          <span className="text-sm text-muted-foreground">Secure payment powered by</span>
+          <span className="font-semibold text-foreground">Stripe</span>
+        </div>
       </div>
     </div>
   );

@@ -39,15 +39,12 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
     }
 
     try {
-      console.log('Checking subscription for user:', user.email);
-      
       // استخدام الدالة الموحدة الجديدة لسرعة أكبر
       const { data, error } = await supabase.rpc('check_user_access_unified', {
         user_email: user.email
       });
       
       if (error) {
-        console.warn('Subscription check failed, using defaults:', error);
         // Set default trial limits for all users - ensure app keeps working
         setSubscriptionData({
           subscribed: false,
@@ -62,7 +59,6 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
       // Handle successful response with comprehensive data
       if (data && data.length > 0) {
         const accessData = data[0];
-        console.log('Subscription data received:', accessData);
         
         // تحديد الحدود بناءً على نوع الاشتراك
         let vesselLimit = 10, portLimit = 20;
@@ -83,7 +79,6 @@ export const SubscriptionProvider: React.FC<{ children: React.ReactNode }> = ({ 
         });
       } else {
         // Fallback to default if no data
-        console.warn('No subscription data received, using defaults');
         setSubscriptionData({
           subscribed: false,
           subscription_tier: 'basic',

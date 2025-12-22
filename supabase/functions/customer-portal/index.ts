@@ -43,12 +43,59 @@ serve(async (req) => {
     logStep("User authenticated", { userId: user.id, email: user.email });
 
     const stripe = new Stripe(stripeKey, { apiVersion: "2023-10-16" });
-    const customers = await stripe.customers.list({ email: user.email, limit: 1 });
-    if (customers.data.length === 0) {
-      throw new Error("No Stripe customer found for this user. Please subscribe to a plan first.");
+    
+    // First, check subscribers table for stripe_customer_id
+    const supabaseAdmin = createClient(
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+    );
+    
+    const { data: subscriber } = await supabaseAdmin
+      .from("subscribers")
+      .select("stripe_customer_id")
+      .eq("user_id", user.id)
+      .maybeSingle();
+    
+    let customerId = subscriber?.stripe_customer_id;
+    logStep("Checked subscribers table", { hasCustomerId: !!customerId });
+    
+    // Verify the customer exists in Stripe
+    if (customerId) {
+      try {
+        await stripe.customers.retrieve(customerId);
+        logStep("Verified customer exists in Stripe", { customerId });
+      } catch (stripeError: any) {
+        // Customer doesn't exist in Stripe - clear and try email search
+        logStep("Customer ID invalid in Stripe, clearing", { customerId, error: stripeError.message });
+        customerId = null;
+        
+        // Update database to remove invalid customer ID
+        await supabaseAdmin
+          .from("subscribers")
+          .update({ stripe_customer_id: null })
+          .eq("user_id", user.id);
+      }
     }
-    const customerId = customers.data[0].id;
-    logStep("Found Stripe customer", { customerId });
+    
+    // Fall back to email search if no valid customer ID
+    if (!customerId) {
+      const customers = await stripe.customers.list({ email: user.email, limit: 1 });
+      if (customers.data.length > 0) {
+        customerId = customers.data[0].id;
+        logStep("Found Stripe customer by email", { customerId });
+        
+        // Update the database with the found customer ID
+        await supabaseAdmin
+          .from("subscribers")
+          .update({ stripe_customer_id: customerId })
+          .eq("user_id", user.id);
+      }
+    }
+    
+    if (!customerId) {
+      throw new Error("No Stripe customer found. Please subscribe to a plan first, or contact support if you believe this is an error.");
+    }
+    logStep("Using Stripe customer", { customerId });
 
     const origin = req.headers.get("origin") || "https://preview--aivessel-trade-flow.lovable.app";
     const portalSession = await stripe.billingPortal.sessions.create({

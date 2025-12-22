@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -24,6 +24,7 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { db } from '@/lib/supabase-helper';
 
 interface FAQ {
   id: string;
@@ -32,12 +33,25 @@ interface FAQ {
   category: string;
 }
 
+interface ContactInfo {
+  email_support: string;
+  phone_support: string;
+  business_hours: string;
+}
+
 const Support = () => {
   const { toast } = useToast();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const contactRef = useRef<HTMLDivElement>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [expandedFAQ, setExpandedFAQ] = useState<string | null>(null);
+  const [faqs, setFaqs] = useState<FAQ[]>([]);
+  const [contactInfo, setContactInfo] = useState<ContactInfo>({
+    email_support: 'support@petrodeallhub.com',
+    phone_support: '+1 (555) 123-4567',
+    business_hours: 'Mon-Fri: 9AM-6PM EST'
+  });
   const [contactForm, setContactForm] = useState({
     name: '',
     email: '',
@@ -46,7 +60,8 @@ const Support = () => {
     category: 'general'
   });
 
-  const faqs: FAQ[] = [
+  // Default FAQs (fallback)
+  const defaultFaqs: FAQ[] = [
     {
       id: '1',
       question: 'How do I start trading oil on PetroDeallHub?',
@@ -97,7 +112,46 @@ const Support = () => {
     }
   ];
 
-  const categories = ['All', 'Getting Started', 'Trading', 'Pricing', 'Subscription', 'Verification', 'Security', 'Vessels', 'Payment'];
+  useEffect(() => {
+    loadData();
+  }, []);
+
+  const loadData = async () => {
+    try {
+      // Load FAQs from database
+      const { data: faqData } = await db
+        .from('support_faqs')
+        .select('*')
+        .eq('is_active', true)
+        .order('sort_order', { ascending: true });
+
+      if (faqData && faqData.length > 0) {
+        setFaqs(faqData);
+      } else {
+        setFaqs(defaultFaqs);
+      }
+
+      // Load contact info from database
+      const { data: contactData } = await db
+        .from('support_contact_info')
+        .select('*')
+        .limit(1)
+        .single();
+
+      if (contactData) {
+        setContactInfo({
+          email_support: contactData.email_support,
+          phone_support: contactData.phone_support,
+          business_hours: contactData.business_hours
+        });
+      }
+    } catch (error) {
+      console.warn('Using default FAQs and contact info');
+      setFaqs(defaultFaqs);
+    }
+  };
+
+  const categories = ['All', ...Array.from(new Set(faqs.map(f => f.category)))];
   const [selectedCategory, setSelectedCategory] = useState('All');
 
   const filteredFAQs = faqs.filter(faq => {
@@ -122,6 +176,25 @@ const Support = () => {
     });
   };
 
+  // Handler for opening the AI chatbot
+  const openLiveChat = () => {
+    // Find and click the floating AI assistant button
+    const chatButton = document.querySelector('[data-chat-trigger="true"]') as HTMLButtonElement;
+    if (chatButton) {
+      chatButton.click();
+    } else {
+      toast({
+        title: "Live Chat",
+        description: "Our AI assistant is available at the bottom right corner of the screen.",
+      });
+    }
+  };
+
+  // Handler for scrolling to contact info
+  const scrollToContact = () => {
+    contactRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
   return (
     <div className="bg-gradient-to-br from-background to-muted/20">
       <div className="container mx-auto px-4 py-12">
@@ -140,28 +213,40 @@ const Support = () => {
 
         {/* Quick Actions */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-12">
-          <Card className="trading-card text-center hover:shadow-lg transition-shadow cursor-pointer">
+          <Card 
+            className="trading-card text-center hover:shadow-lg transition-shadow cursor-pointer"
+            onClick={() => navigate('/documentation')}
+          >
             <CardContent className="p-6">
               <BookOpen className="h-8 w-8 text-primary mx-auto mb-3" />
               <h3 className="font-semibold mb-2">Documentation</h3>
               <p className="text-sm text-muted-foreground">Comprehensive guides and API docs</p>
             </CardContent>
           </Card>
-          <Card className="trading-card text-center hover:shadow-lg transition-shadow cursor-pointer">
+          <Card 
+            className="trading-card text-center hover:shadow-lg transition-shadow cursor-pointer"
+            onClick={() => navigate('/tutorials')}
+          >
             <CardContent className="p-6">
               <Video className="h-8 w-8 text-primary mx-auto mb-3" />
               <h3 className="font-semibold mb-2">Video Tutorials</h3>
               <p className="text-sm text-muted-foreground">Step-by-step video guides</p>
             </CardContent>
           </Card>
-          <Card className="trading-card text-center hover:shadow-lg transition-shadow cursor-pointer">
+          <Card 
+            className="trading-card text-center hover:shadow-lg transition-shadow cursor-pointer"
+            onClick={openLiveChat}
+          >
             <CardContent className="p-6">
               <MessageCircle className="h-8 w-8 text-primary mx-auto mb-3" />
               <h3 className="font-semibold mb-2">Live Chat</h3>
               <p className="text-sm text-muted-foreground">Chat with our support team</p>
             </CardContent>
           </Card>
-          <Card className="trading-card text-center hover:shadow-lg transition-shadow cursor-pointer">
+          <Card 
+            className="trading-card text-center hover:shadow-lg transition-shadow cursor-pointer"
+            onClick={scrollToContact}
+          >
             <CardContent className="p-6">
               <Headphones className="h-8 w-8 text-primary mx-auto mb-3" />
               <h3 className="font-semibold mb-2">Phone Support</h3>
@@ -315,7 +400,7 @@ const Support = () => {
           {/* Contact Section */}
           <div className="space-y-6">
             {/* Contact Info */}
-            <Card className="trading-card">
+            <Card className="trading-card" ref={contactRef}>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <Phone className="h-5 w-5 text-primary" />
@@ -327,21 +412,21 @@ const Support = () => {
                   <Mail className="h-4 w-4 text-muted-foreground" />
                   <div>
                     <div className="font-medium">Email Support</div>
-                    <div className="text-sm text-muted-foreground">support@petrodealllhub.com</div>
+                    <div className="text-sm text-muted-foreground">{contactInfo.email_support}</div>
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
                   <Phone className="h-4 w-4 text-muted-foreground" />
                   <div>
                     <div className="font-medium">Phone Support</div>
-                    <div className="text-sm text-muted-foreground">+1 (555) 123-4567</div>
+                    <div className="text-sm text-muted-foreground">{contactInfo.phone_support}</div>
                   </div>
                 </div>
                 <div className="flex items-center gap-3">
                   <Clock className="h-4 w-4 text-muted-foreground" />
                   <div>
                     <div className="font-medium">Business Hours</div>
-                    <div className="text-sm text-muted-foreground">Mon-Fri: 9AM-6PM EST</div>
+                    <div className="text-sm text-muted-foreground">{contactInfo.business_hours}</div>
                   </div>
                 </div>
               </CardContent>

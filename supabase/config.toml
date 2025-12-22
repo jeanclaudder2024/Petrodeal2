@@ -82,7 +82,6 @@ verify_jwt = true
 [functions.fetch-oil-prices]
 verify_jwt = false
 
-# Schedule oil price updates daily at 6 AM UTC
 [functions.fetch-oil-prices.cron]
 schedule = "0 6 * * *"
 
@@ -99,7 +98,7 @@ verify_jwt = true
 verify_jwt = false
 
 [functions.send-billing-email]
-verify_jwt = false
+verify_jwt = true
 
 [functions.template-review]
 verify_jwt = true
@@ -114,4 +113,49 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.test-email-connection]
+verify_jwt = true
+
+[functions.test-stripe-connection]
+verify_jwt = true
+
+[functions.create-stripe-coupon]
+verify_jwt = true
+
+[functions.send-automated-email]
+verify_jwt = true
+
+[functions.test-email-template]
+verify_jwt = true
+
+[functions.openai-agent-builder]
+verify_jwt = true
+
+[functions.openai-agent-executor]
 verify_jwt = false
+
+[functions.customer-chat]
+verify_jwt = false
+
+[functions.send-smtp-email]
+verify_jwt = true
+
+[functions.sync-imap-emails]
+verify_jwt = true
+
+[functions.generate-marketing-email]
+verify_jwt = true
+
+[functions.send-campaign-emails]
+verify_jwt = true
+
+[functions.generate-ai-reply]
+verify_jwt = true
+
+[functions.mcp-server]
+verify_jwt = false
+
+[functions.openai-agent-webhook]
+verify_jwt = false
+
+[functions.convert-document]
+verify_jwt = true

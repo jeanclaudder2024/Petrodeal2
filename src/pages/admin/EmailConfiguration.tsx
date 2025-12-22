@@ -1,12 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import { Mail, Send, Inbox, CheckCircle2, XCircle, Loader2 } from 'lucide-react';
+import { Mail, Send, Inbox, CheckCircle2, XCircle, Loader2, Trash2, Edit, Star, Settings } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 
 interface SMTPConfig {
@@ -32,10 +35,36 @@ interface IMAPConfig {
   active: boolean;
 }
 
+interface EmailAccount {
+  id: string;
+  account_name: string;
+  email_address: string;
+  smtp_host: string | null;
+  smtp_port: number | null;
+  smtp_username?: string | null;
+  smtp_password?: string | null;
+  imap_host: string | null;
+  imap_port: number | null;
+  imap_username?: string | null;
+  imap_password?: string | null;
+  enable_tls?: boolean | null;
+  is_default: boolean | null;
+  is_active: boolean | null;
+  test_status: string | null;
+  last_tested_at: string | null;
+}
+
 export default function EmailConfiguration() {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [testing, setTesting] = useState<string | null>(null);
+  const [emailAccounts, setEmailAccounts] = useState<EmailAccount[]>([]);
+  const [loadingAccounts, setLoadingAccounts] = useState(true);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  const [editingAccount, setEditingAccount] = useState<EmailAccount | null>(null);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [testingAccountId, setTestingAccountId] = useState<string | null>(null);
+  
   const [smtpConfig, setSmtpConfig] = useState<SMTPConfig>({
     host: 'smtp.hostinger.com',
     port: 587,
@@ -59,9 +88,176 @@ export default function EmailConfiguration() {
     active: false,
   });
 
+  // Auto-port detection based on host and TLS settings
+  const getAutoPort = (type: 'smtp' | 'imap', enableTLS: boolean) => {
+    if (type === 'smtp') {
+      return enableTLS ? 465 : 587;
+    } else {
+      return enableTLS ? 993 : 143;
+    }
+  };
+
+  // Handle SMTP TLS change with auto-port
+  const handleSmtpTlsChange = (enableTLS: boolean) => {
+    setSmtpConfig(prev => ({
+      ...prev,
+      enableTLS,
+      port: getAutoPort('smtp', enableTLS)
+    }));
+  };
+
+  // Handle IMAP TLS change with auto-port
+  const handleImapTlsChange = (enableTLS: boolean) => {
+    setImapConfig(prev => ({
+      ...prev,
+      enableTLS,
+      port: getAutoPort('imap', enableTLS)
+    }));
+  };
+
   useEffect(() => {
     loadConfigurations();
+    loadEmailAccounts();
   }, []);
+
+  const loadEmailAccounts = async () => {
+    setLoadingAccounts(true);
+    try {
+      const { data, error } = await supabase
+        .from('email_accounts')
+        .select('*')
+        .order('is_default', { ascending: false });
+      
+      if (error) throw error;
+      setEmailAccounts(data || []);
+    } catch (error) {
+      console.error('Error loading email accounts:', error);
+    } finally {
+      setLoadingAccounts(false);
+    }
+  };
+
+  const deleteEmailAccount = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this email account?')) return;
+    try {
+      const { error } = await supabase
+        .from('email_accounts')
+        .delete()
+        .eq('id', id);
+      if (error) throw error;
+      toast({ title: "Account Deleted" });
+      loadEmailAccounts();
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    }
+  };
+
+  const setAsDefault = async (id: string) => {
+    try {
+      // First, unset all defaults
+      await supabase.from('email_accounts').update({ is_default: false }).neq('id', 'none');
+      // Then set the selected one as default
+      const { error } = await supabase.from('email_accounts').update({ is_default: true }).eq('id', id);
+      if (error) throw error;
+      toast({ title: "Default Updated" });
+      loadEmailAccounts();
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    }
+  };
+
+  const cancelTest = () => {
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+      abortControllerRef.current = null;
+    }
+    setTesting(null);
+    setTestingAccountId(null);
+    toast({ title: "Test Cancelled", description: "Connection test was cancelled" });
+  };
+
+  const openEditDialog = (account: EmailAccount) => {
+    setEditingAccount(account);
+    setIsEditDialogOpen(true);
+  };
+
+  const saveEditedAccount = async () => {
+    if (!editingAccount) return;
+    setLoading(true);
+    try {
+      const { error } = await supabase
+        .from('email_accounts')
+        .update({
+          account_name: editingAccount.account_name,
+          email_address: editingAccount.email_address,
+          smtp_host: editingAccount.smtp_host,
+          smtp_port: editingAccount.smtp_port,
+          smtp_username: editingAccount.smtp_username,
+          smtp_password: editingAccount.smtp_password,
+          imap_host: editingAccount.imap_host,
+          imap_port: editingAccount.imap_port,
+          imap_username: editingAccount.imap_username,
+          imap_password: editingAccount.imap_password,
+          enable_tls: editingAccount.enable_tls,
+          is_active: editingAccount.is_active,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', editingAccount.id);
+
+      if (error) throw error;
+      toast({ title: "Account Updated", description: "Email account has been updated successfully." });
+      setIsEditDialogOpen(false);
+      setEditingAccount(null);
+      loadEmailAccounts();
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const testEmailAccount = async (account: EmailAccount) => {
+    if (!account.smtp_host || !account.smtp_username) {
+      toast({ title: "Missing SMTP", description: "This account has no SMTP configuration to test.", variant: "destructive" });
+      return;
+    }
+    
+    setTestingAccountId(account.id);
+    try {
+      const { data, error } = await supabase.functions.invoke('test-email-connection', {
+        body: {
+          type: 'smtp',
+          host: account.smtp_host,
+          port: account.smtp_port || 587,
+          username: account.smtp_username,
+          password: account.smtp_password || '',
+          enableTLS: account.enable_tls ?? true,
+        },
+      });
+
+      if (error) throw error;
+
+      // Update test status in database
+      await supabase
+        .from('email_accounts')
+        .update({ 
+          test_status: data?.success ? 'success' : 'failed',
+          last_tested_at: new Date().toISOString()
+        })
+        .eq('id', account.id);
+
+      if (data?.success) {
+        toast({ title: "Connection Successful", description: data.message || "SMTP test passed!" });
+      } else {
+        toast({ title: "Connection Failed", description: data?.message || "SMTP test failed", variant: "destructive" });
+      }
+      loadEmailAccounts();
+    } catch (error: any) {
+      toast({ title: "Test Failed", description: error.message, variant: "destructive" });
+    } finally {
+      setTestingAccountId(null);
+    }
+  };
 
   const loadConfigurations = async () => {
     try {
@@ -113,6 +309,7 @@ export default function EmailConfiguration() {
   const saveSMTPConfig = async () => {
     setLoading(true);
     try {
+      // Save to email_configurations table
       const { error } = await supabase
         .from('email_configurations')
         .upsert({
@@ -120,7 +317,7 @@ export default function EmailConfiguration() {
           host: smtpConfig.host,
           port: smtpConfig.port,
           username: smtpConfig.username,
-          password: smtpConfig.password, // Should be encrypted in production
+          password: smtpConfig.password,
           enable_tls: smtpConfig.enableTLS,
           from_email: smtpConfig.fromEmail,
           from_name: smtpConfig.fromName,
@@ -132,6 +329,33 @@ export default function EmailConfiguration() {
         });
 
       if (error) throw error;
+
+      // Also save to email_accounts table for the accounts list
+      const accountName = smtpConfig.fromName || smtpConfig.username.split('@')[0] || 'SMTP Account';
+      const emailAddress = smtpConfig.fromEmail || smtpConfig.username;
+      
+      const { error: accountError } = await supabase
+        .from('email_accounts')
+        .upsert({
+          account_name: accountName,
+          email_address: emailAddress,
+          smtp_host: smtpConfig.host,
+          smtp_port: smtpConfig.port,
+          smtp_username: smtpConfig.username,
+          smtp_password: smtpConfig.password,
+          enable_tls: smtpConfig.enableTLS,
+          is_active: smtpConfig.active,
+          updated_at: new Date().toISOString(),
+        }, {
+          onConflict: 'email_address'
+        });
+
+      if (accountError) {
+        console.error('Error saving to email_accounts:', accountError);
+      }
+
+      // Reload accounts list
+      await loadEmailAccounts();
 
       toast({
         title: "SMTP Configuration Saved",
@@ -158,7 +382,7 @@ export default function EmailConfiguration() {
           host: imapConfig.host,
           port: imapConfig.port,
           username: imapConfig.username,
-          password: imapConfig.password, // Should be encrypted in production
+          password: imapConfig.password,
           enable_tls: imapConfig.enableTLS,
           check_interval: imapConfig.checkInterval,
           enable_auto_reply: imapConfig.enableAutoReply,
@@ -169,6 +393,33 @@ export default function EmailConfiguration() {
         });
 
       if (error) throw error;
+
+      // Also update email_accounts table with IMAP config
+      const emailAddress = imapConfig.username;
+      if (emailAddress) {
+        const { error: accountError } = await supabase
+          .from('email_accounts')
+          .upsert({
+            account_name: imapConfig.username.split('@')[0] || 'IMAP Account',
+            email_address: emailAddress,
+            imap_host: imapConfig.host,
+            imap_port: imapConfig.port,
+            imap_username: imapConfig.username,
+            imap_password: imapConfig.password,
+            enable_tls: imapConfig.enableTLS,
+            is_active: imapConfig.active,
+            updated_at: new Date().toISOString(),
+          }, {
+            onConflict: 'email_address'
+          });
+
+        if (accountError) {
+          console.error('Error saving IMAP to email_accounts:', accountError);
+        }
+      }
+
+      // Reload accounts list
+      await loadEmailAccounts();
 
       toast({
         title: "IMAP Configuration Saved",
@@ -277,58 +528,29 @@ export default function EmailConfiguration() {
         }
       } catch (backendError: any) {
         // Backend not available, use Supabase Edge Function instead
-        console.log('⚠️ Python backend not available, trying Supabase Edge Function');
+        console.log('⚠️ Python backend not available, using test-email-connection Edge Function');
         
         try {
-          // Try bright-function first, then fallback to test-email-connection
-          let edgeFunctionResult;
-          let functionName = 'bright-function';
-          
-          try {
-            edgeFunctionResult = await supabase.functions.invoke('bright-function', {
-              body: {
-                type: 'smtp',
-                ...testConfig,
-              },
-            });
-            console.log('Using bright-function Edge Function');
-          } catch (brightFunctionError: any) {
-            // If bright-function fails (404), try test-email-connection
-            if (brightFunctionError.message?.includes('404') || brightFunctionError.message?.includes('not found')) {
-              console.log('bright-function not found, trying test-email-connection');
-              functionName = 'test-email-connection';
-              edgeFunctionResult = await supabase.functions.invoke('test-email-connection', {
-                body: {
-                  type: 'smtp',
-                  ...testConfig,
-                },
-              });
-            } else {
-              throw brightFunctionError;
-            }
-          }
+          const edgeFunctionResult = await supabase.functions.invoke('test-email-connection', {
+            body: {
+              type: 'smtp',
+              ...testConfig,
+            },
+          });
           
           data = edgeFunctionResult.data;
           error = edgeFunctionResult.error;
           
           // Handle Supabase function errors
           if (error) {
-            console.error(`Supabase function error (${functionName}):`, error);
-            const errorMsg = error.message || 'Supabase Edge Function error occurred';
-            
-            // Check for specific error types
-            if (errorMsg.includes('404') || errorMsg.includes('not found')) {
-              throw new Error(`Edge Function "${functionName}" not found. Please deploy the function or check the function name.`);
-            } else if (errorMsg.includes('timeout')) {
-              throw new Error('Edge Function request timed out. Please try again.');
-            } else {
-              throw new Error(`Edge Function error: ${errorMsg}`);
-            }
+            console.error('Supabase function error:', error);
+            const errorMsg = error.message || 'Edge Function error occurred';
+            throw new Error(`Edge Function error: ${errorMsg}`);
           }
           
           // Check Supabase function response
           if (data && data.success === true) {
-            console.log(`SMTP connection test successful via ${functionName}!`);
+            console.log('SMTP connection test successful via Edge Function!');
             toast({
               title: "Connection Successful",
               description: data.message || "SMTP connection test passed!",
@@ -336,60 +558,22 @@ export default function EmailConfiguration() {
             setTesting(null);
             return;
           } else if (data && data.success === false) {
-            let errorMsg = data.message || data.error || 'Connection test failed';
-            
-            // Provide more helpful error messages based on common errors
-            if (errorMsg.includes('No response from SMTP server')) {
-              errorMsg = `Unable to connect to SMTP server "${testConfig.host}:${testConfig.port}". Please check:
-• SMTP server address and port are correct
-• Server is accessible and running
-• Firewall allows connections on port ${testConfig.port}
-• For port 587, ensure TLS is enabled
-• For port 465, use SSL instead of TLS`;
-            } else if (errorMsg.includes('connection error') || errorMsg.includes('Unable to connect')) {
-              errorMsg = `Connection failed to ${testConfig.host}:${testConfig.port}. Please verify:
-• Server address is correct
-• Port number matches your SMTP provider's settings
-• Your network allows outbound SMTP connections`;
-            } else if (errorMsg.includes('authentication failed')) {
-              errorMsg = `Authentication failed. Please check:
-• Username is correct (may need full email address)
-• Password is correct
-• Account is not locked or suspended`;
-            } else if (errorMsg.includes('STARTTLS failed')) {
-              errorMsg = `TLS connection failed. Please check:
-• Port 587 requires TLS enabled
-• Port 465 requires SSL (not TLS)
-• Your SMTP server supports STARTTLS`;
-            }
-            
+            const errorMsg = data.message || data.error || 'Connection test failed';
             console.error('SMTP connection test failed:', errorMsg);
             toast({
               title: "Connection Failed",
               description: errorMsg,
               variant: "destructive",
-              duration: 10000, // Show longer for troubleshooting info
+              duration: 10000,
             });
             setTesting(null);
             return;
           } else if (!data) {
-            throw new Error(`No response from ${functionName} Edge Function. Please check if the function is deployed.`);
+            throw new Error('No response from Edge Function. Please check if the function is deployed.');
           }
         } catch (edgeFunctionError: any) {
           console.error('Edge function error:', edgeFunctionError);
-          
-          // Provide more helpful error messages
-          let errorMsg = edgeFunctionError.message || 'Failed to connect to email test service';
-          
-          if (errorMsg.includes('404') || errorMsg.includes('not found')) {
-            errorMsg = 'Email test function not found. Please ensure the Edge Function is deployed on Supabase.';
-          } else if (errorMsg.includes('timeout')) {
-            errorMsg = 'Email test request timed out. The SMTP server may be unreachable or slow.';
-          } else if (errorMsg.includes('No response')) {
-            errorMsg = 'No response from email test service. Please check your SMTP settings and try again.';
-          }
-          
-          throw new Error(errorMsg);
+          throw new Error(edgeFunctionError.message || 'Failed to connect to email test service');
         }
       }
 
@@ -548,10 +732,9 @@ export default function EmailConfiguration() {
         }
       } catch (backendError) {
         // Backend not available, use Supabase Edge Function instead
-        console.log('⚠️ Python backend not available, using Supabase Edge Function');
-        console.log('Calling Supabase Edge Function: bright-function');
+        console.log('⚠️ Python backend not available, using test-email-connection Edge Function');
         
-        const edgeFunctionResult = await supabase.functions.invoke('bright-function', {
+        const edgeFunctionResult = await supabase.functions.invoke('test-email-connection', {
           body: {
             type: 'imap',
             ...testConfig,
@@ -619,8 +802,12 @@ export default function EmailConfiguration() {
         </div>
       </div>
 
-      <Tabs defaultValue="smtp" className="space-y-4">
+      <Tabs defaultValue="accounts" className="space-y-4">
         <TabsList>
+          <TabsTrigger value="accounts">
+            <Settings className="w-4 h-4 mr-2" />
+            Email Accounts
+          </TabsTrigger>
           <TabsTrigger value="smtp">
             <Send className="w-4 h-4 mr-2" />
             SMTP - Email Sending
@@ -630,6 +817,112 @@ export default function EmailConfiguration() {
             IMAP - Email Import
           </TabsTrigger>
         </TabsList>
+
+        {/* Email Accounts Tab */}
+        <TabsContent value="accounts">
+          <Card>
+            <CardHeader>
+              <CardTitle>Saved Email Accounts</CardTitle>
+              <CardDescription>View and manage your configured email accounts</CardDescription>
+            </CardHeader>
+            <CardContent>
+              {loadingAccounts ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin" />
+                </div>
+              ) : emailAccounts.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Mail className="h-12 w-12 mx-auto mb-4 opacity-50" />
+                  <p>No email accounts configured yet.</p>
+                  <p className="text-sm">Configure SMTP or IMAP settings in the tabs above to add an account.</p>
+                </div>
+              ) : (
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Account Name</TableHead>
+                      <TableHead>Email</TableHead>
+                      <TableHead>SMTP</TableHead>
+                      <TableHead>IMAP</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {emailAccounts.map((account) => (
+                      <TableRow key={account.id}>
+                        <TableCell className="font-medium">
+                          {account.account_name}
+                          {account.is_default && (
+                            <Badge variant="secondary" className="ml-2">Default</Badge>
+                          )}
+                        </TableCell>
+                        <TableCell>{account.email_address}</TableCell>
+                        <TableCell>
+                          {account.smtp_host ? (
+                            <span className="text-sm">{account.smtp_host}:{account.smtp_port}</span>
+                          ) : (
+                            <span className="text-muted-foreground">Not configured</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {account.imap_host ? (
+                            <span className="text-sm">{account.imap_host}:{account.imap_port}</span>
+                          ) : (
+                            <span className="text-muted-foreground">Not configured</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={account.is_active ? 'default' : 'secondary'}>
+                            {account.is_active ? 'Active' : 'Inactive'}
+                          </Badge>
+                          {account.test_status && (
+                            <Badge variant={account.test_status === 'success' ? 'default' : 'destructive'} className="ml-1">
+                              {account.test_status}
+                            </Badge>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex gap-1">
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              onClick={() => openEditDialog(account)} 
+                              title="Edit account"
+                            >
+                              <Edit className="h-4 w-4" />
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              onClick={() => testEmailAccount(account)}
+                              disabled={testingAccountId === account.id}
+                              title="Test SMTP connection"
+                            >
+                              {testingAccountId === account.id ? (
+                                <Loader2 className="h-4 w-4 animate-spin" />
+                              ) : (
+                                <CheckCircle2 className="h-4 w-4" />
+                              )}
+                            </Button>
+                            {!account.is_default && (
+                              <Button variant="ghost" size="sm" onClick={() => setAsDefault(account.id)} title="Set as default">
+                                <Star className="h-4 w-4" />
+                              </Button>
+                            )}
+                            <Button variant="ghost" size="sm" onClick={() => deleteEmailAccount(account.id)} title="Delete account">
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
 
         <TabsContent value="smtp">
           <Card>
@@ -736,11 +1029,9 @@ export default function EmailConfiguration() {
                   <Switch
                     id="smtp-tls"
                     checked={smtpConfig.enableTLS}
-                    onCheckedChange={(checked) =>
-                      setSmtpConfig({ ...smtpConfig, enableTLS: checked })
-                    }
+                    onCheckedChange={handleSmtpTlsChange}
                   />
-                  <Label htmlFor="smtp-tls">Enable TLS/SSL</Label>
+                  <Label htmlFor="smtp-tls">Enable TLS/SSL (auto-sets port: {smtpConfig.enableTLS ? '465' : '587'})</Label>
                 </div>
                 <div className="flex items-center space-x-2">
                   <Switch
@@ -768,23 +1059,24 @@ export default function EmailConfiguration() {
                     'Save Configuration'
                   )}
                 </Button>
-                <Button
-                  variant="outline"
-                  onClick={testSMTPConnection}
-                  disabled={testing === 'smtp'}
-                >
-                  {testing === 'smtp' ? (
-                    <>
-                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
-                      Testing...
-                    </>
-                  ) : (
-                    <>
-                      <CheckCircle2 className="w-4 h-4 mr-2" />
-                      Test Connection
-                    </>
-                  )}
-                </Button>
+                {testing === 'smtp' ? (
+                  <Button
+                    variant="destructive"
+                    onClick={cancelTest}
+                  >
+                    <XCircle className="w-4 h-4 mr-2" />
+                    Cancel Test
+                  </Button>
+                ) : (
+                  <Button
+                    variant="outline"
+                    onClick={testSMTPConnection}
+                    disabled={testing !== null}
+                  >
+                    <CheckCircle2 className="w-4 h-4 mr-2" />
+                    Test Connection
+                  </Button>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -882,11 +1174,9 @@ export default function EmailConfiguration() {
                   <Switch
                     id="imap-tls"
                     checked={imapConfig.enableTLS}
-                    onCheckedChange={(checked) =>
-                      setImapConfig({ ...imapConfig, enableTLS: checked })
-                    }
+                    onCheckedChange={handleImapTlsChange}
                   />
-                  <Label htmlFor="imap-tls">Enable TLS/SSL</Label>
+                  <Label htmlFor="imap-tls">Enable TLS/SSL (auto-sets port: {imapConfig.enableTLS ? '993' : '143'})</Label>
                 </div>
                 <div className="flex items-center space-x-2">
                   <Switch
@@ -936,7 +1226,137 @@ export default function EmailConfiguration() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Edit Account Dialog */}
+      {editingAccount && (
+        <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Edit Email Account</DialogTitle>
+              <DialogDescription>Update email account configuration</DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Account Name</Label>
+                  <Input
+                    value={editingAccount.account_name}
+                    onChange={(e) => setEditingAccount({ ...editingAccount, account_name: e.target.value })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Email Address</Label>
+                  <Input
+                    value={editingAccount.email_address}
+                    onChange={(e) => setEditingAccount({ ...editingAccount, email_address: e.target.value })}
+                  />
+                </div>
+              </div>
+
+              <div className="border rounded-lg p-4">
+                <h4 className="font-medium mb-3">SMTP Configuration</h4>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>SMTP Host</Label>
+                    <Input
+                      value={editingAccount.smtp_host || ''}
+                      onChange={(e) => setEditingAccount({ ...editingAccount, smtp_host: e.target.value })}
+                      placeholder="smtp.example.com"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>SMTP Port</Label>
+                    <Input
+                      type="number"
+                      value={editingAccount.smtp_port || 587}
+                      onChange={(e) => setEditingAccount({ ...editingAccount, smtp_port: parseInt(e.target.value) || 587 })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>SMTP Username</Label>
+                    <Input
+                      value={editingAccount.smtp_username || ''}
+                      onChange={(e) => setEditingAccount({ ...editingAccount, smtp_username: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>SMTP Password</Label>
+                    <Input
+                      type="password"
+                      value={editingAccount.smtp_password || ''}
+                      onChange={(e) => setEditingAccount({ ...editingAccount, smtp_password: e.target.value })}
+                      placeholder="••••••••"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="border rounded-lg p-4">
+                <h4 className="font-medium mb-3">IMAP Configuration</h4>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>IMAP Host</Label>
+                    <Input
+                      value={editingAccount.imap_host || ''}
+                      onChange={(e) => setEditingAccount({ ...editingAccount, imap_host: e.target.value })}
+                      placeholder="imap.example.com"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>IMAP Port</Label>
+                    <Input
+                      type="number"
+                      value={editingAccount.imap_port || 993}
+                      onChange={(e) => setEditingAccount({ ...editingAccount, imap_port: parseInt(e.target.value) || 993 })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>IMAP Username</Label>
+                    <Input
+                      value={editingAccount.imap_username || ''}
+                      onChange={(e) => setEditingAccount({ ...editingAccount, imap_username: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label>IMAP Password</Label>
+                    <Input
+                      type="password"
+                      value={editingAccount.imap_password || ''}
+                      onChange={(e) => setEditingAccount({ ...editingAccount, imap_password: e.target.value })}
+                      placeholder="••••••••"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <Switch
+                    checked={editingAccount.enable_tls ?? true}
+                    onCheckedChange={(checked) => setEditingAccount({ ...editingAccount, enable_tls: checked })}
+                  />
+                  <Label>Enable TLS</Label>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Switch
+                    checked={editingAccount.is_active ?? true}
+                    onCheckedChange={(checked) => setEditingAccount({ ...editingAccount, is_active: checked })}
+                  />
+                  <Label>Active</Label>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>Cancel</Button>
+                <Button onClick={saveEditedAccount} disabled={loading}>
+                  {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
+                  Save Changes
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }
-

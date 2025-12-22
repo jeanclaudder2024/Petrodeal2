@@ -1,21 +1,29 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Check, Loader2, AlertCircle, Shield, Calendar } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Check, Loader2, AlertCircle, Shield, Calendar, Lock } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
-import { useAccess } from '@/contexts/AccessContext';
 
 const PaymentSuccess = () => {
   const navigate = useNavigate();
-  const { startTrial } = useAccess();
   const [searchParams] = useSearchParams();
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [registrationComplete, setRegistrationComplete] = useState(false);
   const [subscriptionDetails, setSubscriptionDetails] = useState<any>(null);
   const [isTrialFlow, setIsTrialFlow] = useState(false);
+  const [registrationData, setRegistrationData] = useState<any>(null);
+  
+  // Password entry state (SECURITY: password entered here, never stored)
+  const [showPasswordEntry, setShowPasswordEntry] = useState(false);
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [isCreatingAccount, setIsCreatingAccount] = useState(false);
 
   useEffect(() => {
     handlePaymentSuccess();
@@ -52,7 +60,7 @@ const PaymentSuccess = () => {
         new Date(sessionData.subscription.trial_end * 1000) > new Date();
       setIsTrialFlow(isTrialSubscription);
 
-      // Get stored registration data (now from sessionStorage for security)
+      // Get stored registration data
       const storedData = sessionStorage.getItem('pendingRegistration');
       if (!storedData) {
         // User might already be registered, redirect to dashboard
@@ -60,24 +68,55 @@ const PaymentSuccess = () => {
         return;
       }
 
-      const registrationData = JSON.parse(storedData);
+      const parsedData = JSON.parse(storedData);
 
       // Validate stored email matches session email
-      if (registrationData.email !== sessionData.customer_email) {
+      if (parsedData.email !== sessionData.customer_email) {
         setError('Email mismatch detected. Please contact support.');
         setLoading(false);
         return;
       }
 
-      // Complete the registration process (user will set password on first login via email)
-      if (!registrationData.password) {
-        setError('Registration failed: Password not found. Please restart registration and enter your password.');
-        setLoading(false);
-        return;
-      }
+      // Store data and show password entry form
+      setRegistrationData({ ...parsedData, sessionData });
+      setShowPasswordEntry(true);
+      setLoading(false);
+      
+    } catch (err) {
+      setError('Failed to verify payment. Please contact support.');
+      setLoading(false);
+    }
+  };
+
+  const validatePassword = (): boolean => {
+    if (password.length < 8) {
+      setPasswordError('Password must be at least 8 characters');
+      return false;
+    }
+    if (password !== confirmPassword) {
+      setPasswordError('Passwords do not match');
+      return false;
+    }
+    setPasswordError(null);
+    return true;
+  };
+
+  const handleCreateAccount = async () => {
+    if (!validatePassword()) return;
+    if (!registrationData) return;
+
+    setIsCreatingAccount(true);
+    setPasswordError(null);
+
+    try {
+      const { sessionData } = registrationData;
+      const isTrialSubscription = sessionData.subscription?.trial_end && 
+        new Date(sessionData.subscription.trial_end * 1000) > new Date();
+
+      // SECURITY: Password is entered here, used immediately, and never stored
       const { data, error: signUpError } = await supabase.auth.signUp({
         email: registrationData.email,
-        password: registrationData.password, // Use the real password
+        password: password, // Direct from state, not stored
         options: {
           emailRedirectTo: `${window.location.origin}/dashboard`,
           data: {
@@ -92,13 +131,13 @@ const PaymentSuccess = () => {
       });
 
       if (signUpError) {
-        setError(`Registration failed: ${signUpError.message}`);
-        setLoading(false);
+        setPasswordError(`Registration failed: ${signUpError.message}`);
+        setIsCreatingAccount(false);
         return;
       }
 
       if (data.user) {
-        // Send enhanced confirmation email with subscription details
+        // Send confirmation email
         try {
           await supabase.functions.invoke('send-confirmation-email', {
             body: {
@@ -119,11 +158,11 @@ const PaymentSuccess = () => {
               }
             }
           });
-        } catch (emailError) {
-          // Continue with registration even if email fails
+        } catch {
+          // Continue even if email fails
         }
 
-        // Send billing/receipt email
+        // Send billing email
         try {
           const planName = `PetroDealHub ${registrationData.selectedPlan?.charAt(0).toUpperCase() + registrationData.selectedPlan?.slice(1)} Plan`;
           const amount = sessionData.amount_total || 0;
@@ -142,18 +181,23 @@ const PaymentSuccess = () => {
                 invoice_url: sessionData.invoice?.hosted_invoice_url
               },
               company_info: {
-                company_name: registrationData.company,
-                company_size: sessionData.custom_fields?.find((f: any) => f.key === 'company_size')?.dropdown?.value
+                company_name: registrationData.company
               }
             }
           });
-        } catch (billingEmailError) {
-          // Continue even if billing email fails
+        } catch {
+          // Continue even if email fails
         }
 
         // Clear the pending registration data
         sessionStorage.removeItem('pendingRegistration');
+        
+        // Clear password from memory
+        setPassword('');
+        setConfirmPassword('');
+        
         setRegistrationComplete(true);
+        setShowPasswordEntry(false);
 
         const planText = registrationData.selectedPlan?.charAt(0).toUpperCase() + 
           registrationData.selectedPlan?.slice(1) || 'Selected';
@@ -163,15 +207,11 @@ const PaymentSuccess = () => {
           title: "Registration Complete!",
           description: `Welcome to PetroDealHub ${planText}${trialText}! Check your email to verify your account.`,
         });
-
-        // Wait a moment then show completion screen
-        setTimeout(() => {
-          setLoading(false);
-        }, 1500);
       }
-    } catch (error) {
-      setError('Failed to complete registration. Please contact support.');
-      setLoading(false);
+    } catch {
+      setPasswordError('Failed to create account. Please try again.');
+    } finally {
+      setIsCreatingAccount(false);
     }
   };
 
@@ -190,9 +230,9 @@ const PaymentSuccess = () => {
           <CardContent className="pt-6">
             <div className="text-center">
               <Loader2 className="h-12 w-12 mx-auto animate-spin text-primary mb-4" />
-              <h2 className="text-xl font-semibold mb-2">Completing Your Registration</h2>
+              <h2 className="text-xl font-semibold mb-2">Verifying Payment</h2>
               <p className="text-muted-foreground">
-                Your payment was successful. We're now setting up your account...
+                Please wait while we verify your payment...
               </p>
             </div>
           </CardContent>
@@ -218,6 +258,80 @@ const PaymentSuccess = () => {
                   Contact Support
                 </Button>
               </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  // Password entry form after successful payment
+  if (showPasswordEntry) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-primary/5 via-background to-secondary/5 p-4 light">
+        <Card className="w-full max-w-md">
+          <CardContent className="pt-6">
+            <div className="text-center mb-6">
+              <div className="w-16 h-16 mx-auto bg-green-100 dark:bg-green-900/30 rounded-full flex items-center justify-center mb-4">
+                <Check className="h-8 w-8 text-green-600" />
+              </div>
+              <h2 className="text-xl font-semibold mb-2">Payment Successful!</h2>
+              <p className="text-muted-foreground">
+                Create your password to complete registration
+              </p>
+            </div>
+
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label htmlFor="password" className="flex items-center gap-2">
+                  <Lock className="h-4 w-4" />
+                  Password
+                </Label>
+                <Input
+                  id="password"
+                  type="password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Enter your password"
+                  disabled={isCreatingAccount}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="confirmPassword">Confirm Password</Label>
+                <Input
+                  id="confirmPassword"
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Confirm your password"
+                  disabled={isCreatingAccount}
+                  onKeyDown={(e) => e.key === 'Enter' && handleCreateAccount()}
+                />
+              </div>
+
+              {passwordError && (
+                <p className="text-sm text-red-500">{passwordError}</p>
+              )}
+
+              <Button 
+                onClick={handleCreateAccount} 
+                className="w-full"
+                disabled={isCreatingAccount || !password || !confirmPassword}
+              >
+                {isCreatingAccount ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Creating Account...
+                  </>
+                ) : (
+                  'Complete Registration'
+                )}
+              </Button>
+
+              <p className="text-xs text-center text-muted-foreground">
+                Your password is securely transmitted and never stored in the browser.
+              </p>
             </div>
           </CardContent>
         </Card>
@@ -290,8 +404,8 @@ const PaymentSuccess = () => {
             
             <p className="text-muted-foreground mb-6">
               {isTrialFlow 
-                ? "Your free trial has started! Check your email to verify your account and set your password."
-                : "Your subscription is now active! Check your email to verify your account and set your password."
+                ? "Your free trial has started! Check your email to verify your account."
+                : "Your subscription is now active! Check your email to verify your account."
               }
             </p>
             

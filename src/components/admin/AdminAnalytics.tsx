@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { BarChart3, Users, Ship, TrendingUp, Building2 } from 'lucide-react';
-import { db } from '@/lib/supabase-helper';
+import { supabase } from '@/integrations/supabase/client';
 
 const AdminAnalytics = () => {
   const [stats, setStats] = useState({
@@ -23,26 +23,39 @@ const AdminAnalytics = () => {
   const fetchAnalytics = async () => {
     setLoading(true);
     try {
-      const [
-        usersResult,
-        dealsResult,
-        vesselsResult,
-        companiesResult
-      ] = await Promise.all([
-        db.from('profiles').select('id', { count: 'exact' }).catch(() => ({ count: 0 })),
-        db.from('deals').select('*').catch(() => ({ data: [] })),
-        db.from('vessels').select('id', { count: 'exact' }).catch(() => ({ count: 0 })),
-        db.from('companies').select('id', { count: 'exact' }).catch(() => ({ count: 0 }))
-      ]);
+      // Fetch each table with proper error handling
+      let usersCount = 0;
+      let deals: any[] = [];
+      let vesselsCount = 0;
+      let companiesCount = 0;
 
-      const deals = dealsResult.data || [];
+      try {
+        const { count } = await supabase.from('broker_memberships').select('id', { count: 'exact', head: true });
+        usersCount = count || 0;
+      } catch { /* broker_memberships table may not exist */ }
+
+      try {
+        const { data } = await supabase.from('deals').select('*');
+        deals = data || [];
+      } catch { /* deals table may not exist */ }
+
+      try {
+        const { count } = await supabase.from('vessels').select('id', { count: 'exact', head: true });
+        vesselsCount = count || 0;
+      } catch { /* vessels table may not exist */ }
+
+      try {
+        const { count } = await supabase.from('companies').select('id', { count: 'exact', head: true });
+        companiesCount = count || 0;
+      } catch { /* companies table may not exist */ }
+
       const totalDealValue = deals.reduce((sum: number, deal: any) => sum + (deal.total_value || 0), 0);
 
       setStats({
-        totalUsers: usersResult.count || 0,
+        totalUsers: usersCount,
         totalDeals: deals.length,
-        totalVessels: vesselsResult.count || 0,
-        totalCompanies: companiesResult.count || 0,
+        totalVessels: vesselsCount,
+        totalCompanies: companiesCount,
         activeDeals: deals.filter((deal: any) => deal.status === 'active').length,
         completedDeals: deals.filter((deal: any) => deal.status === 'completed').length,
         pendingDeals: deals.filter((deal: any) => deal.status === 'pending').length,

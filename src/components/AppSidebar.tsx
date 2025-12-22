@@ -57,7 +57,7 @@ const getAccountItems = (t: (key: string) => string) => [
   { title: t('navigation.subscription'), url: '/subscription', icon: Crown },
 ];
 
-const getBrokerItems = (t: (key: string) => string) => [
+const getBrokerItems = (t: (key: string, fallback?: string) => string) => [
   { title: t('brokers.membership', 'Broker Membership'), url: '/broker-membership', icon: Shield },
   { title: t('brokers.dashboard', 'Broker Dashboard'), url: '/broker-dashboard', icon: LayoutDashboard },
 ];

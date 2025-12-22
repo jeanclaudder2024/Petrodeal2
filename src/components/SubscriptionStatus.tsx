@@ -14,7 +14,9 @@ import {
   Factory,
   FileText,
   Users,
-  Zap
+  Zap,
+  Clock,
+  AlertCircle
 } from 'lucide-react';
 
 interface SubscriptionData {
@@ -30,6 +32,8 @@ interface SubscriptionData {
   user_seats?: number;
   api_access?: boolean;
   real_time_analytics?: boolean;
+  selected_plan_tier?: string;
+  is_trial_active?: boolean;
 }
 
 interface SubscriptionStatusProps {
@@ -47,10 +51,48 @@ const SubscriptionStatus: React.FC<SubscriptionStatusProps> = ({
 }) => {
   if (!subscriptionData) return null;
 
-  const formatTierName = (tier: string | null) => {
-    if (!tier) return 'Free';
+  const formatTierName = (tier: string | null, selectedPlan?: string, isTrialActive?: boolean) => {
+    if (isTrialActive && selectedPlan) {
+      return `Free ${selectedPlan.charAt(0).toUpperCase() + selectedPlan.slice(1)} Trial`;
+    }
+    if (isTrialActive) {
+      return 'Free Trial';
+    }
+    if (!tier || tier === 'trial') {
+      if (selectedPlan) {
+        return `${selectedPlan.charAt(0).toUpperCase() + selectedPlan.slice(1)} (Trial)`;
+      }
+      return 'Free Trial';
+    }
     return tier.charAt(0).toUpperCase() + tier.slice(1);
   };
+
+  const getStatusDisplay = () => {
+    if (subscriptionData.subscribed) {
+      return {
+        label: 'Active',
+        variant: 'default' as const,
+        icon: <Check className="h-4 w-4 mr-1" />,
+        className: 'bg-green-500'
+      };
+    }
+    if (subscriptionData.is_trial_active || subscriptionData.subscription_tier === 'trial') {
+      return {
+        label: 'Free Trial',
+        variant: 'secondary' as const,
+        icon: <Clock className="h-4 w-4 mr-1" />,
+        className: 'bg-blue-500 text-white'
+      };
+    }
+    return {
+      label: 'Inactive',
+      variant: 'destructive' as const,
+      icon: <X className="h-4 w-4 mr-1" />,
+      className: ''
+    };
+  };
+
+  const statusDisplay = getStatusDisplay();
 
   const getSupportLevel = (level?: string) => {
     switch (level) {
@@ -88,23 +130,20 @@ const SubscriptionStatus: React.FC<SubscriptionStatusProps> = ({
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <div className="text-center">
             <div className="text-2xl font-bold">
-              {subscriptionData.subscribed ? (
-                <Badge variant="default" className="bg-green-500">
-                  <Check className="h-4 w-4 mr-1" />
-                  Active
-                </Badge>
-              ) : (
-                <Badge variant="destructive">
-                  <X className="h-4 w-4 mr-1" />
-                  Inactive
-                </Badge>
-              )}
+              <Badge variant={statusDisplay.variant} className={statusDisplay.className}>
+                {statusDisplay.icon}
+                {statusDisplay.label}
+              </Badge>
             </div>
             <p className="text-sm text-muted-foreground mt-1">Status</p>
           </div>
           <div className="text-center">
             <div className="text-2xl font-bold">
-              {formatTierName(subscriptionData.subscription_tier)}
+              {formatTierName(
+                subscriptionData.subscription_tier, 
+                subscriptionData.selected_plan_tier,
+                subscriptionData.is_trial_active
+              )}
             </div>
             <p className="text-sm text-muted-foreground mt-1">Plan</p>
           </div>
@@ -112,14 +151,16 @@ const SubscriptionStatus: React.FC<SubscriptionStatusProps> = ({
             <div className="text-2xl font-bold">
               {subscriptionData.subscription_end 
                 ? new Date(subscriptionData.subscription_end).toLocaleDateString()
-                : 'N/A'
+                : subscriptionData.is_trial_active ? 'During Trial' : 'N/A'
               }
             </div>
-            <p className="text-sm text-muted-foreground mt-1">Renewal Date</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              {subscriptionData.subscribed ? 'Renewal Date' : 'Trial End'}
+            </p>
           </div>
         </div>
 
-        {/* Detailed Limits */}
+        {/* Detailed Limits - Show real numbers from subscription data */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="flex flex-col items-center gap-2 p-3 bg-muted/30 rounded-lg">
             <MapPin className="h-5 w-5 text-primary" />
@@ -173,7 +214,7 @@ const SubscriptionStatus: React.FC<SubscriptionStatusProps> = ({
                 {subscriptionData.api_access ? (
                   <Check className="h-4 w-4 text-green-500" />
                 ) : (
-                  <X className="h-4 w-4 text-red-500" />
+                  <X className="h-4 w-4 text-muted-foreground" />
                 )}
               </div>
               <div className="flex items-center justify-between">
@@ -181,7 +222,7 @@ const SubscriptionStatus: React.FC<SubscriptionStatusProps> = ({
                 {subscriptionData.real_time_analytics ? (
                   <Check className="h-4 w-4 text-green-500" />
                 ) : (
-                  <X className="h-4 w-4 text-red-500" />
+                  <X className="h-4 w-4 text-muted-foreground" />
                 )}
               </div>
               <div className="flex items-center justify-between">
@@ -189,7 +230,7 @@ const SubscriptionStatus: React.FC<SubscriptionStatusProps> = ({
                 {(subscriptionData.user_seats || 1) > 1 ? (
                   <Check className="h-4 w-4 text-green-500" />
                 ) : (
-                  <X className="h-4 w-4 text-red-500" />
+                  <X className="h-4 w-4 text-muted-foreground" />
                 )}
               </div>
             </div>

@@ -15,7 +15,7 @@ interface EmailTestRequest {
 }
 
 // Helper to read from connection with timeout
-async function readFromConnection(conn: Deno.TcpConn | Deno.TlsConn, timeout = 5000): Promise<string> {
+async function readFromConnection(conn: Deno.TcpConn | Deno.TlsConn, timeout = 10000): Promise<string> {
   const buffer = new Uint8Array(4096);
   const deadline = Date.now() + timeout;
   
@@ -30,7 +30,7 @@ async function readFromConnection(conn: Deno.TcpConn | Deno.TlsConn, timeout = 5
       await new Promise(resolve => setTimeout(resolve, 100));
     }
   }
-  return '';
+  throw new Error('Connection timeout - no response from server within 10 seconds');
 }
 
 // Helper to write to connection
@@ -38,16 +38,30 @@ function writeToConnection(conn: Deno.TcpConn | Deno.TlsConn, data: string): Pro
   return conn.write(new TextEncoder().encode(data));
 }
 
-// Simple SMTP connection test
+// Simple SMTP connection test with overall timeout
 async function testSMTP(config: Omit<EmailTestRequest, 'type'>): Promise<{ success: boolean; message: string }> {
   let conn: Deno.TcpConn | null = null;
   
+  // Create an abort controller for overall timeout (10 seconds)
+  const overallTimeout = setTimeout(() => {
+    if (conn) {
+      try { conn.close(); } catch {}
+    }
+  }, 10000);
+  
   try {
-    // Connect to SMTP server
-    conn = await Deno.connect({
+    // Connect to SMTP server with timeout
+    const connectPromise = Deno.connect({
       hostname: config.host,
       port: config.port,
     });
+    
+    // Race between connect and timeout
+    const timeoutPromise = new Promise<never>((_, reject) => 
+      setTimeout(() => reject(new Error(`Connection timeout: Unable to connect to ${config.host}:${config.port} within 10 seconds`)), 10000)
+    );
+    
+    conn = await Promise.race([connectPromise, timeoutPromise]);
 
     // Read welcome message (should start with 220)
     const welcome = await readFromConnection(conn);
@@ -90,6 +104,8 @@ async function testSMTP(config: Omit<EmailTestRequest, 'type'>): Promise<{ succe
     
     conn.close();
 
+    clearTimeout(overallTimeout);
+    
     // Check if authentication was successful (235 = Authentication successful)
     if (authResponse.includes('235') || authResponse.toLowerCase().includes('authentication successful')) {
       return { success: true, message: "SMTP authentication successful" };
@@ -100,10 +116,38 @@ async function testSMTP(config: Omit<EmailTestRequest, 'type'>): Promise<{ succe
       message: `SMTP authentication failed: ${authResponse.substring(0, 200)}` 
     };
   } catch (error: any) {
-    if (conn) conn.close();
+    clearTimeout(overallTimeout);
+    if (conn) {
+      try { conn.close(); } catch {}
+    }
+    
+    const errorMessage = error.message || 'Unable to connect to server';
+    
+    // Provide detailed error messages
+    if (errorMessage.includes('timeout')) {
+      return { 
+        success: false, 
+        message: `Connection timeout: Server ${config.host}:${config.port} did not respond within 10 seconds. Check if the server address and port are correct.`
+      };
+    }
+    
+    if (errorMessage.includes('No such host') || errorMessage.includes('dns') || errorMessage.includes('getaddrinfo')) {
+      return { 
+        success: false, 
+        message: `DNS error: Cannot resolve hostname "${config.host}". Please check the server address.`
+      };
+    }
+    
+    if (errorMessage.includes('Connection refused')) {
+      return { 
+        success: false, 
+        message: `Connection refused: Server ${config.host}:${config.port} is not accepting connections. Check if the port is correct.`
+      };
+    }
+    
     return { 
       success: false, 
-      message: `SMTP connection error: ${error.message || 'Unable to connect to server'}` 
+      message: `SMTP connection error: ${errorMessage}` 
     };
   }
 }

@@ -9,11 +9,13 @@ import { Map as MapIcon, Ship, MapPin, Factory, Building2, Search, Filter, Navig
 import { db } from '@/lib/supabase-helper';
 import { useToast } from '@/hooks/use-toast';
 import InteractiveMap from '@/components/InteractiveMap';
+import SponsorBanner from '@/components/SponsorBanner';
 
 interface MapData {
   vessels: any[];
   ports: any[];
   refineries: any[];
+  companies: any[];
 }
 
 interface MapFilters {
@@ -26,13 +28,15 @@ interface MapFilters {
   showVessels: boolean;
   showPorts: boolean;
   showRefineries: boolean;
+  showCompanies: boolean;
 }
 
 const MapPage = () => {
   const [mapData, setMapData] = useState<MapData>({
     vessels: [],
     ports: [],
-    refineries: []
+    refineries: [],
+    companies: []
   });
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState<MapFilters>({
@@ -44,7 +48,8 @@ const MapPage = () => {
     searchTerm: '',
     showVessels: true,
     showPorts: true,
-    showRefineries: true
+    showRefineries: true,
+    showCompanies: true
   });
   const [showFilters, setShowFilters] = useState(false);
   const [showRoutes, setShowRoutes] = useState(true);
@@ -57,16 +62,33 @@ const MapPage = () => {
   const fetchMapData = async () => {
     setLoading(true);
     try {
-      const [vesselsRes, portsRes, refineriesRes] = await Promise.all([
+      const [vesselsRes, portsRes, refineriesRes, companiesRes] = await Promise.all([
         db.from('vessels').select('*'),
-        db.from('ports').select('*').limit(100),
-        db.from('refineries').select('*').limit(100)
+        db.from('ports').select('*'),
+        db.from('refineries').select('*'),
+        db.from('companies').select('*')
       ]);
 
+      // Calculate vessel counts per company based on commodity_source_company_id
+      const vessels = vesselsRes.data || [];
+      const companies = (companiesRes.data || []).map((company: any) => {
+        const connectedVessels = vessels.filter(
+          v => v.commodity_source_company_id === company.id || 
+               v.buyer_company_id === company.id || 
+               v.seller_company_id === company.id
+        );
+        return {
+          ...company,
+          vessel_count: connectedVessels.length,
+          connected_vessels: connectedVessels.map(v => ({ id: v.id, name: v.name }))
+        };
+      });
+
       setMapData({
-        vessels: vesselsRes.data || [],
+        vessels: vessels,
         ports: portsRes.data || [],
-        refineries: refineriesRes.data || []
+        refineries: refineriesRes.data || [],
+        companies: companies
       });
     } catch (error) {
       console.error('Failed to fetch map data:', error);
@@ -89,12 +111,13 @@ const MapPage = () => {
   const refineryTypes = getUniqueValues(mapData.refineries, 'type');
   const countries = [
     ...getUniqueValues(mapData.ports, 'country'),
-    ...getUniqueValues(mapData.refineries, 'country')
-  ];
+    ...getUniqueValues(mapData.refineries, 'country'),
+    ...getUniqueValues(mapData.companies, 'country')
+  ].filter((v, i, a) => a.indexOf(v) === i);
   const regions = [
     ...getUniqueValues(mapData.ports, 'region'),
     ...getUniqueValues(mapData.refineries, 'region')
-  ];
+  ].filter((v, i, a) => a.indexOf(v) === i);
 
   const filteredData = {
     vessels: mapData.vessels.filter(vessel => 
@@ -124,6 +147,14 @@ const MapPage = () => {
         refinery.name?.toLowerCase().includes(filters.searchTerm.toLowerCase()) ||
         refinery.operator?.toLowerCase().includes(filters.searchTerm.toLowerCase())
       )
+    ),
+    companies: mapData.companies.filter(company => 
+      filters.showCompanies &&
+      (filters.countries.length === 0 || filters.countries.includes(company.country)) &&
+      (filters.searchTerm === '' || 
+        company.name?.toLowerCase().includes(filters.searchTerm.toLowerCase()) ||
+        company.country?.toLowerCase().includes(filters.searchTerm.toLowerCase())
+      )
     )
   };
 
@@ -139,6 +170,9 @@ const MapPage = () => {
 
   return (
     <div className="container mx-auto px-4 py-8">
+      {/* Sponsor Banner */}
+      <SponsorBanner location="dashboard_map" className="mb-6 bg-muted/30 rounded-lg border border-border/50" />
+
       <div className="mb-8">
         <h1 className="text-3xl font-bold text-foreground">
           Interactive Map
@@ -219,6 +253,19 @@ const MapPage = () => {
             <label htmlFor="refineries" className="flex items-center gap-2 text-sm font-medium">
               <Factory className="h-4 w-4 text-orange-500" />
               Refineries ({filteredData.refineries.length})
+            </label>
+          </div>
+          <div className="flex items-center space-x-2">
+            <Checkbox
+              id="companies"
+              checked={filters.showCompanies}
+              onCheckedChange={(checked) => 
+                setFilters({...filters, showCompanies: !!checked})
+              }
+            />
+            <label htmlFor="companies" className="flex items-center gap-2 text-sm font-medium">
+              <Building2 className="h-4 w-4 text-purple-500" />
+              Companies ({filteredData.companies.length})
             </label>
           </div>
         </div>
@@ -342,7 +389,7 @@ const MapPage = () => {
       </Card>
 
       {/* Results Summary */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <Card className="trading-card">
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-sm">
@@ -400,6 +447,25 @@ const MapPage = () => {
           </CardContent>
         </Card>
 
+        <Card className="trading-card">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-sm">
+              <Building2 className="h-4 w-4 text-purple-500" />
+              Companies
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-purple-500 mb-2">{filteredData.companies.length}</div>
+            <div className="space-y-1">
+              {filteredData.companies.slice(0, 3).map((company, index) => (
+                <div key={index} className="text-xs text-muted-foreground truncate flex items-center gap-1">
+                  {company.logo_url && <img src={company.logo_url} alt="" className="w-3 h-3 rounded-full" />}
+                  {company.name} {company.vessel_count > 0 && <Badge variant="secondary" className="text-[10px] px-1 py-0">{company.vessel_count} vessels</Badge>}
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
       </div>
     </div>
   );
