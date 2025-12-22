@@ -272,9 +272,9 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                     // Handle unlimited downloads: -1 means unlimited, null/undefined means use default
                     const maxDownloadsValue = plan.max_downloads_per_month;
                     
-                    if (maxDownloadsValue === -1 || maxDownloadsValue === '-1') {
+                    if (maxDownloadsValue === -1 || maxDownloadsValue === '-1' as unknown) {
                       userMaxDownloads = null; // null means unlimited
-                    } else if (maxDownloadsValue === null || maxDownloadsValue === undefined || maxDownloadsValue === '') {
+                    } else if (maxDownloadsValue === null || maxDownloadsValue === undefined || (maxDownloadsValue as unknown) === '') {
                       // If not set, default to 10 (not unlimited!)
                       userMaxDownloads = 10;
                     } else {
@@ -489,10 +489,10 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                 } else {
                   // Plan fetch might have failed - try to get from userPlanDetails
                   const planMaxValue = userPlanDetails.max_downloads_per_month;
-                  if (planMaxValue === -1 || planMaxValue === '-1') {
+                  if (planMaxValue === -1 || (planMaxValue as unknown) === '-1') {
                     maxDownloads = null; // Unlimited
                     remainingDownloads = null;
-                  } else if (planMaxValue !== null && planMaxValue !== undefined && planMaxValue !== '') {
+                  } else if (planMaxValue !== null && planMaxValue !== undefined && (planMaxValue as unknown) !== '') {
                     const numValue = typeof planMaxValue === 'string' ? parseInt(planMaxValue, 10) : planMaxValue;
                     if (!isNaN(numValue) && numValue >= 0) {
                       maxDownloads = numValue;
@@ -592,7 +592,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                 can_download: canDownload,
                 max_downloads: maxDownloads,
                 remaining_downloads: remainingDownloads,
-                current_downloads: templateCurrentDownloads || userCurrentDownloads,
+                current_downloads: (dbTemplate ? templateDownloadCounts.get(dbTemplate.id) || 0 : 0) || userCurrentDownloads,
                 // Store user's plan info in template for plan matching in render
                 _user_plan_tier: userPlanDetails?.plan_tier || null,
                 _user_plan_name: userPlanDetails?.plan_name || null
@@ -884,9 +884,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
         const contentDisposition = response.headers.get('Content-Disposition');
         const templateName = template.file_name || template.name || 'template';
         const apiTemplateName = templateName.replace('.docx', '');
-        
-        // Get filename from Content-Disposition header, default to ZIP filename
-        let filename = `${apiTemplateName}_${vesselImo}_images.zip`;
+        let filename = `${apiTemplateName}_${vesselImo}.pdf`;
         
         if (contentDisposition) {
           const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
@@ -895,31 +893,15 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
           }
         }
         
-        // Get the blob directly from response - it should already have correct Content-Type
         const blob = await response.blob();
-        
-        // Verify Content-Type header - should be application/zip for images
-        const contentType = response.headers.get('Content-Type');
-        if (contentType && !contentType.includes('application/zip')) {
-          console.warn('Unexpected Content-Type:', contentType, 'Expected application/zip');
-        }
-        
-        // Ensure filename ends with .zip (ZIP folder containing PNG images)
-        const zipFilename = filename.endsWith('.zip') ? filename : `${filename}.zip`;
-        
-        // Create download URL from blob (blob already has correct type from response)
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = zipFilename;
+        a.download = filename;
         document.body.appendChild(a);
         a.click();
-        
-        // Cleanup
-        setTimeout(() => {
-          window.URL.revokeObjectURL(url);
-          document.body.removeChild(a);
-        }, 100);
+        window.URL.revokeObjectURL(url);
+        document.body.removeChild(a);
         
         setProcessingStatus(prev => ({
           ...prev,
