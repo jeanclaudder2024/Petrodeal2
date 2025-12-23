@@ -12,6 +12,33 @@ const logStep = (step: string, details?: any) => {
   console.log(`[CREATE-BROKER-CHECKOUT] ${step}${detailsStr}`);
 };
 
+// Get Stripe config based on mode from database
+async function getStripeConfig(supabaseClient: any) {
+  const { data: configData } = await supabaseClient
+    .from('stripe_configuration')
+    .select('stripe_mode')
+    .single();
+
+  const mode = configData?.stripe_mode === 'live' ? 'live' : 'test';
+  
+  let secretKey = mode === 'live' 
+    ? Deno.env.get("STRIPE_SECRET_KEY_LIVE")
+    : Deno.env.get("STRIPE_SECRET_KEY_TEST");
+
+  // Fallback to legacy key
+  if (!secretKey) {
+    secretKey = Deno.env.get("STRIPE_SECRET_KEY");
+    logStep(`Using legacy STRIPE_SECRET_KEY (mode: ${mode})`);
+  }
+
+  if (!secretKey) {
+    throw new Error(`Stripe secret key not configured for ${mode} mode`);
+  }
+
+  logStep(`Using Stripe ${mode.toUpperCase()} mode`);
+  return { secretKey, mode };
+}
+
 // Helper function to clean up stuck membership records
 const cleanupStuckMembership = async (userId: string, supabaseClient: any) => {
   try {
@@ -62,9 +89,8 @@ serve(async (req) => {
   try {
     logStep("Function started");
 
-    const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
-    if (!stripeKey) throw new Error("STRIPE_SECRET_KEY is not set");
-    logStep("Stripe key verified");
+    // Get Stripe config based on mode
+    const { secretKey, mode } = await getStripeConfig(supabaseClient);
 
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) throw new Error("No authorization header provided");
@@ -108,7 +134,7 @@ serve(async (req) => {
       }
     }
 
-    const stripe = new Stripe(stripeKey, { apiVersion: "2023-10-16" });
+    const stripe = new Stripe(secretKey, { apiVersion: "2023-10-16" });
     
     // Check if Stripe customer exists
     const customers = await stripe.customers.list({ email: user.email, limit: 1 });
@@ -138,9 +164,12 @@ serve(async (req) => {
       mode: "payment",
       success_url: `${req.headers.get("origin")}/broker-setup?success=true`,
       cancel_url: `${req.headers.get("origin")}/broker-membership?canceled=true`,
+      metadata: {
+        stripe_mode: mode
+      }
     });
 
-    logStep("Checkout session created", { sessionId: session.id });
+    logStep("Checkout session created", { sessionId: session.id, mode });
 
     // Create or update broker membership record
     const { error: upsertError } = await supabaseClient.from("broker_memberships").upsert({

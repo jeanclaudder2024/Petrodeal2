@@ -2586,6 +2586,113 @@ export type Database = {
         }
         Relationships: []
       }
+      imfpa_agreements: {
+        Row: {
+          bank_name: string | null
+          bank_swift: string | null
+          beneficiary_account_masked: string | null
+          broker_company_number: string | null
+          broker_entity_name: string | null
+          broker_registration_country: string | null
+          broker_role: string | null
+          buyer_entity_name: string | null
+          commission_type: string | null
+          commission_value: number | null
+          commodity_type: string | null
+          created_at: string | null
+          currency: string | null
+          deal_id: string | null
+          document_url: string | null
+          governing_law: string | null
+          imfpa_id: string
+          imfpa_reference_code: string | null
+          jurisdiction: string | null
+          payment_method: string | null
+          payment_trigger: string | null
+          seller_entity_name: string | null
+          signature_hash: string | null
+          signed_by_broker: boolean | null
+          signed_by_buyer: boolean | null
+          signed_by_seller: boolean | null
+          status: string | null
+          updated_at: string | null
+          valid_from: string | null
+          valid_until: string | null
+        }
+        Insert: {
+          bank_name?: string | null
+          bank_swift?: string | null
+          beneficiary_account_masked?: string | null
+          broker_company_number?: string | null
+          broker_entity_name?: string | null
+          broker_registration_country?: string | null
+          broker_role?: string | null
+          buyer_entity_name?: string | null
+          commission_type?: string | null
+          commission_value?: number | null
+          commodity_type?: string | null
+          created_at?: string | null
+          currency?: string | null
+          deal_id?: string | null
+          document_url?: string | null
+          governing_law?: string | null
+          imfpa_id?: string
+          imfpa_reference_code?: string | null
+          jurisdiction?: string | null
+          payment_method?: string | null
+          payment_trigger?: string | null
+          seller_entity_name?: string | null
+          signature_hash?: string | null
+          signed_by_broker?: boolean | null
+          signed_by_buyer?: boolean | null
+          signed_by_seller?: boolean | null
+          status?: string | null
+          updated_at?: string | null
+          valid_from?: string | null
+          valid_until?: string | null
+        }
+        Update: {
+          bank_name?: string | null
+          bank_swift?: string | null
+          beneficiary_account_masked?: string | null
+          broker_company_number?: string | null
+          broker_entity_name?: string | null
+          broker_registration_country?: string | null
+          broker_role?: string | null
+          buyer_entity_name?: string | null
+          commission_type?: string | null
+          commission_value?: number | null
+          commodity_type?: string | null
+          created_at?: string | null
+          currency?: string | null
+          deal_id?: string | null
+          document_url?: string | null
+          governing_law?: string | null
+          imfpa_id?: string
+          imfpa_reference_code?: string | null
+          jurisdiction?: string | null
+          payment_method?: string | null
+          payment_trigger?: string | null
+          seller_entity_name?: string | null
+          signature_hash?: string | null
+          signed_by_broker?: boolean | null
+          signed_by_buyer?: boolean | null
+          signed_by_seller?: boolean | null
+          status?: string | null
+          updated_at?: string | null
+          valid_from?: string | null
+          valid_until?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "imfpa_agreements_deal_id_fkey"
+            columns: ["deal_id"]
+            isOneToOne: false
+            referencedRelation: "broker_deals"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       incoming_emails: {
         Row: {
           auto_replied: boolean | null
@@ -5445,6 +5552,7 @@ export type Database = {
           template_name: string
         }[]
       }
+      get_user_id_by_email: { Args: { user_email: string }; Returns: string }
       get_user_role: {
         Args: { _user_id: string }
         Returns: Database["public"]["Enums"]["app_role"]
@@ -5461,7 +5569,7 @@ export type Database = {
           email_confirmed_at: string
           id: string
           last_sign_in_at: string
-          role: Database["public"]["Enums"]["app_role"]
+          role: string
         }[]
       }
       has_role: {

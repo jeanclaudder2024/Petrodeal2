@@ -896,6 +896,103 @@ export default function AutoReplySystem() {
                                 </Button>
                               </>
                             )}
+                            {campaign.status === 'sent' && (
+                              <>
+                                <Button size="sm" variant="outline" onClick={async () => {
+                                  // Duplicate campaign as draft for editing
+                                  try {
+                                    const { data: fullCampaign, error } = await supabase
+                                      .from('email_campaigns')
+                                      .select('*')
+                                      .eq('id', campaign.id)
+                                      .single();
+                                    
+                                    if (error) throw error;
+                                    
+                                    // Load recipients too
+                                    const { data: recipientsData } = await supabase
+                                      .from('campaign_recipients')
+                                      .select('email, name')
+                                      .eq('campaign_id', campaign.id);
+                                    
+                                    setCampaignForm({
+                                      name: `${fullCampaign.name} (Copy)`,
+                                      email_account_id: fullCampaign.email_account_id || '',
+                                      subject: fullCampaign.subject || '',
+                                      body: fullCampaign.body || '',
+                                      html_content: fullCampaign.html_content || ''
+                                    });
+                                    setRecipients(recipientsData || []);
+                                    setCampaignStep(1); // Start from beginning
+                                    setCampaignWizardOpen(true);
+                                    
+                                    toast({ title: "Campaign Duplicated", description: "Create a new campaign based on this one" });
+                                  } catch (err: any) {
+                                    toast({ title: "Error", description: err.message, variant: "destructive" });
+                                  }
+                                }} title="Edit as copy">
+                                  <Edit className="h-4 w-4" />
+                                </Button>
+                                <Button size="sm" variant="secondary" onClick={async () => {
+                                  // Resend campaign - duplicate and immediately open send dialog
+                                  if (!confirm('Resend this campaign to all recipients?')) return;
+                                  try {
+                                    const { data: fullCampaign, error } = await supabase
+                                      .from('email_campaigns')
+                                      .select('*')
+                                      .eq('id', campaign.id)
+                                      .single();
+                                    
+                                    if (error) throw error;
+                                    
+                                    // Load recipients
+                                    const { data: recipientsData } = await supabase
+                                      .from('campaign_recipients')
+                                      .select('email, name')
+                                      .eq('campaign_id', campaign.id);
+                                    
+                                    // Create a new campaign as copy
+                                    const { data: newCampaign, error: createError } = await supabase
+                                      .from('email_campaigns')
+                                      .insert({
+                                        name: `${fullCampaign.name} (Resend)`,
+                                        email_account_id: fullCampaign.email_account_id,
+                                        subject: fullCampaign.subject,
+                                        body: fullCampaign.body,
+                                        html_content: fullCampaign.html_content,
+                                        status: 'draft',
+                                        total_recipients: recipientsData?.length || 0
+                                      })
+                                      .select()
+                                      .single();
+                                    
+                                    if (createError) throw createError;
+                                    
+                                    // Add recipients to new campaign
+                                    if (recipientsData && recipientsData.length > 0) {
+                                      await supabase
+                                        .from('campaign_recipients')
+                                        .insert(recipientsData.map(r => ({
+                                          campaign_id: newCampaign.id,
+                                          email: r.email,
+                                          name: r.name,
+                                          status: 'pending'
+                                        })));
+                                    }
+                                    
+                                    // Send the new campaign
+                                    await sendCampaign(newCampaign.id);
+                                    
+                                    toast({ title: "Campaign Resent", description: "A new campaign has been created and sent" });
+                                    loadData();
+                                  } catch (err: any) {
+                                    toast({ title: "Error", description: err.message, variant: "destructive" });
+                                  }
+                                }}>
+                                  <RefreshCw className="h-4 w-4 mr-1" /> Resend
+                                </Button>
+                              </>
+                            )}
                             <Button size="sm" variant="outline" onClick={() => viewCampaignRecipients(campaign)}>
                               <Eye className="h-4 w-4 mr-1" /> Recipients
                             </Button>

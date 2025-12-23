@@ -12,6 +12,33 @@ const logStep = (step: string, details?: any) => {
   console.log(`[VERIFY-SESSION] ${step}${detailsStr}`);
 };
 
+// Get Stripe config based on mode from database
+async function getStripeConfig(supabaseClient: any) {
+  const { data: configData } = await supabaseClient
+    .from('stripe_configuration')
+    .select('stripe_mode')
+    .single();
+
+  const mode = configData?.stripe_mode === 'live' ? 'live' : 'test';
+  
+  let secretKey = mode === 'live' 
+    ? Deno.env.get("STRIPE_SECRET_KEY_LIVE")
+    : Deno.env.get("STRIPE_SECRET_KEY_TEST");
+
+  // Fallback to legacy key
+  if (!secretKey) {
+    secretKey = Deno.env.get("STRIPE_SECRET_KEY");
+    logStep(`Using legacy STRIPE_SECRET_KEY (mode: ${mode})`);
+  }
+
+  if (!secretKey) {
+    throw new Error(`Stripe secret key not configured for ${mode} mode`);
+  }
+
+  logStep(`Using Stripe ${mode.toUpperCase()} mode`);
+  return { secretKey, mode };
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -20,19 +47,24 @@ serve(async (req) => {
   try {
     logStep("Function started");
 
-    const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
-    if (!stripeKey) {
-      throw new Error("Stripe configuration error");
-    }
+    // Create Supabase client with service role for database updates
+    const supabaseClient = createClient(
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
+      { auth: { persistSession: false } }
+    );
+
+    // Get Stripe config based on mode
+    const { secretKey, mode } = await getStripeConfig(supabaseClient);
 
     const { session_id } = await req.json();
     if (!session_id) {
       throw new Error("Session ID is required");
     }
 
-    logStep("Verifying session", { session_id });
+    logStep("Verifying session", { session_id, mode });
 
-    const stripe = new Stripe(stripeKey, { apiVersion: "2023-10-16" });
+    const stripe = new Stripe(secretKey, { apiVersion: "2023-10-16" });
     
     // Retrieve the checkout session
     const session = await stripe.checkout.sessions.retrieve(session_id, {
@@ -46,15 +78,9 @@ serve(async (req) => {
     logStep("Session verified", { 
       customer_id: session.customer,
       subscription_id: session.subscription?.id,
-      payment_status: session.payment_status
+      payment_status: session.payment_status,
+      mode
     });
-
-    // Create Supabase client with service role for database updates
-    const supabaseClient = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
-      { auth: { persistSession: false } }
-    );
 
     // Get subscription details if it exists
     let subscriptionDetails = null;
@@ -116,11 +142,11 @@ serve(async (req) => {
           }
         }
 
-        // 🔧 FIX: Check if subscription is in trial period
+        // Check if subscription is in trial period
         const isInTrial = subscription.status === 'trialing' || 
                          (subscription.trial_end && new Date(subscription.trial_end * 1000) > new Date());
         
-        // 🔧 FIX: Set trial dates correctly
+        // Set trial dates correctly
         const trialEndDate = subscription.trial_end ? 
           new Date(subscription.trial_end * 1000).toISOString() : 
           null;
@@ -146,7 +172,6 @@ serve(async (req) => {
           user_seats: userSeats,
           api_access: apiAccess,
           real_time_analytics: realTimeAnalytics,
-          // 🔧 FIX: Set trial status correctly
           is_trial_active: isInTrial,
           trial_used: !isInTrial,
           trial_end_date: trialEndDate,
@@ -176,7 +201,8 @@ serve(async (req) => {
         customer_email: session.customer_details?.email,
         payment_status: session.payment_status,
         subscription: subscriptionDetails,
-        metadata: metadata
+        metadata: metadata,
+        stripe_mode: mode
       }
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

@@ -9,8 +9,7 @@ import {
   CheckCircle, 
   AlertCircle, 
   FileText, 
-  Mail, 
-  Phone,
+  Mail,
   Loader2,
   ArrowLeft,
   RefreshCw
@@ -292,10 +291,6 @@ const BrokerVerificationWaiting = () => {
                 <Button variant="outline" size="sm" onClick={handleContactSupport}>
                   <Mail className="mr-2 h-4 w-4" />
                   Email Support
-                </Button>
-                <Button variant="outline" size="sm" onClick={() => window.open('tel:+1234567890')}>
-                  <Phone className="mr-2 h-4 w-4" />
-                  Call Support
                 </Button>
               </div>
             </div>

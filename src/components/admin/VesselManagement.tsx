@@ -718,24 +718,24 @@ const VesselManagement = ({ vesselIdToEdit, onVesselEditComplete }: VesselManage
     }
   };
 
-  // Bulk auto-fill all vessels
+  // Bulk auto-fill all vessels using AI search (same as individual AI autofill)
   const handleBulkAutofill = async () => {
-    // Filter vessels that have required fields (name and imo)
-    const eligibleVessels = vessels.filter(v => v.name?.trim() && v.imo?.trim());
+    // Filter vessels that have required fields (name, imo, and mmsi)
+    const eligibleVessels = vessels.filter(v => v.name?.trim() && v.imo?.trim() && v.mmsi?.trim());
     const skippedCount = vessels.length - eligibleVessels.length;
     
     if (eligibleVessels.length === 0) {
       toast({
         title: "No Eligible Vessels",
-        description: "All vessels are missing Name or IMO. Please add these fields first.",
+        description: "All vessels are missing Name, IMO, or MMSI. Please add these fields first for AI search.",
         variant: "destructive"
       });
       return;
     }
     
     const confirmMessage = skippedCount > 0 
-      ? `Auto-fill ${eligibleVessels.length} vessels? (${skippedCount} will be skipped - missing Name/IMO)`
-      : `Auto-fill ALL ${eligibleVessels.length} vessels? This may take several minutes.`;
+      ? `AI Auto-fill ${eligibleVessels.length} vessels? (${skippedCount} will be skipped - missing Name/IMO/MMSI)`
+      : `AI Auto-fill ALL ${eligibleVessels.length} vessels? This may take several minutes.`;
     
     if (!confirm(confirmMessage)) {
       return;
@@ -753,33 +753,67 @@ const VesselManagement = ({ vesselIdToEdit, onVesselEditComplete }: VesselManage
       setBulkProgress(prev => ({ ...prev, current: i + 1 }));
 
       try {
-        const { data, error } = await supabase.functions.invoke('autofill-vessel-data', {
-          body: { vesselId: vessel.id }
+        // Use AI vessel search (same as individual AI autofill)
+        const { data, error } = await supabase.functions.invoke('ai-vessel-search', {
+          body: { 
+            imo: vessel.imo,
+            mmsi: vessel.mmsi,
+            vesselName: vessel.name
+          }
         });
 
-        if (error || !data?.success) {
-          failedCount++;
-          console.error(`Failed to autofill vessel ${vessel.id}:`, error || data?.error);
-        } else {
+        if (error) throw error;
+
+        if (data.success && data.vesselData) {
+          // Protect key fields that should not be overwritten
+          const protectedFields = {
+            id: vessel.id,
+            name: vessel.name,
+            imo: vessel.imo,
+            mmsi: vessel.mmsi
+          };
+          
+          // Update vessel in database with AI data
+          const updateData = {
+            ...data.vesselData,
+            ...protectedFields,
+            ai_autofill_source: 'AIS'
+          };
+          
+          // Remove undefined/null fields that shouldn't overwrite existing data
+          Object.keys(updateData).forEach(key => {
+            if (updateData[key] === undefined) {
+              delete updateData[key];
+            }
+          });
+
+          const { error: updateError } = await supabase
+            .from('vessels')
+            .update(updateData)
+            .eq('id', vessel.id);
+
+          if (updateError) throw updateError;
           successCount++;
+        } else {
+          throw new Error(data.error || 'Failed to fetch vessel data');
         }
       } catch (error) {
         failedCount++;
-        console.error(`Error autofilling vessel ${vessel.id}:`, error);
+        console.error(`Error AI autofilling vessel ${vessel.id}:`, error);
       }
 
       setBulkProgress(prev => ({ ...prev, success: successCount, failed: failedCount }));
 
       // Small delay to avoid rate limiting
-      await new Promise(resolve => setTimeout(resolve, 500));
+      await new Promise(resolve => setTimeout(resolve, 800));
     }
 
     setIsBulkAutoFilling(false);
     await fetchVessels();
 
-    const skippedMsg = skippedCount > 0 ? ` Skipped ${skippedCount} (missing Name/IMO).` : '';
+    const skippedMsg = skippedCount > 0 ? ` Skipped ${skippedCount} (missing Name/IMO/MMSI).` : '';
     toast({
-      title: "Bulk Auto-Fill Complete",
+      title: "Bulk AI Auto-Fill Complete",
       description: `Successfully updated ${successCount} vessels. Failed: ${failedCount}.${skippedMsg}`,
       variant: failedCount > 0 ? "destructive" : "default"
     });

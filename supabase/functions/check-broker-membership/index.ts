@@ -12,6 +12,33 @@ const logStep = (step: string, details?: any) => {
   console.log(`[CHECK-BROKER-MEMBERSHIP] ${step}${detailsStr}`);
 };
 
+// Get Stripe config based on mode from database
+async function getStripeConfig(supabaseClient: any) {
+  const { data: configData } = await supabaseClient
+    .from('stripe_configuration')
+    .select('stripe_mode')
+    .single();
+
+  const mode = configData?.stripe_mode === 'live' ? 'live' : 'test';
+  
+  let secretKey = mode === 'live' 
+    ? Deno.env.get("STRIPE_SECRET_KEY_LIVE")
+    : Deno.env.get("STRIPE_SECRET_KEY_TEST");
+
+  // Fallback to legacy key
+  if (!secretKey) {
+    secretKey = Deno.env.get("STRIPE_SECRET_KEY");
+    logStep(`Using legacy STRIPE_SECRET_KEY (mode: ${mode})`);
+  }
+
+  if (!secretKey) {
+    throw new Error(`Stripe secret key not configured for ${mode} mode`);
+  }
+
+  logStep(`Using Stripe ${mode.toUpperCase()} mode`);
+  return { secretKey, mode };
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -26,8 +53,8 @@ serve(async (req) => {
   try {
     logStep("Function started");
 
-    const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
-    if (!stripeKey) throw new Error("STRIPE_SECRET_KEY is not set");
+    // Get Stripe config based on mode
+    const { secretKey, mode } = await getStripeConfig(supabaseClient);
 
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) throw new Error("No authorization header provided");
@@ -37,9 +64,9 @@ serve(async (req) => {
     if (userError) throw new Error(`Authentication error: ${userError.message}`);
     const user = userData.user;
     if (!user?.email) throw new Error("User not authenticated or email not available");
-    logStep("User authenticated", { userId: user.id, email: user.email });
+    logStep("User authenticated", { userId: user.id, email: user.email, mode });
 
-    const stripe = new Stripe(stripeKey, { apiVersion: "2023-10-16" });
+    const stripe = new Stripe(secretKey, { apiVersion: "2023-10-16" });
 
     // FIRST: Check if user has broker subscription activated in subscribers table (admin manual activation)
     const { data: subscriberData } = await supabaseClient

@@ -13,6 +13,33 @@ const logStep = (step: string, details?: any) => {
   console.log(`[CREATE-CHECKOUT] ${step}${detailsStr}`);
 };
 
+// Get Stripe config based on mode from database
+async function getStripeConfig(supabaseClient: any) {
+  const { data: configData } = await supabaseClient
+    .from('stripe_configuration')
+    .select('stripe_mode')
+    .single();
+
+  const mode = configData?.stripe_mode === 'live' ? 'live' : 'test';
+  
+  let secretKey = mode === 'live' 
+    ? Deno.env.get("STRIPE_SECRET_KEY_LIVE")
+    : Deno.env.get("STRIPE_SECRET_KEY_TEST");
+
+  // Fallback to legacy key
+  if (!secretKey) {
+    secretKey = Deno.env.get("STRIPE_SECRET_KEY");
+    logStep(`Using legacy STRIPE_SECRET_KEY (mode: ${mode})`);
+  }
+
+  if (!secretKey) {
+    throw new Error(`Stripe secret key not configured for ${mode} mode`);
+  }
+
+  logStep(`Using Stripe ${mode.toUpperCase()} mode`);
+  return { secretKey, mode };
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -68,20 +95,23 @@ serve(async (req) => {
       throw new Error("User email required for checkout");
     }
 
-
     const { tier, billing_cycle = 'monthly', payment_type = 'subscribe_now', trial_days = 0 } = requestBody;
     if (!tier) {
       throw new Error("Subscription tier is required");
     }
-    
-    const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
-    if (!stripeKey) {
-      logStep("Stripe secret key missing");
-      throw new Error("Stripe configuration error - please contact support");
-    }
-    logStep("Stripe key found");
 
-    const stripe = new Stripe(stripeKey, { apiVersion: "2023-10-16" });
+    // Create service role client for database operations
+    const supabaseService = createClient(
+      Deno.env.get("SUPABASE_URL") ?? "",
+      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
+      { auth: { persistSession: false } }
+    );
+
+    // Get Stripe config based on mode
+    const { secretKey, mode } = await getStripeConfig(supabaseService);
+    logStep("Stripe key found", { mode });
+
+    const stripe = new Stripe(secretKey, { apiVersion: "2023-10-16" });
     
     // Check for existing Stripe customer
     const customers = await stripe.customers.list({ email: userEmail, limit: 1 });
@@ -92,13 +122,6 @@ serve(async (req) => {
     } else {
       logStep("No existing customer found, will create during checkout");
     }
-
-    // Check for active discounts for this plan tier
-    const supabaseService = createClient(
-      Deno.env.get("SUPABASE_URL") ?? "",
-      Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
-      { auth: { persistSession: false } }
-    );
 
     let discountPercentage = 0;
     try {
@@ -174,7 +197,6 @@ serve(async (req) => {
       }
     } catch (planError) {
       logStep("Error fetching plan pricing, using fallback", { error: planError instanceof Error ? planError.message : 'Plan error' });
-      // Keep the fallback pricing already set above
     }
 
     // Apply annual discount (2 months free = ~17% discount)
@@ -217,7 +239,7 @@ serve(async (req) => {
     logStep("Final pricing", { unitAmount, interval, discountPercentage });
 
     const origin = req.headers.get("origin") || "https://preview--aivessel-trade-flow.lovable.app";
-    logStep("Creating Stripe session", { origin });
+    logStep("Creating Stripe session", { origin, mode });
 
     // Configure subscription options based on payment type
     const subscriptionData: any = {
@@ -230,7 +252,7 @@ serve(async (req) => {
             product_data: { 
               name: productName,
               description: `PetroDealHub ${tier.charAt(0).toUpperCase() + tier.slice(1)} Subscription with 5-day free trial`,
-              images: [`${origin}/lovable-uploads/92162cb9-ec10-41e2-bb64-5e35030478d1.png`] // Company logo
+              images: [`${origin}/lovable-uploads/92162cb9-ec10-41e2-bb64-5e35030478d1.png`]
             },
             unit_amount: unitAmount,
             recurring: { interval },
@@ -241,7 +263,6 @@ serve(async (req) => {
       mode: "subscription",
       success_url: `${origin}/payment-success?session_id={CHECKOUT_SESSION_ID}&success=true`,
       cancel_url: `${origin}/auth?mode=signup&cancelled=true`,
-      // Enable promo codes
       allow_promotion_codes: true,
       billing_address_collection: 'auto',
       metadata: {
@@ -250,9 +271,9 @@ serve(async (req) => {
         discount_applied: discountPercentage.toString(),
         user_id: user?.id || 'registration_pending',
         email: userEmail,
-        payment_type: payment_type
+        payment_type: payment_type,
+        stripe_mode: mode
       },
-      // دائماً إضافة فترة تجربة 5 أيام
       subscription_data: {
         trial_period_days: 5,
         metadata: {
@@ -265,7 +286,7 @@ serve(async (req) => {
 
     const session = await stripe.checkout.sessions.create(subscriptionData);
 
-    logStep("Stripe session created successfully", { sessionId: session.id, url: session.url });
+    logStep("Stripe session created successfully", { sessionId: session.id, url: session.url, mode });
 
     return new Response(JSON.stringify({ url: session.url }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

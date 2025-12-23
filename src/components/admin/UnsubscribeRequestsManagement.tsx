@@ -59,69 +59,58 @@ const UnsubscribeRequestsManagement: React.FC = () => {
   const fetchRequests = async () => {
     setLoading(true);
     try {
+      // Fetch unsubscribe requests
       const { data, error } = await db
         .from('unsubscribe_requests')
         .select('*')
         .order('requested_at', { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching unsubscribe_requests:', error);
+        throw error;
+      }
 
-      // Fetch subscriber info for each request - try multiple methods
-      const requestsWithInfo = await Promise.all(
-        (data || []).map(async (req) => {
-          let subData = null;
-          let email = null;
-          
-          // Method 1: Try by user_id in subscribers table
-          if (req.user_id) {
-            const { data: byUserId } = await db
-              .from('subscribers')
-              .select('email, subscription_tier')
-              .eq('user_id', req.user_id)
-              .maybeSingle();
-            subData = byUserId;
-          }
-          
-          // Method 2: If not found by user_id, try by subscriber_id
-          if (!subData && req.subscriber_id) {
-            const { data: bySubId } = await db
-              .from('subscribers')
-              .select('email, subscription_tier')
-              .eq('id', req.subscriber_id)
-              .maybeSingle();
-            subData = bySubId;
-          }
-          
-          // Method 3: If still not found, try to get email from auth.users via profiles or direct lookup
-          if (!subData && req.user_id) {
-            // Try profiles table which may have email
-            const { data: profileData } = await db
-              .from('profiles')
-              .select('email')
-              .eq('id', req.user_id)
-              .maybeSingle();
-            
-            if (profileData?.email) {
-              email = profileData.email;
-            }
-          }
-          
-          // If we still don't have an email but have subscriber data without email
-          if (!subData && !email && req.user_id) {
-            // Use a formatted user ID as fallback display
-            email = `User: ${req.user_id.substring(0, 8)}...`;
-          }
-          
-          return {
-            ...req,
-            subscriber: subData || { 
-              email: email || subData?.email || 'Unknown User', 
-              subscription_tier: subData?.subscription_tier || null 
-            }
-          };
-        })
-      );
+      console.log('Fetched unsubscribe requests:', data?.length || 0);
 
+      // Fetch all unique user_ids and subscriber_ids from requests
+      const userIds = [...new Set((data || []).map(r => r.user_id).filter(Boolean))];
+      
+      // Batch fetch subscribers by user_id
+      let subscribersMap: Record<string, { email: string; subscription_tier: string | null }> = {};
+      
+      if (userIds.length > 0) {
+        const { data: subscribersData, error: subError } = await db
+          .from('subscribers')
+          .select('user_id, email, subscription_tier')
+          .in('user_id', userIds);
+        
+        if (!subError && subscribersData) {
+          subscribersData.forEach((sub: any) => {
+            if (sub.user_id) {
+              subscribersMap[sub.user_id] = {
+                email: sub.email || 'Unknown',
+                subscription_tier: sub.subscription_tier
+              };
+            }
+          });
+        }
+        console.log('Subscribers found:', Object.keys(subscribersMap).length);
+      }
+
+      // Map requests with subscriber info
+      const requestsWithInfo = (data || []).map(req => {
+        const subscriber = req.user_id ? subscribersMap[req.user_id] : null;
+        
+        return {
+          ...req,
+          subscriber: subscriber || { 
+            email: req.user_id ? `User: ${req.user_id.substring(0, 8)}...` : 'Unknown User', 
+            subscription_tier: null 
+          }
+        };
+      });
+
+      console.log('Processed requests:', requestsWithInfo.length);
       setRequests(requestsWithInfo);
     } catch (error) {
       console.error('Error fetching requests:', error);

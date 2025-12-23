@@ -13,6 +13,33 @@ const logStep = (step: string, details?: any) => {
   console.log(`[CUSTOMER-PORTAL] ${step}${detailsStr}`);
 };
 
+// Get Stripe config based on mode from database
+async function getStripeConfig(supabaseClient: any) {
+  const { data: configData } = await supabaseClient
+    .from('stripe_configuration')
+    .select('stripe_mode')
+    .single();
+
+  const mode = configData?.stripe_mode === 'live' ? 'live' : 'test';
+  
+  let secretKey = mode === 'live' 
+    ? Deno.env.get("STRIPE_SECRET_KEY_LIVE")
+    : Deno.env.get("STRIPE_SECRET_KEY_TEST");
+
+  // Fallback to legacy key
+  if (!secretKey) {
+    secretKey = Deno.env.get("STRIPE_SECRET_KEY");
+    logStep(`Using legacy STRIPE_SECRET_KEY (mode: ${mode})`);
+  }
+
+  if (!secretKey) {
+    throw new Error(`Stripe secret key not configured for ${mode} mode`);
+  }
+
+  logStep(`Using Stripe ${mode.toUpperCase()} mode`);
+  return { secretKey, mode };
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -20,10 +47,6 @@ serve(async (req) => {
 
   try {
     logStep("Function started");
-
-    const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
-    if (!stripeKey) throw new Error("STRIPE_SECRET_KEY is not set");
-    logStep("Stripe key verified");
 
     // Initialize Supabase client with the anon key for auth verification
     const supabaseClient = createClient(
@@ -42,14 +65,18 @@ serve(async (req) => {
     if (!user?.email) throw new Error("User not authenticated or email not available");
     logStep("User authenticated", { userId: user.id, email: user.email });
 
-    const stripe = new Stripe(stripeKey, { apiVersion: "2023-10-16" });
-    
-    // First, check subscribers table for stripe_customer_id
+    // Create admin client for database operations
     const supabaseAdmin = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
     );
+
+    // Get Stripe config based on mode
+    const { secretKey, mode } = await getStripeConfig(supabaseAdmin);
+
+    const stripe = new Stripe(secretKey, { apiVersion: "2023-10-16" });
     
+    // First, check subscribers table for stripe_customer_id
     const { data: subscriber } = await supabaseAdmin
       .from("subscribers")
       .select("stripe_customer_id")
@@ -57,7 +84,7 @@ serve(async (req) => {
       .maybeSingle();
     
     let customerId = subscriber?.stripe_customer_id;
-    logStep("Checked subscribers table", { hasCustomerId: !!customerId });
+    logStep("Checked subscribers table", { hasCustomerId: !!customerId, mode });
     
     // Verify the customer exists in Stripe
     if (customerId) {
@@ -102,7 +129,7 @@ serve(async (req) => {
       customer: customerId,
       return_url: `${origin}/subscription`,
     });
-    logStep("Customer portal session created", { sessionId: portalSession.id, url: portalSession.url });
+    logStep("Customer portal session created", { sessionId: portalSession.id, url: portalSession.url, mode });
 
     return new Response(JSON.stringify({ url: portalSession.url }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },

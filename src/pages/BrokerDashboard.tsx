@@ -27,6 +27,8 @@ import LoadingFallback from '@/components/LoadingFallback';
 import CreateDealForm from '@/components/broker/CreateDealForm';
 import DealSteps from '@/components/broker/DealSteps';
 import EditProfileForm from '@/components/broker/EditProfileForm';
+import CompanyContacts from '@/components/broker/CompanyContacts';
+import IMFPAAgreement from '@/components/broker/IMFPAAgreement';
 import { useToast } from '@/hooks/use-toast';
 
 interface BrokerProfile {
@@ -399,11 +401,13 @@ const BrokerDashboard = () => {
 
       {/* Main Content */}
       <Tabs defaultValue="deals" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="deals">My Deals</TabsTrigger>
-          <TabsTrigger value="profile">Profile</TabsTrigger>
-          <TabsTrigger value="messages">Messages</TabsTrigger>
-          <TabsTrigger value="analytics">Analytics</TabsTrigger>
+        <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 md:grid-cols-6 h-auto gap-1">
+          <TabsTrigger value="deals" className="text-xs sm:text-sm">My Deals</TabsTrigger>
+          <TabsTrigger value="imfpa" className="text-xs sm:text-sm">IMFPA</TabsTrigger>
+          <TabsTrigger value="contacts" className="text-xs sm:text-sm">Companies</TabsTrigger>
+          <TabsTrigger value="profile" className="text-xs sm:text-sm">Profile</TabsTrigger>
+          <TabsTrigger value="messages" className="text-xs sm:text-sm">Messages</TabsTrigger>
+          <TabsTrigger value="analytics" className="text-xs sm:text-sm">Analytics</TabsTrigger>
         </TabsList>
 
         <TabsContent value="deals" className="space-y-6">
@@ -495,6 +499,40 @@ const BrokerDashboard = () => {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="imfpa" className="space-y-6">
+          {deals.length === 0 ? (
+            <Card>
+              <CardContent className="text-center py-12">
+                <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                <p className="text-muted-foreground">No deals to create IMFPA for. Create a deal first.</p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-4">
+              <p className="text-sm text-muted-foreground">Select a deal to view/create its IMFPA agreement:</p>
+              {deals.map((deal, index) => (
+                <Card key={deal.id} className="cursor-pointer hover:shadow-md" onClick={() => setSelectedDeal(deal.id)}>
+                  <CardContent className="p-4 flex items-center justify-between">
+                    <span>Deal #{deals.length - index} - {deal.cargo_type || deal.deal_type}</span>
+                    <Badge variant="outline">{deal.status}</Badge>
+                  </CardContent>
+                </Card>
+              ))}
+              {selectedDeal && deals.find(d => d.id === selectedDeal) && (
+                <IMFPAAgreement 
+                  dealId={selectedDeal}
+                  dealInfo={deals.find(d => d.id === selectedDeal)!}
+                  brokerProfile={{ full_name: profile.full_name, company_name: profile.company_name, country: profile.country }}
+                />
+              )}
+            </div>
+          )}
+        </TabsContent>
+
+        <TabsContent value="contacts" className="space-y-6">
+          <CompanyContacts />
         </TabsContent>
 
         <TabsContent value="profile" className="space-y-6">

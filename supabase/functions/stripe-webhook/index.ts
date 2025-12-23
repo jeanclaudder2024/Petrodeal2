@@ -12,6 +12,42 @@ const logStep = (step: string, details?: any) => {
   console.log(`[STRIPE-WEBHOOK] ${step}${detailsStr}`);
 };
 
+// Get Stripe config based on mode from database
+async function getStripeConfig(supabaseClient: any) {
+  const { data: configData } = await supabaseClient
+    .from('stripe_configuration')
+    .select('stripe_mode')
+    .single();
+
+  const mode = configData?.stripe_mode === 'live' ? 'live' : 'test';
+  
+  let secretKey = mode === 'live' 
+    ? Deno.env.get("STRIPE_SECRET_KEY_LIVE")
+    : Deno.env.get("STRIPE_SECRET_KEY_TEST");
+
+  let webhookSecret = mode === 'live'
+    ? Deno.env.get("STRIPE_WEBHOOK_SECRET_LIVE")
+    : Deno.env.get("STRIPE_WEBHOOK_SECRET_TEST");
+
+  // Fallback to legacy keys
+  if (!secretKey) {
+    secretKey = Deno.env.get("STRIPE_SECRET_KEY");
+    logStep(`Using legacy STRIPE_SECRET_KEY (mode: ${mode})`);
+  }
+
+  if (!webhookSecret) {
+    webhookSecret = Deno.env.get("STRIPE_WEBHOOK_SECRET");
+    logStep(`Using legacy STRIPE_WEBHOOK_SECRET (mode: ${mode})`);
+  }
+
+  if (!secretKey) {
+    throw new Error(`Stripe secret key not configured for ${mode} mode`);
+  }
+
+  logStep(`Using Stripe ${mode.toUpperCase()} mode`);
+  return { secretKey, webhookSecret, mode };
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -20,21 +56,17 @@ serve(async (req) => {
   try {
     logStep("Webhook received");
 
-    const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
-    const webhookSecret = Deno.env.get("STRIPE_WEBHOOK_SECRET");
-    
-    if (!stripeKey) {
-      throw new Error("Stripe secret key not configured");
-    }
-
-    const stripe = new Stripe(stripeKey, { apiVersion: "2023-10-16" });
-    
     // Create Supabase client with service role
     const supabaseClient = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
       { auth: { persistSession: false } }
     );
+
+    // Get Stripe config based on mode
+    const { secretKey, webhookSecret, mode } = await getStripeConfig(supabaseClient);
+
+    const stripe = new Stripe(secretKey, { apiVersion: "2023-10-16" });
 
     const body = await req.text();
     const signature = req.headers.get("stripe-signature");
@@ -54,13 +86,13 @@ serve(async (req) => {
 
     try {
       event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
-      logStep("Webhook signature verified");
+      logStep("Webhook signature verified", { mode });
     } catch (err) {
       logStep("Webhook signature verification failed", { error: err instanceof Error ? err.message : 'Signature error' });
       return new Response("Webhook signature verification failed", { status: 400 });
     }
 
-    logStep("Processing event", { type: event.type, id: event.id });
+    logStep("Processing event", { type: event.type, id: event.id, mode });
 
     // Handle the event
     switch (event.type) {
@@ -230,6 +262,27 @@ async function updateSubscriberFromStripe(
   stripe: Stripe
 ) {
   try {
+    // CRITICAL: Get user_id from auth.users by email
+    const { data: authUser, error: authError } = await supabaseClient
+      .from('auth.users')
+      .select('id')
+      .eq('email', customerEmail)
+      .single();
+
+    // Alternative: Use auth API to find user
+    let userId = authUser?.id;
+    if (!userId) {
+      // Try using RPC to get user id
+      const { data: userData } = await supabaseClient.rpc('get_user_id_by_email', { 
+        user_email: customerEmail 
+      });
+      userId = userData;
+      
+      if (!userId) {
+        logStep("No user found for email, will create subscriber without user_id initially", { email: customerEmail });
+      }
+    }
+
     // Get price information to determine tier
     const price = await stripe.prices.retrieve(subscription.items.data[0].price.id);
     const amount = price.unit_amount || 0;
@@ -260,17 +313,20 @@ async function updateSubscriberFromStripe(
     const subscriptionStatus = subscription.status === 'active' || subscription.status === 'trialing' ? 'active' : subscription.status;
     const isActive = subscriptionStatus === 'active';
     
-    // 🔧 FIX: Check if subscription is in trial period
     const isInTrial = subscription.status === 'trialing' || 
                      (subscription.trial_end && new Date(subscription.trial_end * 1000) > new Date());
     
-    // 🔧 FIX: Set trial dates correctly
     const trialEndDate = subscription.trial_end ? 
       new Date(subscription.trial_end * 1000).toISOString() : 
       null;
 
+    const trialStartDate = subscription.trial_start ?
+      new Date(subscription.trial_start * 1000).toISOString() :
+      (isInTrial ? new Date().toISOString() : null);
+
     logStep("Updating subscriber from Stripe", { 
       email: customerEmail,
+      userId: userId,
       tier: subscriptionTier,
       status: subscriptionStatus,
       subscriptionId: subscription.id,
@@ -278,7 +334,8 @@ async function updateSubscriberFromStripe(
       trialEndDate: trialEndDate
     });
 
-    const { error } = await supabaseClient.from("subscribers").upsert({
+    // Build subscriber data - ALWAYS include user_id if available
+    const subscriberData: any = {
       email: customerEmail,
       stripe_customer_id: subscription.customer,
       stripe_subscription_id: subscription.id,
@@ -297,19 +354,35 @@ async function updateSubscriberFromStripe(
       user_seats: userSeats,
       api_access: apiAccess,
       real_time_analytics: realTimeAnalytics,
-      // 🔧 FIX: Set trial status correctly based on actual trial state
       is_trial_active: isInTrial,
       trial_used: !isInTrial,
+      trial_start_date: trialStartDate,
       trial_end_date: trialEndDate,
       unified_trial_end_date: trialEndDate,
+      is_locked: false,
+      locked_at: null,
+      locked_reason: null,
+      preview_access: true,
+      trial_with_subscription: true,
       updated_at: new Date().toISOString(),
-    }, { onConflict: 'email' });
+    };
+
+    // Include user_id if we found it
+    if (userId) {
+      subscriberData.user_id = userId;
+    }
+
+    const { error } = await supabaseClient.from("subscribers").upsert(
+      subscriberData, 
+      { onConflict: 'email' }
+    );
 
     if (error) {
       logStep("Error updating subscriber from webhook", { error: error.message });
     } else {
       logStep("Successfully updated subscriber from webhook", { 
         email: customerEmail,
+        userId: userId,
         tier: subscriptionTier,
         status: subscriptionStatus,
         isInTrial: isInTrial

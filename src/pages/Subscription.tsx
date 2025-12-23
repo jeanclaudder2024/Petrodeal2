@@ -344,12 +344,23 @@ const Subscription = () => {
         </div>
       )}
 
-      {/* Cancel Subscription Section - Moved to end */}
+      {/* Cancel Subscription Section - for subscribed users */}
       {user && subscriptionData?.subscribed && (
         <div className="mt-12">
           <UnsubscribeRequest 
             subscriptionEndDate={subscriptionData.subscription_end}
             isTrialActive={accessType === 'trial'}
+          />
+        </div>
+      )}
+
+      {/* Unsubscribe from Free Trial - for trial users */}
+      {user && !subscriptionData?.subscribed && accessType === 'trial' && (
+        <div className="mt-12">
+          <UnsubscribeRequest 
+            subscriptionEndDate={null}
+            isTrialActive={true}
+            showForTrial={true}
           />
         </div>
       )}

@@ -15,6 +15,7 @@ import { format } from 'date-fns';
 interface UnsubscribeRequestProps {
   subscriptionEndDate?: string | null;
   isTrialActive?: boolean;
+  showForTrial?: boolean;
 }
 
 interface ExistingRequest {
@@ -27,7 +28,8 @@ interface ExistingRequest {
 
 const UnsubscribeRequest: React.FC<UnsubscribeRequestProps> = ({
   subscriptionEndDate,
-  isTrialActive = false
+  isTrialActive = false,
+  showForTrial = false
 }) => {
   const { user } = useAuth();
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -160,16 +162,22 @@ const UnsubscribeRequest: React.FC<UnsubscribeRequestProps> = ({
     );
   }
 
+  // Different UI for trial users
+  const cardTitle = showForTrial ? 'End Free Trial' : 'Cancel Subscription';
+  const cardDescription = showForTrial 
+    ? 'Request to end your free trial early. Requires admin approval.'
+    : 'Request to cancel your subscription. Requires admin approval.';
+
   return (
     <>
       <Card className="mt-6 border-destructive/20">
         <CardHeader className="pb-3">
           <CardTitle className="text-lg flex items-center gap-2">
             <AlertTriangle className="h-5 w-5 text-destructive" />
-            Cancel Subscription
+            {cardTitle}
           </CardTitle>
           <CardDescription>
-            Request to cancel your subscription. Requires admin approval.
+            {cardDescription}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -177,13 +185,20 @@ const UnsubscribeRequest: React.FC<UnsubscribeRequestProps> = ({
             <div className="p-3 bg-muted/50 rounded-lg text-sm">
               <p className="font-medium mb-2">Important Information:</p>
               <ul className="list-disc list-inside space-y-1 text-muted-foreground">
-                <li>Unsubscribe requests require admin approval</li>
-                <li>Your subscription will remain active until the current period ends</li>
-                {subscriptionEndDate && (
-                  <li>Current period ends: {format(new Date(subscriptionEndDate), 'MMMM dd, yyyy')}</li>
-                )}
-                {isTrialActive && (
-                  <li>Your free trial must complete before unsubscribing</li>
+                {showForTrial ? (
+                  <>
+                    <li>Ending your free trial requires admin approval</li>
+                    <li>Once approved, you will lose access to trial features</li>
+                    <li>You can re-subscribe to a paid plan at any time</li>
+                  </>
+                ) : (
+                  <>
+                    <li>Unsubscribe requests require admin approval</li>
+                    <li>Your subscription will remain active until the current period ends</li>
+                    {subscriptionEndDate && (
+                      <li>Current period ends: {format(new Date(subscriptionEndDate), 'MMMM dd, yyyy')}</li>
+                    )}
+                  </>
                 )}
               </ul>
             </div>
@@ -192,7 +207,7 @@ const UnsubscribeRequest: React.FC<UnsubscribeRequestProps> = ({
               className="w-full border-destructive/50 text-destructive hover:bg-destructive/10"
               onClick={() => setIsDialogOpen(true)}
             >
-              Request Unsubscribe
+              {showForTrial ? 'End Free Trial' : 'Request Unsubscribe'}
             </Button>
           </div>
         </CardContent>

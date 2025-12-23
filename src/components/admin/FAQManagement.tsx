@@ -224,23 +224,35 @@ const FAQManagement = () => {
   const syncFAQsFromSupport = async () => {
     setSyncing(true);
     try {
-      // Try to sync from support page content if available
+      // Default FAQs to import if none exist
+      const defaultFAQs = [
+        { question: 'What is PetroDealHub?', answer: 'PetroDealHub is a comprehensive oil trading platform that connects buyers, sellers, and brokers in the petroleum industry.', category: 'General' },
+        { question: 'How do I create an account?', answer: 'Click on the "Sign Up" button in the top navigation, fill in your details, and verify your email to get started.', category: 'Getting Started' },
+        { question: 'What subscription plans are available?', answer: 'We offer Basic, Professional, and Enterprise plans with various features tailored to different trading needs.', category: 'Subscription' },
+        { question: 'How do I track vessels?', answer: 'Navigate to the Vessels section in your dashboard to access real-time vessel tracking and AIS data.', category: 'Vessels' },
+        { question: 'How do I become a verified broker?', answer: 'Purchase a broker membership, complete your profile, and submit verification documents. Our team will review within 1-2 business days.', category: 'Verification' },
+        { question: 'Is my data secure?', answer: 'Yes, we use industry-standard encryption and security measures to protect your data. See our Privacy Policy for details.', category: 'Security' },
+        { question: 'How do I contact support?', answer: 'You can reach our support team via the Contact Us page, create a support ticket, or use our AI assistant for quick answers.', category: 'General' },
+        { question: 'What payment methods are accepted?', answer: 'We accept all major credit cards through our secure Stripe payment gateway.', category: 'Payment' },
+      ];
+
+      // First try to sync from support page content if available
       const { data: supportContent } = await db
         .from('cms_page_content')
         .select('content_sections')
         .eq('page_slug', 'support')
         .single();
 
+      let syncedCount = 0;
+      
       if (supportContent?.content_sections) {
         const sections = Array.isArray(supportContent.content_sections) ? supportContent.content_sections : [];
         const faqSections = sections.filter((s: any) => s.type === 'faq' || s.title?.toLowerCase().includes('faq'));
         
-        let syncedCount = 0;
         for (const section of faqSections) {
           if (section.items && Array.isArray(section.items)) {
             for (const item of section.items) {
               if (item.question && item.answer) {
-                // Check if FAQ already exists
                 const { data: existing } = await db
                   .from('support_faqs')
                   .select('id')
@@ -261,10 +273,37 @@ const FAQManagement = () => {
             }
           }
         }
+      }
+      
+      // If no FAQs synced and database is empty, populate with defaults
+      if (syncedCount === 0 && faqs.length === 0) {
+        for (let i = 0; i < defaultFAQs.length; i++) {
+          const faq = defaultFAQs[i];
+          const { data: existing } = await db
+            .from('support_faqs')
+            .select('id')
+            .eq('question', faq.question)
+            .maybeSingle();
+
+          if (!existing) {
+            await db.from('support_faqs').insert({
+              question: faq.question,
+              answer: faq.answer,
+              category: faq.category,
+              is_active: true,
+              sort_order: i
+            });
+            syncedCount++;
+          }
+        }
         
+        if (syncedCount > 0) {
+          toast.success(`Populated ${syncedCount} default FAQs`);
+        }
+      } else if (syncedCount > 0) {
         toast.success(`Synced ${syncedCount} FAQs from support page`);
       } else {
-        toast.info('No FAQ content found on support page to sync');
+        toast.info('No new FAQs to sync');
       }
       
       loadData();

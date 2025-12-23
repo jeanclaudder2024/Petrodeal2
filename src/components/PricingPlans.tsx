@@ -252,22 +252,48 @@ const PricingPlans: React.FC<PricingPlansProps> = ({
     }
   ];
 
+  // Helper function to get tier icon - defined outside useMemo for stability
+  const getTierIcon = useCallback((tier: string | null | undefined): React.ComponentType<any> => {
+    const normalizedTier = (tier || '').toLowerCase().trim();
+    console.log('Getting icon for tier:', tier, '-> normalized:', normalizedTier);
+    if (normalizedTier.includes('basic') || normalizedTier.includes('starter')) {
+      return Ship;
+    }
+    if (normalizedTier.includes('professional') || normalizedTier.includes('pro')) {
+      return Crown;
+    }
+    if (normalizedTier.includes('enterprise') || normalizedTier.includes('business')) {
+      return Zap;
+    }
+    // Default icon based on position if no match
+    return Ship;
+  }, []);
+
   const displayPlans = useMemo(() => {
+    console.log('DB Plans loaded:', dbPlans.length, dbPlans.map(p => ({ tier: p.plan_tier, name: p.plan_name })));
+    
     if (dbPlans.length > 0) {
-      return dbPlans.map(dbPlan => ({
-        tier: dbPlan.plan_tier || '',
-        name: dbPlan.plan_name || '',
-        subtitle: dbPlan.description || '',
-        monthlyPrice: dbPlan.monthly_price || 0,
-        annualPrice: dbPlan.annual_price || 0,
-        icon: dbPlan.plan_tier === 'enterprise' ? Zap : dbPlan.plan_tier === 'professional' ? Crown : Ship,
-        popular: dbPlan.is_popular || false,
-        features: (dbPlan.features || []).map(feature => ({ icon: Check, text: feature })),
-        highlight: `Perfect for ${dbPlan.plan_tier} level users.`
-      }));
+      return dbPlans.map((dbPlan, index) => {
+        const IconComponent = getTierIcon(dbPlan.plan_tier);
+        // Use index-based icon as fallback
+        const FallbackIcons = [Ship, Crown, Zap];
+        const FinalIcon = IconComponent || FallbackIcons[index % 3];
+        
+        return {
+          tier: dbPlan.plan_tier || '',
+          name: dbPlan.plan_name || '',
+          subtitle: dbPlan.description || '',
+          monthlyPrice: dbPlan.monthly_price || 0,
+          annualPrice: dbPlan.annual_price || 0,
+          icon: FinalIcon,
+          popular: dbPlan.is_popular || false,
+          features: (dbPlan.features || []).map(feature => ({ icon: Check, text: feature })),
+          highlight: `Perfect for ${dbPlan.plan_tier} level users.`
+        };
+      });
     }
     return staticPlans;
-  }, [dbPlans]);
+  }, [dbPlans, getTierIcon]);
 
   if (!displayPlans || displayPlans.length === 0) {
     return (

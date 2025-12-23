@@ -32,6 +32,7 @@ import {
 } from 'lucide-react';
 import DealStepTemplates from './DealStepTemplates';
 import BrokerPricingManagement from './BrokerPricingManagement';
+import IMFPAManagement from './IMFPAManagement';
 import { db, supabase } from '@/lib/supabase-helper';
 import { useToast } from '@/hooks/use-toast';
 
@@ -298,6 +299,17 @@ const BrokerManagement = () => {
     if (!selectedBroker || !chatMessage.trim()) return;
 
     try {
+      // Get the current admin user's ID
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast({
+          title: "Error",
+          description: "You must be logged in to send messages",
+          variant: "destructive"
+        });
+        return;
+      }
+
       const { error } = await supabase
         .from('broker_chat_messages')
         .insert({
@@ -305,7 +317,7 @@ const BrokerManagement = () => {
           deal_id: selectedDeal?.id,
           message: chatMessage,
           sender_type: 'admin',
-          sender_id: 'admin', // This would be the actual admin user ID in production
+          sender_id: user.id,
         });
 
       if (error) throw error;
@@ -314,6 +326,7 @@ const BrokerManagement = () => {
       toast({ title: "Success", description: "Message sent" });
       fetchData();
     } catch (error) {
+      console.error('Failed to send message:', error);
       toast({
         title: "Error",
         description: "Failed to send message",
@@ -369,6 +382,38 @@ const BrokerManagement = () => {
     }
   };
 
+  const handleDeleteDeal = async (dealId: string) => {
+    if (!confirm('Are you sure you want to delete this deal? This action cannot be undone.')) {
+      return;
+    }
+    
+    try {
+      // First delete associated deal steps
+      await supabase
+        .from('deal_steps')
+        .delete()
+        .eq('deal_id', dealId);
+      
+      // Then delete the deal
+      const { error } = await supabase
+        .from('broker_deals')
+        .delete()
+        .eq('id', dealId);
+
+      if (error) throw error;
+      
+      toast({ title: "Success", description: "Deal deleted successfully" });
+      fetchData();
+    } catch (error) {
+      console.error('Failed to delete deal:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete deal",
+        variant: "destructive"
+      });
+    }
+  };
+
   const getStatusBadge = (status: string) => {
     const statusConfig = {
       'pending': { variant: 'secondary' as const, label: 'Pending' },
@@ -414,6 +459,7 @@ const BrokerManagement = () => {
         <TabsList className="flex flex-nowrap overflow-x-auto w-full">
           <TabsTrigger value="brokers" className="text-xs md:text-sm whitespace-nowrap">Brokers</TabsTrigger>
           <TabsTrigger value="deals" className="text-xs md:text-sm whitespace-nowrap">Deals</TabsTrigger>
+          <TabsTrigger value="imfpa" className="text-xs md:text-sm whitespace-nowrap">IMFPA</TabsTrigger>
           <TabsTrigger value="chat" className="text-xs md:text-sm whitespace-nowrap">Chat</TabsTrigger>
           <TabsTrigger value="steps" className="text-xs md:text-sm whitespace-nowrap">Steps</TabsTrigger>
           <TabsTrigger value="templates" className="flex items-center gap-1 text-xs md:text-sm whitespace-nowrap">
@@ -686,6 +732,14 @@ const BrokerManagement = () => {
                                >
                                  <MessageCircle className="h-4 w-4" />
                                </Button>
+                               <Button
+                                 size="sm"
+                                 variant="outline"
+                                 onClick={() => handleDeleteDeal(deal.id)}
+                                 className="text-destructive hover:text-destructive hover:bg-destructive/10"
+                               >
+                                 <Trash2 className="h-4 w-4" />
+                               </Button>
                              </div>
                            </TableCell>
                          </TableRow>
@@ -696,6 +750,10 @@ const BrokerManagement = () => {
               </div>
             </CardContent>
           </Card>
+        </TabsContent>
+
+        <TabsContent value="imfpa">
+          <IMFPAManagement />
         </TabsContent>
 
         <TabsContent value="chat">

@@ -43,14 +43,27 @@ const UserManagement = () => {
       // Use RPC function directly - this is the reliable method
       const { data: usersData, error } = await supabase.rpc('get_users_with_roles');
       
-      if (error) throw error;
+      if (error) {
+        console.error('RPC error:', error);
+        // If RPC fails due to permissions, show a helpful message
+        if (error.message?.includes('permission') || error.code === '42501') {
+          toast({
+            title: "Permission Error",
+            description: "You don't have permission to view users. Please ensure you have admin privileges.",
+            variant: "destructive"
+          });
+        } else {
+          throw error;
+        }
+        return;
+      }
       
       setUsers(usersData || []);
-    } catch (error) {
+    } catch (error: any) {
       console.error('Failed to fetch users:', error);
       toast({
         title: "Error",
-        description: "Failed to load users",
+        description: error.message || "Failed to load users. Please try again.",
         variant: "destructive"
       });
     } finally {

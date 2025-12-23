@@ -12,6 +12,29 @@ const logStep = (step: string, details?: any) => {
   console.log(`[CHECK-SUBSCRIPTION] ${step}${detailsStr}`);
 };
 
+// Get Stripe config based on mode from database
+async function getStripeConfig(supabaseClient: any) {
+  const { data: configData } = await supabaseClient
+    .from('stripe_configuration')
+    .select('stripe_mode')
+    .single();
+
+  const mode = configData?.stripe_mode === 'live' ? 'live' : 'test';
+  
+  let secretKey = mode === 'live' 
+    ? Deno.env.get("STRIPE_SECRET_KEY_LIVE")
+    : Deno.env.get("STRIPE_SECRET_KEY_TEST");
+
+  // Fallback to legacy key
+  if (!secretKey) {
+    secretKey = Deno.env.get("STRIPE_SECRET_KEY");
+    logStep(`Using legacy STRIPE_SECRET_KEY (mode: ${mode})`);
+  }
+
+  logStep(`Using Stripe ${mode.toUpperCase()} mode`);
+  return { secretKey, mode };
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -26,9 +49,11 @@ serve(async (req) => {
   try {
     logStep("Function started");
 
-    const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
-    if (!stripeKey) {
-      logStep("STRIPE_SECRET_KEY not found, returning no access");
+    // Get Stripe config based on mode
+    const { secretKey, mode } = await getStripeConfig(supabaseClient);
+    
+    if (!secretKey) {
+      logStep("Stripe secret key not found, returning no access");
       return new Response(JSON.stringify({ 
         subscribed: false,
         subscription_tier: null,
@@ -83,7 +108,7 @@ serve(async (req) => {
       });
     }
 
-    logStep("User authenticated", { email: user.email });
+    logStep("User authenticated", { email: user.email, mode });
 
     // Use the new function that includes lock status
     const { data: accessData, error: accessError } = await supabaseClient.rpc('check_user_access_with_lock', {
@@ -210,7 +235,8 @@ serve(async (req) => {
       support_level: supportLevel,
       user_seats: userSeats,
       api_access: apiAccess,
-      real_time_analytics: realTimeAnalytics
+      real_time_analytics: realTimeAnalytics,
+      stripe_mode: mode
     }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 200,
