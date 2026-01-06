@@ -1004,7 +1004,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
     return (
       <div className="flex items-center justify-center p-6">
         <Loader2 className="h-6 w-6 animate-spin mr-2" />
-        <span>Loading templates...</span>
+        <span>Loading trade documents...</span>
       </div>
     );
   }
@@ -1014,14 +1014,14 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
         {templates.length === 0 ? (
           <div className="text-center py-8 text-muted-foreground">
             <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
-            <p>No templates available.</p>
-            <p className="text-sm">Contact your administrator to upload templates.</p>
+            <p>No documents available for this deal.</p>
+            <p className="text-sm">Please contact your administrator to activate document access.</p>
             <Button 
               variant="outline" 
               className="mt-4"
               onClick={fetchTemplates}
             >
-              Refresh Templates
+              Refresh Documents
             </Button>
           </div>
         ) : (
@@ -1029,8 +1029,11 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <FileText className="h-5 w-5" />
-                Available Document Templates ({templates.length})
+                Trade Documentation
               </CardTitle>
+              <p className="text-sm text-muted-foreground mt-1">
+                Commercial and inspection documents available for active deals
+              </p>
             </CardHeader>
             <CardContent>
               <div className="space-y-4">

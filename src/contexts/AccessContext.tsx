@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useEffect } from 'react';
 import { useAuth } from './AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
+import { trackTrialStarted } from '@/utils/analytics';
 
 interface AccessInfo {
   hasAccess: boolean;
@@ -115,6 +116,8 @@ export const AccessProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         });
         return;
       }
+      // Track trial start in GA4
+      trackTrialStarted(5);
       toast({
         title: "Trial Started!",
         description: "Your 5-day free trial has begun with Basic plan features. Enjoy exploring the platform!",

@@ -2,6 +2,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { trackSignUpComplete } from '@/utils/analytics';
 
 interface AuthContextType {
   user: User | null;
@@ -89,12 +90,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       // Check if email confirmation is required
       if (data.user && !data.session) {
+        // Track signup in GA4
+        trackSignUpComplete('email');
         toast({
           title: "Check Your Email",
           description: "We've sent you a confirmation link. Please check your email and click the link to verify your account.",
         });
       } else if (data.session) {
         // User is immediately signed in (email confirmation disabled)
+        // Track signup in GA4
+        trackSignUpComplete('email');
         toast({
           title: "Welcome!",
           description: "Your account has been created successfully.",

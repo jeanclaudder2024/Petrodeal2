@@ -10,6 +10,8 @@ import SubscriptionStatus from '@/components/SubscriptionStatus';
 import FuturisticTrialCountdown from '@/components/FuturisticTrialCountdown';
 import UnsubscribeRequest from '@/components/UnsubscribeRequest';
 import { Badge } from '@/components/ui/badge';
+import { trackPricingView } from '@/utils/analytics';
+
 interface PromotionFrame {
   id: string;
   title: string;
@@ -57,6 +59,8 @@ const Subscription = () => {
   useEffect(() => {
     checkSubscription();
     fetchPromotionFrame();
+    // Track pricing page view in GA4
+    trackPricingView();
   }, [user]);
 
   const fetchPromotionFrame = async () => {

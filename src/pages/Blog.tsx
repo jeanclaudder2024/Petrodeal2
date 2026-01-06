@@ -1,8 +1,13 @@
+import { useState, useEffect } from "react";
+import { Link } from "react-router-dom";
 import LandingNavbar from "@/components/landing/LandingNavbar";
 import Footer from "@/components/Footer";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
+import { supabase } from "@/integrations/supabase/client";
+import { format } from "date-fns";
 import { 
   TrendingUp, 
   FileText, 
@@ -13,23 +18,89 @@ import {
   Edit3,
   Mail,
   Lightbulb,
-  BarChart3,
-  Shield,
-  Target,
-  ArrowRight
+  Calendar,
+  ArrowRight,
+  Eye
 } from "lucide-react";
 
+interface BlogPost {
+  id: string;
+  title: string;
+  slug: string;
+  excerpt: string | null;
+  featured_image: string | null;
+  publish_date: string | null;
+  views: number | null;
+  category: {
+    name: string;
+    slug: string;
+  } | null;
+}
+
+interface BlogCategory {
+  id: string;
+  name: string;
+  slug: string;
+  description: string | null;
+}
+
 const Blog = () => {
+  const [posts, setPosts] = useState<BlogPost[]>([]);
+  const [categories, setCategories] = useState<BlogCategory[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetchBlogData();
+  }, []);
+
+  const fetchBlogData = async () => {
+    try {
+      // Fetch published posts
+      const { data: postsData, error: postsError } = await supabase
+        .from('blog_posts')
+        .select(`
+          id,
+          title,
+          slug,
+          excerpt,
+          featured_image,
+          publish_date,
+          views,
+          category:blog_categories(name, slug)
+        `)
+        .eq('status', 'published')
+        .lte('publish_date', new Date().toISOString())
+        .order('publish_date', { ascending: false });
+
+      if (postsError) throw postsError;
+
+      // Fetch categories
+      const { data: categoriesData, error: categoriesError } = await supabase
+        .from('blog_categories')
+        .select('*')
+        .order('name');
+
+      if (categoriesError) throw categoriesError;
+
+      setPosts(postsData || []);
+      setCategories(categoriesData || []);
+    } catch (error) {
+      console.error('Error fetching blog data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const filteredPosts = selectedCategory
+    ? posts.filter(post => post.category?.slug === selectedCategory)
+    : posts;
+
   const blogValues = [
     {
       icon: TrendingUp,
       title: "Industry Intelligence",
       description: "Stay ahead with insights into market trends, global price shifts, refinery movements, and regulatory updates."
-    },
-    {
-      icon: Target,
-      title: "Deal Strategy", 
-      description: "Learn how top brokers structure offers, negotiate terms, and validate documents across regions."
     },
     {
       icon: BookOpen,
@@ -39,40 +110,7 @@ const Blog = () => {
     {
       icon: Users,
       title: "Expert Commentary",
-      description: "Articles from seasoned professionals with real experience in crude, refined products, tankers, port operations, and risk management."
-    },
-    {
-      icon: Zap,
-      title: "AI, TradeTech & Petroleum",
-      description: "How smart platforms are reshaping legacy trading workflows."
-    }
-  ];
-
-  const sampleArticles = [
-    {
-      emoji: "",
-      title: "The Rise of Digital Oil Brokerage: How Smart Platforms Are Replacing Old Models",
-      description: "Explore how PetroDealHub and similar technologies are changing the broker's role forever."
-    },
-    {
-      emoji: "", 
-      title: "Tanker-to-Refinery Deals: How to Verify Real-World Shipment Paths",
-      description: "Understand the key documents and digital tools to validate that a tanker is truly en route to a legitimate refinery."
-    },
-    {
-      emoji: "",
-      title: "LOI vs FCO: What Makes a Legitimate First Offer in Oil Trade?",
-      description: "We break down the documentation logic and how buyers should issue intent the right way."
-    },
-    {
-      emoji: "",
-      title: "Insider's View: Why Many Oil Deals Fail Before They Start", 
-      description: "A detailed guide on the missteps brokers make — and how PetroDealHub simplifies and secures the early steps of a transaction."
-    },
-    {
-      emoji: "",
-      title: "The Future of Trade Intelligence in Oil Logistics",
-      description: "Learn how big data, blockchain, and smart APIs are creating real-time visibility for cargo, documents, and compliance."
+      description: "Articles from seasoned professionals with real experience in crude, refined products, tankers, and risk management."
     }
   ];
 
@@ -93,23 +131,126 @@ const Blog = () => {
             <p className="text-xl md:text-2xl text-muted-foreground mb-8 leading-relaxed">
               Expert Articles. Real-World Value. PetroDealHub Perspective.
             </p>
-            <div className="bg-background/80 backdrop-blur-sm p-8 rounded-2xl border border-border/50 shadow-elegant">
-              <p className="text-lg text-muted-foreground leading-relaxed mb-4">
-                At PetroDealHub, we believe that knowledge is as powerful as the deal itself.
-              </p>
-              <p className="text-lg text-muted-foreground leading-relaxed">
-                Our Blog is not just a space for content — it's a strategic resource center built to empower 
-                brokers, traders, refinery managers, and energy professionals with insights that matter. 
-                From the intricate world of oil documentation to the evolving global tanker routes — 
-                every article is written to bridge experience, data, and decision-making.
-              </p>
-            </div>
           </div>
         </div>
       </section>
 
+      {/* Category Filter */}
+      {categories.length > 0 && (
+        <section className="py-6 border-b border-border/50">
+          <div className="container mx-auto px-4">
+            <div className="flex flex-wrap items-center justify-center gap-3">
+              <Button
+                variant={selectedCategory === null ? "default" : "outline"}
+                size="sm"
+                onClick={() => setSelectedCategory(null)}
+              >
+                All Posts
+              </Button>
+              {categories.map((category) => (
+                <Button
+                  key={category.id}
+                  variant={selectedCategory === category.slug ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setSelectedCategory(category.slug)}
+                >
+                  {category.name}
+                </Button>
+              ))}
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* Blog Posts Grid */}
+      <section className="py-16 bg-background">
+        <div className="container mx-auto px-4">
+          {loading ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 max-w-6xl mx-auto">
+              {[1, 2, 3, 4, 5, 6].map((i) => (
+                <Card key={i} className="overflow-hidden">
+                  <Skeleton className="h-48 w-full" />
+                  <div className="p-6 space-y-3">
+                    <Skeleton className="h-4 w-24" />
+                    <Skeleton className="h-6 w-full" />
+                    <Skeleton className="h-4 w-full" />
+                    <Skeleton className="h-4 w-3/4" />
+                  </div>
+                </Card>
+              ))}
+            </div>
+          ) : filteredPosts.length > 0 ? (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 max-w-6xl mx-auto">
+              {filteredPosts.map((post) => (
+                <Link key={post.id} to={`/blog/${post.slug}`}>
+                  <Card className="overflow-hidden h-full hover:shadow-elegant transition-all duration-300 hover:-translate-y-2 border-0 bg-background/80 backdrop-blur-sm group">
+                    {post.featured_image ? (
+                      <div className="h-48 overflow-hidden">
+                        <img
+                          src={post.featured_image}
+                          alt={post.title}
+                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                        />
+                      </div>
+                    ) : (
+                      <div className="h-48 bg-gradient-to-br from-primary/20 to-accent/20 flex items-center justify-center">
+                        <FileText className="h-16 w-16 text-muted-foreground/50" />
+                      </div>
+                    )}
+                    <div className="p-6">
+                      <div className="flex items-center gap-3 mb-3">
+                        {post.category && (
+                          <Badge variant="secondary" className="text-xs">
+                            {post.category.name}
+                          </Badge>
+                        )}
+                        {post.publish_date && (
+                          <span className="text-xs text-muted-foreground flex items-center gap-1">
+                            <Calendar className="h-3 w-3" />
+                            {format(new Date(post.publish_date), 'MMM d, yyyy')}
+                          </span>
+                        )}
+                      </div>
+                      <h3 className="text-xl font-bold mb-3 text-foreground group-hover:text-accent transition-colors line-clamp-2">
+                        {post.title}
+                      </h3>
+                      {post.excerpt && (
+                        <p className="text-muted-foreground text-sm line-clamp-3 mb-4">
+                          {post.excerpt}
+                        </p>
+                      )}
+                      <div className="flex items-center justify-between">
+                        <span className="text-accent font-medium text-sm flex items-center gap-1 group-hover:gap-2 transition-all">
+                          Read More <ArrowRight className="h-4 w-4" />
+                        </span>
+                        {post.views !== null && (
+                          <span className="text-xs text-muted-foreground flex items-center gap-1">
+                            <Eye className="h-3 w-3" />
+                            {post.views}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  </Card>
+                </Link>
+              ))}
+            </div>
+          ) : (
+            <div className="text-center py-16 max-w-2xl mx-auto">
+              <div className="w-20 h-20 mx-auto mb-6 rounded-full bg-muted/50 flex items-center justify-center">
+                <FileText className="h-10 w-10 text-muted-foreground" />
+              </div>
+              <h3 className="text-2xl font-bold mb-4 text-foreground">No Posts Yet</h3>
+              <p className="text-muted-foreground mb-8">
+                We're working on creating valuable content for you. Check back soon for expert insights on oil trading, market analysis, and industry trends.
+              </p>
+            </div>
+          )}
+        </div>
+      </section>
+
       {/* Why Our Blog Matters */}
-      <section className="py-20 bg-background">
+      <section className="py-20 bg-muted/30">
         <div className="container mx-auto px-4">
           <div className="text-center mb-16">
             <h2 className="text-3xl md:text-4xl font-bold mb-6 text-foreground">
@@ -117,8 +258,8 @@ const Blog = () => {
             </h2>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8 max-w-6xl mx-auto">
-            {blogValues.slice(0, 3).map((value, index) => (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto">
+            {blogValues.map((value, index) => (
               <Card 
                 key={index}
                 className="p-8 text-center hover:shadow-elegant transition-all duration-300 hover:-translate-y-2 border-0 bg-background/80 backdrop-blur-sm"
@@ -134,62 +275,6 @@ const Blog = () => {
                 <p className="text-muted-foreground leading-relaxed">
                   {value.description}
                 </p>
-              </Card>
-            ))}
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-4xl mx-auto mt-8">
-            {blogValues.slice(3).map((value, index) => (
-              <Card 
-                key={index + 3}
-                className="p-8 text-center hover:shadow-elegant transition-all duration-300 hover:-translate-y-2 border-0 bg-background/80 backdrop-blur-sm"
-              >
-                <div className="w-16 h-16 mx-auto mb-6 rounded-2xl bg-gradient-to-br from-primary to-accent flex items-center justify-center">
-                  <value.icon className="w-8 h-8 text-white" />
-                </div>
-                
-                <h3 className="text-xl font-bold mb-4 text-foreground">
-                  {value.title}
-                </h3>
-                
-                <p className="text-muted-foreground leading-relaxed">
-                  {value.description}
-                </p>
-              </Card>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Sample Articles */}
-      <section className="py-20 bg-muted/30">
-        <div className="container mx-auto px-4">
-          <div className="text-center mb-16">
-            <h2 className="text-3xl md:text-4xl font-bold mb-6 text-foreground">
-               Sample Article Topics
-            </h2>
-          </div>
-
-          <div className="max-w-4xl mx-auto space-y-6">
-            {sampleArticles.map((article, index) => (
-              <Card 
-                key={index}
-                className="p-6 hover:shadow-elegant transition-all duration-300 hover:-translate-y-1 border-0 bg-background/80 backdrop-blur-sm group cursor-pointer"
-              >
-                <div className="flex items-start gap-4">
-                  <div className="flex-shrink-0 w-12 h-12 bg-gradient-to-br from-accent to-accent-green rounded-xl flex items-center justify-center text-white text-xl">
-                    {article.emoji}
-                  </div>
-                  <div className="flex-1">
-                    <h3 className="text-xl font-bold mb-3 text-foreground group-hover:text-accent transition-colors">
-                      {article.title}
-                    </h3>
-                    <p className="text-muted-foreground leading-relaxed">
-                      {article.description}
-                    </p>
-                  </div>
-                  <ArrowRight className="w-5 h-5 text-muted-foreground group-hover:text-accent transition-colors flex-shrink-0 mt-1" />
-                </div>
               </Card>
             ))}
           </div>

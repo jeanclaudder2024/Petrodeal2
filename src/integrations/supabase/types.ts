@@ -568,6 +568,101 @@ export type Database = {
         }
         Relationships: []
       }
+      blog_categories: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          name: string
+          slug: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name: string
+          slug: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          name?: string
+          slug?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      blog_posts: {
+        Row: {
+          author_id: string | null
+          category_id: string | null
+          content: string
+          created_at: string
+          excerpt: string | null
+          featured_image: string | null
+          id: string
+          meta_description: string | null
+          meta_keywords: string[] | null
+          meta_title: string | null
+          publish_date: string | null
+          slug: string
+          status: string
+          tags: string[] | null
+          title: string
+          updated_at: string
+          views: number | null
+        }
+        Insert: {
+          author_id?: string | null
+          category_id?: string | null
+          content: string
+          created_at?: string
+          excerpt?: string | null
+          featured_image?: string | null
+          id?: string
+          meta_description?: string | null
+          meta_keywords?: string[] | null
+          meta_title?: string | null
+          publish_date?: string | null
+          slug: string
+          status?: string
+          tags?: string[] | null
+          title: string
+          updated_at?: string
+          views?: number | null
+        }
+        Update: {
+          author_id?: string | null
+          category_id?: string | null
+          content?: string
+          created_at?: string
+          excerpt?: string | null
+          featured_image?: string | null
+          id?: string
+          meta_description?: string | null
+          meta_keywords?: string[] | null
+          meta_title?: string | null
+          publish_date?: string | null
+          slug?: string
+          status?: string
+          tags?: string[] | null
+          title?: string
+          updated_at?: string
+          views?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "blog_posts_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "blog_categories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       broker_chat_messages: {
         Row: {
           broker_id: string
@@ -1066,6 +1161,182 @@ export type Database = {
           verified?: boolean | null
         }
         Relationships: []
+      }
+      buyer_companies: {
+        Row: {
+          address: string | null
+          annual_revenue: number | null
+          city: string | null
+          company_objective: string | null
+          compliance_notes: string | null
+          country: string | null
+          country_risk: string | null
+          created_at: string
+          description: string | null
+          director_photo_url: string | null
+          email: string | null
+          employees_count: number | null
+          founded_year: number | null
+          id: string
+          industry: string | null
+          is_verified: boolean | null
+          kyc_status: string | null
+          legal_address: string | null
+          logo_url: string | null
+          name: string
+          official_email: string | null
+          operations_email: string | null
+          passport_country: string | null
+          passport_number: string | null
+          phone: string | null
+          primary_activity: string | null
+          registration_country: string | null
+          registration_number: string | null
+          representative_email: string | null
+          representative_name: string | null
+          representative_title: string | null
+          sanctions_status: string | null
+          signatory_signature_url: string | null
+          trade_name: string | null
+          trading_regions: string[] | null
+          updated_at: string
+          website: string | null
+        }
+        Insert: {
+          address?: string | null
+          annual_revenue?: number | null
+          city?: string | null
+          company_objective?: string | null
+          compliance_notes?: string | null
+          country?: string | null
+          country_risk?: string | null
+          created_at?: string
+          description?: string | null
+          director_photo_url?: string | null
+          email?: string | null
+          employees_count?: number | null
+          founded_year?: number | null
+          id?: string
+          industry?: string | null
+          is_verified?: boolean | null
+          kyc_status?: string | null
+          legal_address?: string | null
+          logo_url?: string | null
+          name: string
+          official_email?: string | null
+          operations_email?: string | null
+          passport_country?: string | null
+          passport_number?: string | null
+          phone?: string | null
+          primary_activity?: string | null
+          registration_country?: string | null
+          registration_number?: string | null
+          representative_email?: string | null
+          representative_name?: string | null
+          representative_title?: string | null
+          sanctions_status?: string | null
+          signatory_signature_url?: string | null
+          trade_name?: string | null
+          trading_regions?: string[] | null
+          updated_at?: string
+          website?: string | null
+        }
+        Update: {
+          address?: string | null
+          annual_revenue?: number | null
+          city?: string | null
+          company_objective?: string | null
+          compliance_notes?: string | null
+          country?: string | null
+          country_risk?: string | null
+          created_at?: string
+          description?: string | null
+          director_photo_url?: string | null
+          email?: string | null
+          employees_count?: number | null
+          founded_year?: number | null
+          id?: string
+          industry?: string | null
+          is_verified?: boolean | null
+          kyc_status?: string | null
+          legal_address?: string | null
+          logo_url?: string | null
+          name?: string
+          official_email?: string | null
+          operations_email?: string | null
+          passport_country?: string | null
+          passport_number?: string | null
+          phone?: string | null
+          primary_activity?: string | null
+          registration_country?: string | null
+          registration_number?: string | null
+          representative_email?: string | null
+          representative_name?: string | null
+          representative_title?: string | null
+          sanctions_status?: string | null
+          signatory_signature_url?: string | null
+          trade_name?: string | null
+          trading_regions?: string[] | null
+          updated_at?: string
+          website?: string | null
+        }
+        Relationships: []
+      }
+      buyer_company_bank_accounts: {
+        Row: {
+          account_name: string
+          account_number: string | null
+          bank_address: string | null
+          bank_name: string
+          beneficiary_address: string | null
+          company_id: string
+          created_at: string
+          currency: string | null
+          iban: string | null
+          id: string
+          is_primary: boolean | null
+          swift_code: string | null
+          updated_at: string
+        }
+        Insert: {
+          account_name: string
+          account_number?: string | null
+          bank_address?: string | null
+          bank_name: string
+          beneficiary_address?: string | null
+          company_id: string
+          created_at?: string
+          currency?: string | null
+          iban?: string | null
+          id?: string
+          is_primary?: boolean | null
+          swift_code?: string | null
+          updated_at?: string
+        }
+        Update: {
+          account_name?: string
+          account_number?: string | null
+          bank_address?: string | null
+          bank_name?: string
+          beneficiary_address?: string | null
+          company_id?: string
+          created_at?: string
+          currency?: string | null
+          iban?: string | null
+          id?: string
+          is_primary?: boolean | null
+          swift_code?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "buyer_company_bank_accounts_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "buyer_companies"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       campaign_recipients: {
         Row: {
@@ -2019,6 +2290,51 @@ export type Database = {
           },
         ]
       }
+      document_saved_templates: {
+        Row: {
+          content: string
+          content_format: string | null
+          created_at: string | null
+          created_by: string | null
+          description: string | null
+          document_type: string
+          entity_types: string[] | null
+          id: string
+          is_public: boolean | null
+          name: string
+          placeholders: string[] | null
+          updated_at: string | null
+        }
+        Insert: {
+          content: string
+          content_format?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          document_type: string
+          entity_types?: string[] | null
+          id?: string
+          is_public?: boolean | null
+          name: string
+          placeholders?: string[] | null
+          updated_at?: string | null
+        }
+        Update: {
+          content?: string
+          content_format?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          description?: string | null
+          document_type?: string
+          entity_types?: string[] | null
+          id?: string
+          is_public?: boolean | null
+          name?: string
+          placeholders?: string[] | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       document_templates: {
         Row: {
           analysis_result: Json | null
@@ -2103,6 +2419,48 @@ export type Database = {
           title?: string | null
           updated_at?: string | null
           uploaded_at?: string | null
+        }
+        Relationships: []
+      }
+      document_type_templates: {
+        Row: {
+          created_at: string | null
+          default_prompt: string | null
+          description: string | null
+          id: string
+          is_active: boolean | null
+          legal_sections: Json | null
+          name: string
+          recommended_entity_types: string[] | null
+          short_code: string
+          typical_page_range: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          default_prompt?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          legal_sections?: Json | null
+          name: string
+          recommended_entity_types?: string[] | null
+          short_code: string
+          typical_page_range?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          default_prompt?: string | null
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          legal_sections?: Json | null
+          name?: string
+          recommended_entity_types?: string[] | null
+          short_code?: string
+          typical_page_range?: string | null
+          updated_at?: string | null
         }
         Relationships: []
       }
@@ -2586,6 +2944,57 @@ export type Database = {
         }
         Relationships: []
       }
+      generated_documents: {
+        Row: {
+          ai_prompt: string | null
+          created_at: string | null
+          created_by: string | null
+          document_type: string
+          entity_type: string
+          estimated_pages: number | null
+          generated_content: string | null
+          id: string
+          placeholders_from_db: Json | null
+          placeholders_generated: Json | null
+          selected_entity_id: string | null
+          status: string | null
+          title: string
+          updated_at: string | null
+        }
+        Insert: {
+          ai_prompt?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          document_type: string
+          entity_type: string
+          estimated_pages?: number | null
+          generated_content?: string | null
+          id?: string
+          placeholders_from_db?: Json | null
+          placeholders_generated?: Json | null
+          selected_entity_id?: string | null
+          status?: string | null
+          title: string
+          updated_at?: string | null
+        }
+        Update: {
+          ai_prompt?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          document_type?: string
+          entity_type?: string
+          estimated_pages?: number | null
+          generated_content?: string | null
+          id?: string
+          placeholders_from_db?: Json | null
+          placeholders_generated?: Json | null
+          selected_entity_id?: string | null
+          status?: string | null
+          title?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       imfpa_agreements: {
         Row: {
           bank_name: string | null
@@ -2771,6 +3180,156 @@ export type Database = {
         }
         Relationships: []
       }
+      marketing_events: {
+        Row: {
+          category: string | null
+          created_at: string
+          description: string | null
+          display_name: string
+          event_name: string
+          event_params: Json | null
+          id: string
+          is_enabled: boolean | null
+          providers: string[] | null
+          updated_at: string
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string
+          description?: string | null
+          display_name: string
+          event_name: string
+          event_params?: Json | null
+          id?: string
+          is_enabled?: boolean | null
+          providers?: string[] | null
+          updated_at?: string
+        }
+        Update: {
+          category?: string | null
+          created_at?: string
+          description?: string | null
+          display_name?: string
+          event_name?: string
+          event_params?: Json | null
+          id?: string
+          is_enabled?: boolean | null
+          providers?: string[] | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      marketing_popups: {
+        Row: {
+          button_link: string | null
+          button_text: string | null
+          collect_email: boolean | null
+          collect_name: boolean | null
+          collect_phone: boolean | null
+          content: string | null
+          created_at: string | null
+          created_by: string | null
+          display_delay_seconds: number | null
+          end_date: string | null
+          id: string
+          image_url: string | null
+          is_active: boolean | null
+          popup_type: string
+          show_on_all_pages: boolean | null
+          show_once_per_session: boolean | null
+          start_date: string | null
+          style_config: Json | null
+          subtitle: string | null
+          title: string
+          trigger_pages: string[] | null
+          updated_at: string | null
+        }
+        Insert: {
+          button_link?: string | null
+          button_text?: string | null
+          collect_email?: boolean | null
+          collect_name?: boolean | null
+          collect_phone?: boolean | null
+          content?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          display_delay_seconds?: number | null
+          end_date?: string | null
+          id?: string
+          image_url?: string | null
+          is_active?: boolean | null
+          popup_type?: string
+          show_on_all_pages?: boolean | null
+          show_once_per_session?: boolean | null
+          start_date?: string | null
+          style_config?: Json | null
+          subtitle?: string | null
+          title: string
+          trigger_pages?: string[] | null
+          updated_at?: string | null
+        }
+        Update: {
+          button_link?: string | null
+          button_text?: string | null
+          collect_email?: boolean | null
+          collect_name?: boolean | null
+          collect_phone?: boolean | null
+          content?: string | null
+          created_at?: string | null
+          created_by?: string | null
+          display_delay_seconds?: number | null
+          end_date?: string | null
+          id?: string
+          image_url?: string | null
+          is_active?: boolean | null
+          popup_type?: string
+          show_on_all_pages?: boolean | null
+          show_once_per_session?: boolean | null
+          start_date?: string | null
+          style_config?: Json | null
+          subtitle?: string | null
+          title?: string
+          trigger_pages?: string[] | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      marketing_settings: {
+        Row: {
+          config: Json | null
+          created_at: string
+          created_by: string | null
+          id: string
+          is_enabled: boolean | null
+          name: string | null
+          provider: string
+          tracking_id: string
+          updated_at: string
+        }
+        Insert: {
+          config?: Json | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_enabled?: boolean | null
+          name?: string | null
+          provider: string
+          tracking_id: string
+          updated_at?: string
+        }
+        Update: {
+          config?: Json | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          is_enabled?: boolean | null
+          name?: string | null
+          provider?: string
+          tracking_id?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       newsletter_subscribers: {
         Row: {
           created_at: string | null
@@ -2846,6 +3405,198 @@ export type Database = {
         }
         Relationships: []
       }
+      oil_products: {
+        Row: {
+          analysis_date: string | null
+          ash_content_max: number | null
+          carbon_residue_max: number | null
+          cetane_number_min: number | null
+          cloud_point_c: number | null
+          coa_url: string | null
+          color_max: number | null
+          commodity_name: string
+          commodity_type: string | null
+          contract_duration_months: number | null
+          contract_type: string | null
+          created_at: string
+          created_by: string | null
+          currency: string | null
+          delivery_terms: string | null
+          density_kg_m3: number | null
+          destination_ports: string[] | null
+          discharge_ports: string[] | null
+          distillation_range: string | null
+          fame_content_max: number | null
+          flash_point_min_c: number | null
+          grade: string | null
+          id: string
+          incoterms: string | null
+          is_active: boolean | null
+          lab_certificate_url: string | null
+          lab_name: string | null
+          loading_ports: string[] | null
+          lubricity_um: number | null
+          msds_url: string | null
+          notes: string | null
+          option_months: number | null
+          origin: string | null
+          origin_country: string | null
+          oxidation_stability: number | null
+          payment_condition: string | null
+          payment_days: number | null
+          payment_terms: string | null
+          pour_point_c: number | null
+          premium_discount: number | null
+          price_basis: string | null
+          price_reference: string | null
+          price_type: string | null
+          product_code: string | null
+          q88_document_url: string | null
+          quantity_max_mt: number | null
+          quantity_min_mt: number | null
+          quantity_unit: string | null
+          refinery_id: string | null
+          status: string | null
+          sulphur_content_ppm: number | null
+          supplier_company_id: string | null
+          test_method: string | null
+          updated_at: string
+          viscosity_cst: number | null
+          water_content_max_ppm: number | null
+        }
+        Insert: {
+          analysis_date?: string | null
+          ash_content_max?: number | null
+          carbon_residue_max?: number | null
+          cetane_number_min?: number | null
+          cloud_point_c?: number | null
+          coa_url?: string | null
+          color_max?: number | null
+          commodity_name: string
+          commodity_type?: string | null
+          contract_duration_months?: number | null
+          contract_type?: string | null
+          created_at?: string
+          created_by?: string | null
+          currency?: string | null
+          delivery_terms?: string | null
+          density_kg_m3?: number | null
+          destination_ports?: string[] | null
+          discharge_ports?: string[] | null
+          distillation_range?: string | null
+          fame_content_max?: number | null
+          flash_point_min_c?: number | null
+          grade?: string | null
+          id?: string
+          incoterms?: string | null
+          is_active?: boolean | null
+          lab_certificate_url?: string | null
+          lab_name?: string | null
+          loading_ports?: string[] | null
+          lubricity_um?: number | null
+          msds_url?: string | null
+          notes?: string | null
+          option_months?: number | null
+          origin?: string | null
+          origin_country?: string | null
+          oxidation_stability?: number | null
+          payment_condition?: string | null
+          payment_days?: number | null
+          payment_terms?: string | null
+          pour_point_c?: number | null
+          premium_discount?: number | null
+          price_basis?: string | null
+          price_reference?: string | null
+          price_type?: string | null
+          product_code?: string | null
+          q88_document_url?: string | null
+          quantity_max_mt?: number | null
+          quantity_min_mt?: number | null
+          quantity_unit?: string | null
+          refinery_id?: string | null
+          status?: string | null
+          sulphur_content_ppm?: number | null
+          supplier_company_id?: string | null
+          test_method?: string | null
+          updated_at?: string
+          viscosity_cst?: number | null
+          water_content_max_ppm?: number | null
+        }
+        Update: {
+          analysis_date?: string | null
+          ash_content_max?: number | null
+          carbon_residue_max?: number | null
+          cetane_number_min?: number | null
+          cloud_point_c?: number | null
+          coa_url?: string | null
+          color_max?: number | null
+          commodity_name?: string
+          commodity_type?: string | null
+          contract_duration_months?: number | null
+          contract_type?: string | null
+          created_at?: string
+          created_by?: string | null
+          currency?: string | null
+          delivery_terms?: string | null
+          density_kg_m3?: number | null
+          destination_ports?: string[] | null
+          discharge_ports?: string[] | null
+          distillation_range?: string | null
+          fame_content_max?: number | null
+          flash_point_min_c?: number | null
+          grade?: string | null
+          id?: string
+          incoterms?: string | null
+          is_active?: boolean | null
+          lab_certificate_url?: string | null
+          lab_name?: string | null
+          loading_ports?: string[] | null
+          lubricity_um?: number | null
+          msds_url?: string | null
+          notes?: string | null
+          option_months?: number | null
+          origin?: string | null
+          origin_country?: string | null
+          oxidation_stability?: number | null
+          payment_condition?: string | null
+          payment_days?: number | null
+          payment_terms?: string | null
+          pour_point_c?: number | null
+          premium_discount?: number | null
+          price_basis?: string | null
+          price_reference?: string | null
+          price_type?: string | null
+          product_code?: string | null
+          q88_document_url?: string | null
+          quantity_max_mt?: number | null
+          quantity_min_mt?: number | null
+          quantity_unit?: string | null
+          refinery_id?: string | null
+          status?: string | null
+          sulphur_content_ppm?: number | null
+          supplier_company_id?: string | null
+          test_method?: string | null
+          updated_at?: string
+          viscosity_cst?: number | null
+          water_content_max_ppm?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "oil_products_refinery_id_fkey"
+            columns: ["refinery_id"]
+            isOneToOne: false
+            referencedRelation: "refineries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "oil_products_supplier_company_id_fkey"
+            columns: ["supplier_company_id"]
+            isOneToOne: false
+            referencedRelation: "seller_companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       plan_template_permissions: {
         Row: {
           can_download: boolean | null
@@ -2887,6 +3638,50 @@ export type Database = {
             columns: ["template_id"]
             isOneToOne: false
             referencedRelation: "document_templates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      popup_subscribers: {
+        Row: {
+          email: string | null
+          id: string
+          ip_address: string | null
+          name: string | null
+          page_subscribed_from: string | null
+          phone: string | null
+          popup_id: string | null
+          subscribed_at: string | null
+          user_agent: string | null
+        }
+        Insert: {
+          email?: string | null
+          id?: string
+          ip_address?: string | null
+          name?: string | null
+          page_subscribed_from?: string | null
+          phone?: string | null
+          popup_id?: string | null
+          subscribed_at?: string | null
+          user_agent?: string | null
+        }
+        Update: {
+          email?: string | null
+          id?: string
+          ip_address?: string | null
+          name?: string | null
+          page_subscribed_from?: string | null
+          phone?: string | null
+          popup_id?: string | null
+          subscribed_at?: string | null
+          user_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "popup_subscribers_popup_id_fkey"
+            columns: ["popup_id"]
+            isOneToOne: false
+            referencedRelation: "marketing_popups"
             referencedColumns: ["id"]
           },
         ]
@@ -3711,6 +4506,200 @@ export type Database = {
           year_built?: number | null
         }
         Relationships: []
+      }
+      seller_companies: {
+        Row: {
+          address: string | null
+          annual_revenue: number | null
+          city: string | null
+          company_objective: string | null
+          compliance_notes: string | null
+          country: string | null
+          country_risk: string | null
+          created_at: string
+          description: string | null
+          director_photo_url: string | null
+          email: string | null
+          employees_count: number | null
+          founded_year: number | null
+          id: string
+          industry: string | null
+          is_refinery_owner: boolean | null
+          is_verified: boolean | null
+          kyc_status: string | null
+          legal_address: string | null
+          loading_ports: string[] | null
+          logo_url: string | null
+          name: string
+          official_email: string | null
+          operations_email: string | null
+          passport_country: string | null
+          passport_number: string | null
+          phone: string | null
+          primary_activity: string | null
+          products_supplied: string[] | null
+          refinery_capacity_bpd: number | null
+          refinery_location: string | null
+          refinery_name: string | null
+          registration_country: string | null
+          registration_number: string | null
+          representative_email: string | null
+          representative_name: string | null
+          representative_title: string | null
+          sanctions_status: string | null
+          signatory_signature_url: string | null
+          trade_name: string | null
+          trading_regions: string[] | null
+          updated_at: string
+          website: string | null
+        }
+        Insert: {
+          address?: string | null
+          annual_revenue?: number | null
+          city?: string | null
+          company_objective?: string | null
+          compliance_notes?: string | null
+          country?: string | null
+          country_risk?: string | null
+          created_at?: string
+          description?: string | null
+          director_photo_url?: string | null
+          email?: string | null
+          employees_count?: number | null
+          founded_year?: number | null
+          id?: string
+          industry?: string | null
+          is_refinery_owner?: boolean | null
+          is_verified?: boolean | null
+          kyc_status?: string | null
+          legal_address?: string | null
+          loading_ports?: string[] | null
+          logo_url?: string | null
+          name: string
+          official_email?: string | null
+          operations_email?: string | null
+          passport_country?: string | null
+          passport_number?: string | null
+          phone?: string | null
+          primary_activity?: string | null
+          products_supplied?: string[] | null
+          refinery_capacity_bpd?: number | null
+          refinery_location?: string | null
+          refinery_name?: string | null
+          registration_country?: string | null
+          registration_number?: string | null
+          representative_email?: string | null
+          representative_name?: string | null
+          representative_title?: string | null
+          sanctions_status?: string | null
+          signatory_signature_url?: string | null
+          trade_name?: string | null
+          trading_regions?: string[] | null
+          updated_at?: string
+          website?: string | null
+        }
+        Update: {
+          address?: string | null
+          annual_revenue?: number | null
+          city?: string | null
+          company_objective?: string | null
+          compliance_notes?: string | null
+          country?: string | null
+          country_risk?: string | null
+          created_at?: string
+          description?: string | null
+          director_photo_url?: string | null
+          email?: string | null
+          employees_count?: number | null
+          founded_year?: number | null
+          id?: string
+          industry?: string | null
+          is_refinery_owner?: boolean | null
+          is_verified?: boolean | null
+          kyc_status?: string | null
+          legal_address?: string | null
+          loading_ports?: string[] | null
+          logo_url?: string | null
+          name?: string
+          official_email?: string | null
+          operations_email?: string | null
+          passport_country?: string | null
+          passport_number?: string | null
+          phone?: string | null
+          primary_activity?: string | null
+          products_supplied?: string[] | null
+          refinery_capacity_bpd?: number | null
+          refinery_location?: string | null
+          refinery_name?: string | null
+          registration_country?: string | null
+          registration_number?: string | null
+          representative_email?: string | null
+          representative_name?: string | null
+          representative_title?: string | null
+          sanctions_status?: string | null
+          signatory_signature_url?: string | null
+          trade_name?: string | null
+          trading_regions?: string[] | null
+          updated_at?: string
+          website?: string | null
+        }
+        Relationships: []
+      }
+      seller_company_bank_accounts: {
+        Row: {
+          account_name: string
+          account_number: string | null
+          bank_address: string | null
+          bank_name: string
+          beneficiary_address: string | null
+          company_id: string
+          created_at: string
+          currency: string | null
+          iban: string | null
+          id: string
+          is_primary: boolean | null
+          swift_code: string | null
+          updated_at: string
+        }
+        Insert: {
+          account_name: string
+          account_number?: string | null
+          bank_address?: string | null
+          bank_name: string
+          beneficiary_address?: string | null
+          company_id: string
+          created_at?: string
+          currency?: string | null
+          iban?: string | null
+          id?: string
+          is_primary?: boolean | null
+          swift_code?: string | null
+          updated_at?: string
+        }
+        Update: {
+          account_name?: string
+          account_number?: string | null
+          bank_address?: string | null
+          bank_name?: string
+          beneficiary_address?: string | null
+          company_id?: string
+          created_at?: string
+          currency?: string | null
+          iban?: string | null
+          id?: string
+          is_primary?: boolean | null
+          swift_code?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "seller_company_bank_accounts_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "seller_companies"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       sponsor_banners: {
         Row: {
@@ -4784,6 +5773,48 @@ export type Database = {
         }
         Relationships: []
       }
+      utm_tracking: {
+        Row: {
+          created_at: string
+          id: string
+          landing_page: string | null
+          referrer: string | null
+          session_id: string | null
+          user_id: string | null
+          utm_campaign: string | null
+          utm_content: string | null
+          utm_medium: string | null
+          utm_source: string | null
+          utm_term: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          landing_page?: string | null
+          referrer?: string | null
+          session_id?: string | null
+          user_id?: string | null
+          utm_campaign?: string | null
+          utm_content?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
+          utm_term?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          landing_page?: string | null
+          referrer?: string | null
+          session_id?: string | null
+          user_id?: string | null
+          utm_campaign?: string | null
+          utm_content?: string | null
+          utm_medium?: string | null
+          utm_source?: string | null
+          utm_term?: string | null
+        }
+        Relationships: []
+      }
       vessel_connections: {
         Row: {
           ai_confidence: string | null
@@ -5552,6 +6583,7 @@ export type Database = {
           template_name: string
         }[]
       }
+      get_user_email_by_id: { Args: { user_uuid: string }; Returns: string }
       get_user_id_by_email: { Args: { user_email: string }; Returns: string }
       get_user_role: {
         Args: { _user_id: string }

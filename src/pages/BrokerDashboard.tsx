@@ -29,6 +29,7 @@ import DealSteps from '@/components/broker/DealSteps';
 import EditProfileForm from '@/components/broker/EditProfileForm';
 import CompanyContacts from '@/components/broker/CompanyContacts';
 import IMFPAAgreement from '@/components/broker/IMFPAAgreement';
+import IMFPAInfoNotice from '@/components/broker/IMFPAInfoNotice';
 import { useToast } from '@/hooks/use-toast';
 
 interface BrokerProfile {
@@ -502,6 +503,9 @@ const BrokerDashboard = () => {
         </TabsContent>
 
         <TabsContent value="imfpa" className="space-y-6">
+          {/* IMFPA Informational Notice */}
+          <IMFPAInfoNotice />
+          
           {deals.length === 0 ? (
             <Card>
               <CardContent className="text-center py-12">

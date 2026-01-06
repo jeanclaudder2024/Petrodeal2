@@ -1,7 +1,9 @@
 import { Toaster } from "@/components/ui/toaster";
+import MarketingPopupDisplay from "@/components/MarketingPopupDisplay";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { HelmetProvider } from "react-helmet-async";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { ThemeProvider } from "next-themes";
 import { AuthProvider } from "@/contexts/AuthContext";
@@ -14,6 +16,7 @@ import { MobileLayout } from "@/components/MobileLayout";
 import { MobileBottomNav } from "@/components/MobileBottomNav";
 import { MobileHeader } from "@/components/MobileHeader";
 import FloatingAIAssistant from "@/components/FloatingAIAssistant";
+import MarketingPixelLoader from "@/components/MarketingPixelLoader";
 import ThemeToggle from "@/components/ThemeToggle";
 import LanguageSelector from "@/components/LanguageSelector";
 import UserProfileMenu from "@/components/UserProfileMenu";
@@ -23,6 +26,7 @@ import AboutUs from "./pages/AboutUs";
 import FutureTrading from "./pages/FutureTrading";
 import APIIntegration from "./pages/APIIntegration";
 import Blog from "./pages/Blog";
+import BlogPostPage from "./pages/BlogPost";
 import Careers from "./pages/Careers";
 import ContactUs from "./pages/ContactUs";
 import CookiePolicy from "./pages/CookiePolicy";
@@ -111,6 +115,7 @@ const AppLayout = ({ children }: { children: React.ReactNode }) => {
 };
 
 const App = () => (
+  <HelmetProvider>
   <QueryClientProvider client={queryClient}>
     <ThemeProvider
       attribute="class"
@@ -126,6 +131,8 @@ const App = () => (
             <Toaster />
             <Sonner />
             <BrowserRouter>
+              <MarketingPixelLoader />
+              <MarketingPopupDisplay />
           <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/about" element={<AboutUs />} />
@@ -142,6 +149,7 @@ const App = () => (
           />
             <Route path="/api-integration" element={<APIIntegration />} />
             <Route path="/blog" element={<Blog />} />
+            <Route path="/blog/:slug" element={<BlogPostPage />} />
             <Route path="/careers" element={<Careers />} />
             <Route path="/contact" element={<ContactUs />} />
             <Route path="/cookies" element={<CookiePolicy />} />
@@ -438,6 +446,7 @@ const App = () => (
     </AuthProvider>
     </ThemeProvider>
   </QueryClientProvider>
+  </HelmetProvider>
 );
 
 export default App;

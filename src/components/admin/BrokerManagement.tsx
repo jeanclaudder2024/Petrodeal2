@@ -794,9 +794,9 @@ const BrokerManagement = () => {
                       <TableHead>Broker</TableHead>
                       <TableHead>Message</TableHead>
                       <TableHead>Sender</TableHead>
-                      <TableHead>Deal ID</TableHead>
                       <TableHead>Date</TableHead>
                       <TableHead>Status</TableHead>
+                      <TableHead>Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -820,7 +820,6 @@ const BrokerManagement = () => {
                               {message.sender_type}
                             </Badge>
                           </TableCell>
-                          <TableCell>{message.deal_id ? message.deal_id.slice(0, 8) + '...' : 'N/A'}</TableCell>
                           <TableCell>
                             {new Date(message.created_at).toLocaleDateString()}
                           </TableCell>
@@ -828,6 +827,41 @@ const BrokerManagement = () => {
                             <Badge variant={message.is_read ? 'default' : 'secondary'}>
                               {message.is_read ? 'Read' : 'Unread'}
                             </Badge>
+                          </TableCell>
+                          <TableCell>
+                            <div className="flex gap-1">
+                              <Dialog>
+                                <DialogTrigger asChild>
+                                  <Button size="sm" variant="outline">
+                                    <Eye className="h-4 w-4" />
+                                  </Button>
+                                </DialogTrigger>
+                                <DialogContent>
+                                  <DialogHeader>
+                                    <DialogTitle>Message from {message.broker_profiles?.full_name}</DialogTitle>
+                                    <DialogDescription>
+                                      {new Date(message.created_at).toLocaleString()}
+                                    </DialogDescription>
+                                  </DialogHeader>
+                                  <div className="p-4 bg-muted rounded-lg">
+                                    <p className="whitespace-pre-wrap">{message.message}</p>
+                                  </div>
+                                </DialogContent>
+                              </Dialog>
+                              <Button 
+                                size="sm" 
+                                variant="outline"
+                                onClick={() => {
+                                  const broker = brokers.find(b => b.id === message.broker_id);
+                                  if (broker) {
+                                    setSelectedBroker(broker);
+                                    setChatMessage('');
+                                  }
+                                }}
+                              >
+                                <Send className="h-4 w-4" />
+                              </Button>
+                            </div>
                           </TableCell>
                         </TableRow>
                       ))

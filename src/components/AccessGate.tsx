@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { 
@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { useAccess } from '@/contexts/AccessContext';
 import { useNavigate } from 'react-router-dom';
+import { trackFeatureLockedView } from '@/utils/analytics';
 
 interface AccessGateProps {
   children: React.ReactNode;
@@ -35,6 +36,13 @@ const AccessGate: React.FC<AccessGateProps> = ({
       </div>
     );
   }
+
+  // Track feature locked view when access is denied
+  useEffect(() => {
+    if (!loading && !hasAccess) {
+      trackFeatureLockedView(fallbackMessage || 'premium_feature');
+    }
+  }, [loading, hasAccess, fallbackMessage]);
 
   if (hasAccess) {
     return <>{children}</>;

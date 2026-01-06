@@ -20,6 +20,7 @@ import {
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { trackContactSubmit } from "@/utils/analytics";
 
 const ContactUs = () => {
   const { toast } = useToast();
@@ -88,6 +89,9 @@ const ContactUs = () => {
           `
         }
       });
+      
+      // Track contact form submission in GA4
+      trackContactSubmit();
       
       toast({ title: "Message sent!", description: "We'll get back to you within 1-2 business days." });
       setFormData({ name: "", email: "", subject: "", message: "", securityAnswer: "" });

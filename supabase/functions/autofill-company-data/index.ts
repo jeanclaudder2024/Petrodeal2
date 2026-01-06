@@ -193,6 +193,76 @@ function generateRegistrationNumber(country: string): string {
   return `${data.passportPrefix}-${generateDigits(4)}-${generateDigits(6)}`;
 }
 
+// Generate a realistic domain from company name
+function generateDomainFromCompanyName(companyName: string): string {
+  // Remove common suffixes and clean the name
+  const cleanName = companyName
+    .toLowerCase()
+    .replace(/\b(ltd|llc|inc|corp|corporation|limited|co|company|trading|group|international|intl|holdings|enterprises|gmbh|sa|srl|bv|nv|ag|plc)\b/gi, '')
+    .replace(/[^a-z0-9\s]/g, '')
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2) // Take first 2 words max
+    .join('');
+  
+  // If name is too short, add a suffix
+  if (cleanName.length < 3) {
+    return `${cleanName}energy.com`;
+  }
+  
+  return `${cleanName}.com`;
+}
+
+// Known major oil/energy companies with their real domains
+const KNOWN_COMPANIES: Record<string, { website: string; email_domain: string }> = {
+  'chevron': { website: 'https://www.chevron.com', email_domain: 'chevron.com' },
+  'exxonmobil': { website: 'https://corporate.exxonmobil.com', email_domain: 'exxonmobil.com' },
+  'exxon': { website: 'https://corporate.exxonmobil.com', email_domain: 'exxonmobil.com' },
+  'shell': { website: 'https://www.shell.com', email_domain: 'shell.com' },
+  'bp': { website: 'https://www.bp.com', email_domain: 'bp.com' },
+  'totalenergies': { website: 'https://totalenergies.com', email_domain: 'totalenergies.com' },
+  'total': { website: 'https://totalenergies.com', email_domain: 'totalenergies.com' },
+  'conocophillips': { website: 'https://www.conocophillips.com', email_domain: 'conocophillips.com' },
+  'aramco': { website: 'https://www.aramco.com', email_domain: 'aramco.com' },
+  'saudi aramco': { website: 'https://www.aramco.com', email_domain: 'aramco.com' },
+  'petrobras': { website: 'https://petrobras.com.br', email_domain: 'petrobras.com.br' },
+  'gazprom': { website: 'https://www.gazprom.com', email_domain: 'gazprom.com' },
+  'lukoil': { website: 'https://lukoil.com', email_domain: 'lukoil.com' },
+  'rosneft': { website: 'https://www.rosneft.com', email_domain: 'rosneft.com' },
+  'eni': { website: 'https://www.eni.com', email_domain: 'eni.com' },
+  'equinor': { website: 'https://www.equinor.com', email_domain: 'equinor.com' },
+  'repsol': { website: 'https://www.repsol.com', email_domain: 'repsol.com' },
+  'petrochina': { website: 'https://www.petrochina.com.cn', email_domain: 'petrochina.com.cn' },
+  'sinopec': { website: 'https://www.sinopec.com', email_domain: 'sinopec.com' },
+  'cnooc': { website: 'https://www.cnooc.com.cn', email_domain: 'cnooc.com.cn' },
+  'adnoc': { website: 'https://www.adnoc.ae', email_domain: 'adnoc.ae' },
+  'marathon oil': { website: 'https://www.marathonoil.com', email_domain: 'marathonoil.com' },
+  'valero': { website: 'https://www.valero.com', email_domain: 'valero.com' },
+  'phillips 66': { website: 'https://www.phillips66.com', email_domain: 'phillips66.com' },
+  'occidental': { website: 'https://www.oxy.com', email_domain: 'oxy.com' },
+  'pioneer': { website: 'https://www.pxd.com', email_domain: 'pxd.com' },
+  'devon energy': { website: 'https://www.devonenergy.com', email_domain: 'devonenergy.com' },
+  'hess': { website: 'https://www.hess.com', email_domain: 'hess.com' },
+  'apache': { website: 'https://www.apachecorp.com', email_domain: 'apachecorp.com' },
+  'trafigura': { website: 'https://www.trafigura.com', email_domain: 'trafigura.com' },
+  'vitol': { website: 'https://www.vitol.com', email_domain: 'vitol.com' },
+  'glencore': { website: 'https://www.glencore.com', email_domain: 'glencore.com' },
+  'gunvor': { website: 'https://gunvorgroup.com', email_domain: 'gunvorgroup.com' },
+  'mercuria': { website: 'https://www.mercuria.com', email_domain: 'mercuria.com' },
+};
+
+function getKnownCompanyInfo(companyName: string): { website: string; email_domain: string } | null {
+  const normalizedName = companyName.toLowerCase().trim();
+  
+  for (const [key, value] of Object.entries(KNOWN_COMPANIES)) {
+    if (normalizedName.includes(key) || key.includes(normalizedName.split(' ')[0])) {
+      return value;
+    }
+  }
+  
+  return null;
+}
+
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders })
@@ -224,6 +294,12 @@ serve(async (req) => {
     const isSeller = companyType === 'seller' || companyType === 'seller_test';
     const countryData = getCountryData(country || 'United States');
 
+    // Check if this is a known major company
+    const knownCompanyInfo = getKnownCompanyInfo(companyName);
+    
+    // Generate domain from company name for non-known companies
+    const generatedDomain = generateDomainFromCompanyName(companyName);
+
     // Generate country-specific data
     const firstName = randomFrom(countryData.firstNames);
     const lastName = randomFrom(countryData.lastNames);
@@ -231,9 +307,18 @@ serve(async (req) => {
     const city = randomFrom(countryData.cities);
     const bank = randomFrom(countryData.banks);
 
+    // Determine the domain to use
+    const emailDomain = knownCompanyInfo?.email_domain || generatedDomain;
+    const websiteUrl = knownCompanyInfo?.website || `https://www.${generatedDomain}`;
+
     const prompt = `Generate realistic company information for: "${companyName}" based in ${country || 'United States'}.
 Company type: ${companyType || 'real'}
 ${isSeller ? 'This is a SELLER/REFINERY company - include refinery details.' : ''}
+
+IMPORTANT: Use these EXACT values for website and emails:
+- Website: ${websiteUrl}
+- Official Email: info@${emailDomain}
+- Operations Email: operations@${emailDomain}
 
 Provide ONLY the following JSON (no markdown, no explanation):
 {
@@ -242,9 +327,9 @@ Provide ONLY the following JSON (no markdown, no explanation):
   "company_objective": "Clear company objective/mission statement for oil trading business",
   "industry": "Oil & Gas specific industry",
   "city": "${city}",
-  "website": "https://www.realistic-domain.com",
-  "official_email": "info@realistic-domain.com",
-  "operations_email": "operations@realistic-domain.com",
+  "website": "${websiteUrl}",
+  "official_email": "info@${emailDomain}",
+  "operations_email": "operations@${emailDomain}",
   "address": "Realistic street address in ${city}, ${country}",
   "employees_count": realistic_number,
   "annual_revenue": realistic_number_in_usd,
@@ -268,7 +353,7 @@ Provide ONLY the following JSON (no markdown, no explanation):
       body: JSON.stringify({
         model: 'gpt-4o-mini',
         messages: [
-          { role: 'system', content: 'You are a helpful assistant that generates realistic company information for oil and energy companies. Always respond with valid JSON only.' },
+          { role: 'system', content: 'You are a helpful assistant that generates realistic company information for oil and energy companies. Always respond with valid JSON only. Use the EXACT website and email values provided in the prompt - do not change them.' },
           { role: 'user', content: prompt }
         ],
         max_tokens: 800,
@@ -290,9 +375,11 @@ Provide ONLY the following JSON (no markdown, no explanation):
     
     let aiData = JSON.parse(content)
 
-    // Add country-specific generated data
-    const websiteDomain = (aiData.website || 'company.com').replace('https://www.', '').replace('https://', '').replace('http://', '');
-    
+    // CRITICAL: Override AI-generated emails/website with our generated ones to ensure correctness
+    aiData.website = websiteUrl;
+    aiData.official_email = `info@${emailDomain}`;
+    aiData.operations_email = `operations@${emailDomain}`;
+
     const companyData: Record<string, unknown> = {
       ...aiData,
       phone: generatePhoneNumber(country),
@@ -304,7 +391,7 @@ Provide ONLY the following JSON (no markdown, no explanation):
       representative_title: randomFrom(['Chief Executive Officer', 'Managing Director', 'President', 'Chairman']),
       passport_number: generatePassportNumber(country),
       passport_country: country,
-      representative_email: `${firstName.toLowerCase()}.${lastName.toLowerCase()}@${websiteDomain}`,
+      representative_email: `${firstName.toLowerCase()}.${lastName.toLowerCase()}@${emailDomain}`,
       // Always generate bank account
       bankAccounts: [{
         bank_name: bank.name,
@@ -324,7 +411,7 @@ Provide ONLY the following JSON (no markdown, no explanation):
       companyData.is_refinery_owner = true;
     }
 
-    console.log('Generated company data for:', companyName, 'Country:', country, 'Type:', companyType);
+    console.log('Generated company data for:', companyName, 'Country:', country, 'Type:', companyType, 'Domain:', emailDomain);
 
     return new Response(
       JSON.stringify({ success: true, data: companyData }),

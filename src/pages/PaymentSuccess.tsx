@@ -4,9 +4,10 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Check, Loader2, AlertCircle, Shield, Calendar, Lock } from 'lucide-react';
+import { Check, Loader2, AlertCircle, Shield, Calendar, Lock, KeyRound } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
+import { trackSubscriptionSuccess, trackTrialStarted } from '@/utils/analytics';
 
 const PaymentSuccess = () => {
   const navigate = useNavigate();
@@ -203,6 +204,17 @@ const PaymentSuccess = () => {
           registrationData.selectedPlan?.slice(1) || 'Selected';
         const trialText = isTrialSubscription ? ' with 5-day free trial' : '';
 
+        // Track GA4 events
+        const amount = sessionData.amount_total ? sessionData.amount_total / 100 : 0;
+        trackSubscriptionSuccess(
+          registrationData.selectedPlan || 'basic',
+          registrationData.billingCycle || 'monthly',
+          amount
+        );
+        if (isTrialSubscription) {
+          trackTrialStarted(5);
+        }
+
         toast({
           title: "Registration Complete!",
           description: `Welcome to PetroDealHub ${planText}${trialText}! Check your email to verify your account.`,
@@ -316,16 +328,19 @@ const PaymentSuccess = () => {
 
               <Button 
                 onClick={handleCreateAccount} 
-                className="w-full"
+                className="w-full h-14 text-lg font-bold bg-gradient-to-r from-green-600 to-emerald-600 hover:from-green-700 hover:to-emerald-700 shadow-lg hover:shadow-xl transition-all"
                 disabled={isCreatingAccount || !password || !confirmPassword}
               >
                 {isCreatingAccount ? (
                   <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    <Loader2 className="mr-2 h-5 w-5 animate-spin" />
                     Creating Account...
                   </>
                 ) : (
-                  'Complete Registration'
+                  <>
+                    <KeyRound className="mr-2 h-5 w-5" />
+                    Create Password & Complete Registration
+                  </>
                 )}
               </Button>
 

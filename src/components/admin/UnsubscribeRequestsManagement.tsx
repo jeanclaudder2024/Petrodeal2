@@ -139,7 +139,31 @@ const UnsubscribeRequestsManagement: React.FC = () => {
 
       if (error) throw error;
 
-      toast.success(`Request ${actionType === 'approve' ? 'approved' : 'rejected'} successfully`);
+      // CRITICAL: If approved, lock the user's account
+      if (actionType === 'approve' && selectedRequest.user_id) {
+        const { error: lockError } = await db
+          .from('subscribers')
+          .update({
+            is_locked: true,
+            locked_at: new Date().toISOString(),
+            locked_reason: 'Subscription cancelled by user request',
+            subscribed: false,
+            subscription_status: 'cancelled',
+            is_trial_active: false,
+            updated_at: new Date().toISOString()
+          })
+          .eq('user_id', selectedRequest.user_id);
+
+        if (lockError) {
+          console.error('Error locking account:', lockError);
+          toast.warning('Request approved but failed to lock account. Please lock manually.');
+        } else {
+          toast.success('Request approved and account locked successfully');
+        }
+      } else {
+        toast.success(`Request ${actionType === 'approve' ? 'approved' : 'rejected'} successfully`);
+      }
+
       setSelectedRequest(null);
       setAdminNotes('');
       setActionType(null);
