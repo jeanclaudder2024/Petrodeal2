@@ -34,9 +34,17 @@ interface VesselInfo {
 
 const API_BASE_URL = 'http://localhost:8000';
 
+interface SubscriptionPlan {
+  id: string;
+  plan_name: string;
+  plan_tier: string;
+  is_active: boolean;
+}
+
 export default function DocumentTemplateManager() {
   const [templates, setTemplates] = useState<DocumentTemplate[]>([]);
   const [vessels, setVessels] = useState<VesselInfo[]>([]);
+  const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<DocumentTemplate | null>(null);
@@ -44,13 +52,39 @@ export default function DocumentTemplateManager() {
   const [newTemplate, setNewTemplate] = useState({
     name: '',
     description: '',
-    file: null as File | null
+    file: null as File | null,
+    selectedPlans: [] as string[]
   });
 
   useEffect(() => {
     fetchTemplates();
     fetchVessels();
+    fetchPlans();
   }, []);
+
+  const fetchPlans = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/plans-db`);
+      if (response.ok) {
+        const data = await response.json();
+        if (data.plans) {
+          // Convert plans object to array
+          const plansArray = Object.entries(data.plans)
+            .map(([planTier, planData]: [string, any]) => ({
+              id: planData.id || planTier,
+              plan_name: planData.name || planTier,
+              plan_tier: planTier,
+              is_active: planData.is_active !== false
+            }))
+            .filter(p => p.is_active);
+          setPlans(plansArray);
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching plans:', error);
+      // Silently fail - plans selection is optional
+    }
+  };
 
   const fetchTemplates = async () => {
     try {
@@ -59,7 +93,7 @@ export default function DocumentTemplateManager() {
       if (response.ok) {
         const data = await response.json();
         let templatesList = data.templates || [];
-        
+
         // Enrich templates with plan information from database
         try {
           // Get all templates from database to match by file_name
@@ -67,7 +101,7 @@ export default function DocumentTemplateManager() {
             .from('document_templates')
             .select('id, file_name, title, description')
             .eq('is_active', true);
-          
+
           if (dbTemplates) {
             // Get plan permissions for templates
             const templateIds = dbTemplates.map(t => t.id);
@@ -76,7 +110,7 @@ export default function DocumentTemplateManager() {
               .select('template_id, plan_id, can_download')
               .in('template_id', templateIds)
               .eq('can_download', true);
-            
+
             // Get plan details
             let planDetails: Record<string, any> = {};
             if (permissions && permissions.length > 0) {
@@ -85,14 +119,14 @@ export default function DocumentTemplateManager() {
                 .from('subscription_plans')
                 .select('id, plan_name, plan_tier')
                 .in('id', planIds);
-              
+
               if (plans) {
                 planDetails = Object.fromEntries(
                   plans.map(p => [p.id, { plan_name: p.plan_name, plan_tier: p.plan_tier }])
                 );
               }
             }
-            
+
             // Create a map of file_name to template info
             const templateMap = new Map<string, any>();
             dbTemplates.forEach(t => {
@@ -105,12 +139,12 @@ export default function DocumentTemplateManager() {
                 });
               }
             });
-            
+
             // Enrich templates with plan information
             templatesList = templatesList.map((t: DocumentTemplate) => {
               const fileName = (t.file_name || t.name || '').replace('.docx', '').toLowerCase();
               const dbTemplate = templateMap.get(fileName);
-              
+
               if (dbTemplate && permissions) {
                 // Find plan permission for this template
                 const templatePerm = permissions.find(p => p.template_id === dbTemplate.id);
@@ -124,14 +158,14 @@ export default function DocumentTemplateManager() {
                   };
                 }
               }
-              
+
               return t;
             });
           }
         } catch (planError) {
           // If plan enrichment fails, just use templates without plan info
         }
-        
+
         setTemplates(templatesList);
       } else {
         toast.error('Failed to fetch templates');
@@ -173,6 +207,11 @@ export default function DocumentTemplateManager() {
       formData.append('name', newTemplate.name);
       formData.append('description', newTemplate.description);
       formData.append('file', newTemplate.file);
+      
+      // Add plan_ids if selected
+      if (newTemplate.selectedPlans.length > 0) {
+        formData.append('plan_ids', JSON.stringify(newTemplate.selectedPlans));
+      }
 
       const response = await fetch(`${API_BASE_URL}/upload-template`, {
         method: 'POST',
@@ -182,7 +221,7 @@ export default function DocumentTemplateManager() {
       if (response.ok) {
         await response.json();
         toast.success('Template uploaded successfully');
-        setNewTemplate({ name: '', description: '', file: null });
+        setNewTemplate({ name: '', description: '', file: null, selectedPlans: [] });
         setShowUploadForm(false);
         fetchTemplates();
       } else {
@@ -211,7 +250,7 @@ export default function DocumentTemplateManager() {
   const processDocument = async (templateId: string, vesselImo: string) => {
     try {
       setLoading(true);
-      
+
       // Create a dummy file for the template_file parameter (required by API but not used)
       const dummyFile = new File(['dummy'], 'dummy.docx', {
         type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
@@ -235,10 +274,10 @@ export default function DocumentTemplateManager() {
 
       if (response.ok) {
         const result = JSON.parse(responseText);
-        
+
         if (result.success) {
           toast.success('Document processed successfully');
-          
+
           // Auto-download the document
           setTimeout(() => {
             window.open(`${API_BASE_URL}/download/${result.document_id}`, '_blank');
@@ -309,7 +348,7 @@ export default function DocumentTemplateManager() {
             <p className="text-sm text-muted-foreground">
               Manage Word document templates with placeholders for automatic data filling
             </p>
-            <Button 
+            <Button
               onClick={() => setShowUploadForm(!showUploadForm)}
               className="flex items-center gap-2"
             >
@@ -335,7 +374,7 @@ export default function DocumentTemplateManager() {
                       required
                     />
                   </div>
-                  
+
                   <div>
                     <Label htmlFor="description">Description</Label>
                     <Textarea
@@ -346,7 +385,7 @@ export default function DocumentTemplateManager() {
                       rows={3}
                     />
                   </div>
-                  
+
                   <div>
                     <Label htmlFor="file">Word Document (.docx)</Label>
                     <Input
@@ -360,7 +399,44 @@ export default function DocumentTemplateManager() {
                       Upload a Word document with placeholders like {`{{vessel_name}}`}, {`{{imo}}`}, etc.
                     </p>
                   </div>
-                  
+
+                  {plans.length > 0 && (
+                    <div>
+                      <Label className="block mb-2">Plan Access (Optional)</Label>
+                      <p className="text-xs text-muted-foreground mb-2">
+                        Select which subscription plans can download this template. Leave empty to make it available to all plans.
+                      </p>
+                      <div className="space-y-2 border rounded-md p-3 bg-muted/50">
+                        {plans.map(plan => (
+                          <div key={plan.id} className="flex items-center">
+                            <input
+                              type="checkbox"
+                              id={`plan_${plan.id}`}
+                              checked={newTemplate.selectedPlans.includes(plan.plan_tier)}
+                              onChange={(e) => {
+                                if (e.target.checked) {
+                                  setNewTemplate(prev => ({
+                                    ...prev,
+                                    selectedPlans: [...prev.selectedPlans, plan.plan_tier]
+                                  }));
+                                } else {
+                                  setNewTemplate(prev => ({
+                                    ...prev,
+                                    selectedPlans: prev.selectedPlans.filter(p => p !== plan.plan_tier)
+                                  }));
+                                }
+                              }}
+                              className="rounded border-gray-300 mr-2"
+                            />
+                            <label htmlFor={`plan_${plan.id}`} className="text-sm cursor-pointer">
+                              {plan.plan_name}
+                            </label>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   <div className="flex gap-2">
                     <Button type="submit" disabled={uploading || !newTemplate.file}>
                       {uploading ? (
@@ -375,9 +451,9 @@ export default function DocumentTemplateManager() {
                         </>
                       )}
                     </Button>
-                    <Button 
-                      type="button" 
-                      variant="outline" 
+                    <Button
+                      type="button"
+                      variant="outline"
                       onClick={() => setShowUploadForm(false)}
                     >
                       Cancel
@@ -412,11 +488,11 @@ export default function DocumentTemplateManager() {
                             {template.is_active ? "Active" : "Inactive"}
                           </Badge>
                         </div>
-                        
+
                         <p className="text-sm text-muted-foreground mb-3">
                           {template.description}
                         </p>
-                        
+
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                           <div>
                             <span className="font-medium">File:</span>
@@ -444,7 +520,7 @@ export default function DocumentTemplateManager() {
                             </Badge>
                           </div>
                         )}
-                        
+
                         {template.placeholders && template.placeholders.length > 0 && (
                           <div className="mt-3">
                             <span className="font-medium text-sm">Placeholders:</span>
@@ -463,7 +539,7 @@ export default function DocumentTemplateManager() {
                           </div>
                         )}
                       </div>
-                      
+
                       <div className="flex items-center gap-2 ml-4">
                         <Button
                           variant="outline"
@@ -517,7 +593,7 @@ export default function DocumentTemplateManager() {
                   ))}
                 </select>
               </div>
-              
+
               <div className="flex gap-2">
                 <Button
                   variant="outline"
