@@ -559,11 +559,28 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                     }
                   }
                 } else if (userPlanId) {
-                  // Subscription plan check - use can_download from API, don't override plan_name
-                  if (templatePerm) {
+                  // Subscription plan check
+                  // CRITICAL: First check if template has plan_tiers from API
+                  // If user's plan tier is in template's plan_tiers array, allow access
+                  const templatePlanTiers = t.plan_tiers || [];
+                  const userPlanTier = userPlanDetails?.plan_tier || null;
+                  
+                  let planMatchFromTiers = false;
+                  if (templatePlanTiers.length > 0 && userPlanTier) {
+                    const normalizedUserTier = userPlanTier.toLowerCase().trim();
+                    const normalizedTemplateTiers = templatePlanTiers.map(tier => String(tier).toLowerCase().trim());
+                    planMatchFromTiers = normalizedTemplateTiers.includes(normalizedUserTier);
+                  }
+                  
+                  if (planMatchFromTiers) {
+                    // User's plan tier matches template's plan_tiers - allow access
+                    canDownload = true;
+                  } else if (templatePerm) {
+                    // Fallback to permission table check
                     canDownload = templatePerm.plan_id === userPlanId && templatePerm.can_download === true;
                     // Don't override plan_name - keep what came from API
                   } else {
+                    // No permission found and plan_tiers don't match - deny access
                     canDownload = false;
                     // Don't override plan_name - keep what came from API (template's required plan)
                   }
