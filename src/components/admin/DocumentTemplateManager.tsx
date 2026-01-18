@@ -34,17 +34,9 @@ interface VesselInfo {
 
 const API_BASE_URL = 'http://localhost:8000';
 
-interface SubscriptionPlan {
-  id: string;
-  plan_name: string;
-  plan_tier: string;
-  is_active: boolean;
-}
-
 export default function DocumentTemplateManager() {
   const [templates, setTemplates] = useState<DocumentTemplate[]>([]);
   const [vessels, setVessels] = useState<VesselInfo[]>([]);
-  const [plans, setPlans] = useState<SubscriptionPlan[]>([]);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<DocumentTemplate | null>(null);
@@ -52,39 +44,13 @@ export default function DocumentTemplateManager() {
   const [newTemplate, setNewTemplate] = useState({
     name: '',
     description: '',
-    file: null as File | null,
-    selectedPlans: [] as string[]
+    file: null as File | null
   });
 
   useEffect(() => {
     fetchTemplates();
     fetchVessels();
-    fetchPlans();
   }, []);
-
-  const fetchPlans = async () => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/plans-db`);
-      if (response.ok) {
-        const data = await response.json();
-        if (data.plans) {
-          // Convert plans object to array
-          const plansArray = Object.entries(data.plans)
-            .map(([planTier, planData]: [string, any]) => ({
-              id: planData.id || planTier,
-              plan_name: planData.name || planTier,
-              plan_tier: planTier,
-              is_active: planData.is_active !== false
-            }))
-            .filter(p => p.is_active);
-          setPlans(plansArray);
-        }
-      }
-    } catch (error) {
-      console.error('Error fetching plans:', error);
-      // Silently fail - plans selection is optional
-    }
-  };
 
   const fetchTemplates = async () => {
     try {
@@ -207,11 +173,6 @@ export default function DocumentTemplateManager() {
       formData.append('name', newTemplate.name);
       formData.append('description', newTemplate.description);
       formData.append('file', newTemplate.file);
-      
-      // Add plan_ids if selected
-      if (newTemplate.selectedPlans.length > 0) {
-        formData.append('plan_ids', JSON.stringify(newTemplate.selectedPlans));
-      }
 
       const response = await fetch(`${API_BASE_URL}/upload-template`, {
         method: 'POST',
@@ -221,7 +182,7 @@ export default function DocumentTemplateManager() {
       if (response.ok) {
         await response.json();
         toast.success('Template uploaded successfully');
-        setNewTemplate({ name: '', description: '', file: null, selectedPlans: [] });
+        setNewTemplate({ name: '', description: '', file: null });
         setShowUploadForm(false);
         fetchTemplates();
       } else {
@@ -399,43 +360,6 @@ export default function DocumentTemplateManager() {
                       Upload a Word document with placeholders like {`{{vessel_name}}`}, {`{{imo}}`}, etc.
                     </p>
                   </div>
-
-                  {plans.length > 0 && (
-                    <div>
-                      <Label className="block mb-2">Plan Access (Optional)</Label>
-                      <p className="text-xs text-muted-foreground mb-2">
-                        Select which subscription plans can download this template. Leave empty to make it available to all plans.
-                      </p>
-                      <div className="space-y-2 border rounded-md p-3 bg-muted/50">
-                        {plans.map(plan => (
-                          <div key={plan.id} className="flex items-center">
-                            <input
-                              type="checkbox"
-                              id={`plan_${plan.id}`}
-                              checked={newTemplate.selectedPlans.includes(plan.plan_tier)}
-                              onChange={(e) => {
-                                if (e.target.checked) {
-                                  setNewTemplate(prev => ({
-                                    ...prev,
-                                    selectedPlans: [...prev.selectedPlans, plan.plan_tier]
-                                  }));
-                                } else {
-                                  setNewTemplate(prev => ({
-                                    ...prev,
-                                    selectedPlans: prev.selectedPlans.filter(p => p !== plan.plan_tier)
-                                  }));
-                                }
-                              }}
-                              className="rounded border-gray-300 mr-2"
-                            />
-                            <label htmlFor={`plan_${plan.id}`} className="text-sm cursor-pointer">
-                              {plan.plan_name}
-                            </label>
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
 
                   <div className="flex gap-2">
                     <Button type="submit" disabled={uploading || !newTemplate.file}>
