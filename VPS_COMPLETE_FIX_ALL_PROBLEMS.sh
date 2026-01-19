@@ -65,6 +65,12 @@ echo "=========================================="
 echo "STEP 5: Fixing Syntax Errors"
 echo "=========================================="
 
+# Fix line 481 indentation error
+if sed -n '481p' main.py | grep -q "^        $"; then
+    sed -i '481s/^        $/    /' main.py || sed -i '481s/^        $//' main.py
+    echo "✅ Fixed line 481 indentation error"
+fi
+
 # Remove misplaced code after raise HTTPException
 RAISE_LINE=$(grep -n "raise HTTPException.*Template not found.*template_id" main.py 2>/dev/null | head -1 | cut -d: -f1)
 if [ ! -z "$RAISE_LINE" ]; then
