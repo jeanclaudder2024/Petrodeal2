@@ -1,0 +1,4 @@
+# Quick Fix - Install Missing aiohttp Module
+# Copy and paste this to your VPS:
+
+cd /opt/petrodealhub/document-processor && source venv/bin/activate && pip install aiohttp && echo "✅ aiohttp installed" && pm2 restart python-api && sleep 5 && curl http://localhost:8000/health && echo "✅ API working!" || echo "Check logs: pm2 logs python-api --err"
