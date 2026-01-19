@@ -27,88 +27,113 @@ with open('main.py', 'r', encoding='utf-8') as f:
     lines = f.readlines()
 
 # Find the specific raise HTTPException around line 2349
-# It should be inside a try block that ends with except Exception as e:
+# It should be: raise HTTPException(...) followed immediately by except Exception as e:
 target_raise_line = None
-target_except_line = None
 
-# Look for the specific pattern: raise HTTPException for Template not found
-for i in range(max(0, 2340), min(len(lines), 2360)):
+# Look for the pattern: raise HTTPException with Template not found around line 2349
+for i in range(max(0, 2345), min(len(lines), 2355)):
     line = lines[i].strip()
     
-    # Find the raise statement
-    if 'raise HTTPException(status_code=404' in line and 'Template not found' in line:
+    # Find the raise statement with Template not found
+    if 'raise HTTPException(status_code=404' in line and ('Template not found' in line or 'template_id' in line):
         target_raise_line = i
-        print(f"   Found target raise at line {i+1}: {line[:80]}")
-        
-        # Now find the except block that should immediately follow
-        # This should be the except for the outer try block
         indent_raise = len(lines[i]) - len(lines[i].lstrip())
         
-        # Look for except block with same or less indentation
+        print(f"   Found target raise at line {i+1}: {line[:80]}")
+        print(f"   Indentation: {indent_raise} spaces")
+        
+        # The correct structure should be:
+        # raise HTTPException(...)
+        # except Exception as e:
+        #     logger.error(...)
+        #     raise HTTPException(...)
+        
+        # Find the except block that should immediately follow
         j = i + 1
         found_except = False
-        while j < len(lines) and j < i + 50:
+        
+        # Look for except block - it should be at same or less indentation as the try block
+        # Since raise is inside a try, except should be at same indentation as try
+        # Try block should be at indent_raise - 4 (standard Python)
+        try_indent = indent_raise - 4 if indent_raise >= 4 else 0
+        
+        while j < len(lines) and j < i + 100:  # Check up to 100 lines ahead
             current_line = lines[j].strip()
             current_indent = len(lines[j]) - len(lines[j].lstrip())
             
-            # Check if this is the except block we need
-            if current_line.startswith('except') and current_indent <= indent_raise:
-                target_except_line = j
-                found_except = True
-                print(f"   Found target except at line {j+1}: {current_line[:80]}")
-                break
+            # Check if this is the except block we need (same indentation as try, or less)
+            if current_line.startswith('except'):
+                if current_indent <= try_indent or current_indent <= indent_raise:
+                    print(f"   Found except block at line {j+1}: {current_line[:80]}")
+                    print(f"   Except indentation: {current_indent} spaces")
+                    
+                    # Remove ALL code between raise and except
+                    if j > i + 1:
+                        lines_to_remove = j - i - 1
+                        print(f"   🗑️  Removing {lines_to_remove} lines of unreachable code (lines {i+2} to {j+1})")
+                        
+                        # Show what will be removed
+                        print("   Lines to be removed:")
+                        for k in range(i + 1, j):
+                            content = lines[k].rstrip()
+                            if len(content) > 100:
+                                content = content[:100] + "..."
+                            print(f"      {k+1}: {content}")
+                        
+                        # Remove the lines
+                        del lines[i + 1:j]
+                        
+                        # Write back
+                        with open('main.py', 'w', encoding='utf-8') as f:
+                            f.writelines(lines)
+                        
+                        print(f"   ✅ Removed unreachable code")
+                        print(f"   ✅ File now has {len(lines)} lines")
+                        found_except = True
+                    else:
+                        print(f"   ✅ No unreachable code (except immediately follows raise)")
+                        found_except = True
+                    break
             
-            # If we hit another function or significant structure, stop
+            # If we hit another function or significant structure, stop searching
             if (current_line.startswith('@app.') or 
                 (current_line.startswith('def ') and current_indent == 0)):
                 print(f"   ⚠️  Hit next function/structure at line {j+1} without finding except")
+                print(f"   This means the except block is missing!")
+                print(f"   Attempting to insert correct except block...")
+                
+                # Insert correct except block after raise
+                except_block = ['    except Exception as e:\n',
+                               '        logger.error(f"Error getting placeholder settings: {e}")\n',
+                               '        raise HTTPException(status_code=500, detail=str(e))\n']
+                
+                lines[i+1:i+1] = except_block
+                
+                # Write back
+                with open('main.py', 'w', encoding='utf-8') as f:
+                    f.writelines(lines)
+                
+                print(f"   ✅ Inserted correct except block after raise")
+                found_except = True
                 break
             
             j += 1
         
         if not found_except:
-            print(f"   ❌ Could not find except block after raise at line {i+1}")
-            print(f"   Checking structure around line {i+1}...")
-            for k in range(max(0, i-3), min(len(lines), i+10)):
-                print(f"      Line {k+1}: {lines[k].rstrip()}")
-            break
-        
-        # Remove all code between raise and except
-        if target_except_line > target_raise_line + 1:
-            lines_to_remove = target_except_line - target_raise_line - 1
-            print(f"   🗑️  Removing {lines_to_remove} lines of unreachable code (lines {target_raise_line+2} to {target_except_line})")
-            
-            # Show what will be removed
-            print("   Lines to be removed:")
-            for k in range(target_raise_line + 1, target_except_line):
-                content = lines[k].rstrip()
-                if len(content) > 100:
-                    content = content[:100] + "..."
-                print(f"      {k+1}: {content}")
-            
-            # Remove the lines
-            del lines[target_raise_line + 1:target_except_line]
-            
-            # Write back
-            with open('main.py', 'w', encoding='utf-8') as f:
-                f.writelines(lines)
-            
-            print(f"   ✅ Removed unreachable code")
-            print(f"   ✅ File now has {len(lines)} lines")
-        else:
-            print(f"   ✅ No unreachable code found (except immediately follows raise)")
+            print(f"   ❌ Could not find except block after raise")
+            print(f"   Showing structure around raise:")
+            for k in range(max(0, i-5), min(len(lines), i+20)):
+                marker = " >>> " if k == i else "     "
+                print(f"{marker}Line {k+1}: {lines[k].rstrip()}")
         
         break
 
 if target_raise_line is None:
     print("   ❌ Could not find the target raise HTTPException statement")
-    print("   Searching for any raise HTTPException with Template not found...")
+    print("   Searching for any raise HTTPException...")
     for i in range(2340, min(2360, len(lines))):
-        if 'raise HTTPException' in lines[i] and 'Template not found' in lines[i]:
+        if 'raise HTTPException' in lines[i]:
             print(f"   Found at line {i+1}: {lines[i].strip()[:80]}")
-            print("   Showing surrounding context:")
-            for j in range(max(0, i-3), min(len(lines), i+15)):
-                print(f"      {j+1}: {lines[j].rstrip()}")
 PYTHON_FIX
 
 echo ""
