@@ -1,0 +1,4 @@
+# Quick Final Fix - Remove Line 2350 Error
+# Copy and paste this to your VPS:
+
+cd /opt/petrodealhub/document-processor && cp main.py main.py.final_fix.$(date +%Y%m%d_%H%M%S) && git checkout HEAD -- main.py && sed -i '/\[permission-convert\] Plan.*EMPTY.*NULL.*skipping/d' main.py && source venv/bin/activate && python3 -m py_compile main.py && echo "✅ Syntax OK" && pm2 delete python-api 2>/dev/null; pm2 start python-api --name python-api --interpreter venv/bin/python -- main.py && sleep 5 && curl http://localhost:8000/health && echo "✅ API working!" || echo "❌ Check logs: pm2 logs python-api --err --lines 20"
