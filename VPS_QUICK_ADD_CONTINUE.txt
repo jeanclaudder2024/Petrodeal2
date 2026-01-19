@@ -1,0 +1,4 @@
+# Quick Fix - Add Missing Continue Statement
+# Copy and paste this to your VPS:
+
+cd /opt/petrodealhub/document-processor && cp main.py main.py.add_continue.$(date +%Y%m%d_%H%M%S) && IF_LINE=$(grep -n "^\s*if not template_name:" main.py | head -1 | cut -d: -f1) && IF_INDENT=$(sed -n "${IF_LINE}p" main.py | sed 's/[^ ].*//' | wc -c) && PROPER_INDENT=$(printf '%*s' $((IF_INDENT + 4)) '') && if ! sed -n "$((IF_LINE+1))p" main.py | grep -q "continue"; then sed -i "${IF_LINE}a\\${PROPER_INDENT}continue" main.py && echo "✅ Added continue"; fi && source venv/bin/activate && python3 -m py_compile main.py && echo "✅ Syntax OK" && pm2 restart python-api && sleep 3 && curl http://localhost:8000/health || echo "Check logs: pm2 logs python-api --err"
