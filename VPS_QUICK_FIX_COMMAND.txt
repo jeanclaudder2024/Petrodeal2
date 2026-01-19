@@ -1,0 +1,3 @@
+# Quick Fix Command - Copy and Paste This to Your VPS Terminal
+
+cd /opt/petrodealhub/document-processor && cp main.py main.py.broken.$(date +%Y%m%d_%H%M%S) && git checkout HEAD -- main.py && source venv/bin/activate && python -m py_compile main.py && pm2 restart python-api && sleep 3 && curl http://localhost:8000/health || echo "API not responding - check logs: pm2 logs python-api --err --lines 50"
