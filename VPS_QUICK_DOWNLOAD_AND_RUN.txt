@@ -1,0 +1,4 @@
+# Quick Command to Download and Run Fix Script on VPS
+# Copy and paste this entire command to your VPS terminal:
+
+cd /opt/petrodealhub/document-processor && curl -O https://raw.githubusercontent.com/jeanclaudder2024/Petrodeal2/main/VPS_FIX_MAIN_PY_COMPLETE.sh && chmod +x VPS_FIX_MAIN_PY_COMPLETE.sh && ./VPS_FIX_MAIN_PY_COMPLETE.sh
