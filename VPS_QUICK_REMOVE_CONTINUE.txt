@@ -1,0 +1,4 @@
+# Quick Fix - Remove Bad Continue Statement
+# Copy and paste this to your VPS:
+
+cd /opt/petrodealhub/document-processor && cp main.py main.py.quick_fix.$(date +%Y%m%d_%H%M%S) && RAISE_LINE=$(grep -n "raise HTTPException.*Template not found.*template_id" main.py | head -1 | cut -d: -f1) && echo "Found raise at line $RAISE_LINE" && sed -i '/^[[:space:]]\{30,\}continue[[:space:]]*$/d' main.py && source venv/bin/activate && python3 -m py_compile main.py && echo "✅ Syntax OK" && pm2 restart python-api && sleep 3 && curl http://localhost:8000/health || echo "Check logs: pm2 logs python-api --err"
