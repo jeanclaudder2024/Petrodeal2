@@ -1,0 +1,4 @@
+# Quick Command - Pull from GitHub and Run Complete Fix
+# Copy and paste this complete command to your VPS:
+
+cd /opt/petrodealhub && git pull origin main 2>/dev/null || git pull origin master && cd document-processor && git pull origin master 2>/dev/null || git pull origin main && curl -O https://raw.githubusercontent.com/jeanclaudder2024/Petrodeal2/main/VPS_COMPLETE_FIX_ALL_PROBLEMS.sh && chmod +x VPS_COMPLETE_FIX_ALL_PROBLEMS.sh && ./VPS_COMPLETE_FIX_ALL_PROBLEMS.sh
