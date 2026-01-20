@@ -19,11 +19,55 @@ echo ""
 # 2. Update API endpoint
 echo "2. Updating editor.js API endpoint..."
 
-# Use sed to fix the API endpoint
-sed -i "s|apiBase = 'https://petrodealhub.com/api';|apiBase = 'https://control.petrodealhub.com';|g" cms/editor.js
+# Use sed to fix the API endpoint - handle control.petrodealhub.com separately
+sed -i "s|else if (hostname === 'control.petrodealhub.com' || hostname === 'petrodealhub.com' || hostname === 'www.petrodealhub.com') {|else if (hostname === 'control.petrodealhub.com') {|g" cms/editor.js
 
-# Also fix if it's in a different format
-sed -i "s|'https://petrodealhub.com/api'|'https://control.petrodealhub.com'|g" cms/editor.js
+# Add the new line for control.petrodealhub.com
+if ! grep -q "apiBase = 'https://control.petrodealhub.com';" cms/editor.js; then
+    # Use Python to do a precise replacement
+    python3 << 'PYTHON_FIX'
+with open('cms/editor.js', 'r') as f:
+    content = f.read()
+
+# Replace the problematic section
+old_pattern = """        // Production domains
+        else if (hostname === 'control.petrodealhub.com' || hostname === 'petrodealhub.com' || hostname === 'www.petrodealhub.com') {
+            apiBase = 'https://petrodealhub.com/api';
+        }"""
+
+new_pattern = """        // Production domains
+        else if (hostname === 'control.petrodealhub.com') {
+            // Use same origin (document-processor API) instead of main API
+            apiBase = 'https://control.petrodealhub.com';
+        } else if (hostname === 'petrodealhub.com' || hostname === 'www.petrodealhub.com') {
+            apiBase = 'https://petrodealhub.com/api';
+        }"""
+
+if old_pattern in content:
+    content = content.replace(old_pattern, new_pattern)
+    with open('cms/editor.js', 'w') as f:
+        f.write(content)
+    print("   ✅ Updated using Python")
+else:
+    # Try simpler replacement
+    import re
+    pattern = r"else if \(hostname === 'control\.petrodealhub\.com' \|\| hostname === 'petrodealhub\.com' \|\| hostname === 'www\.petrodealhub\.com'\) \{"
+    replacement = "else if (hostname === 'control.petrodealhub.com') {"
+    content = re.sub(pattern, replacement, content)
+    
+    # Now fix the apiBase line
+    content = re.sub(
+        r"(else if \(hostname === 'control\.petrodealhub\.com'\) \{[^}]+)apiBase = 'https://petrodealhub\.com/api';",
+        r"\1apiBase = 'https://control.petrodealhub.com';",
+        content,
+        flags=re.DOTALL
+    )
+    
+    with open('cms/editor.js', 'w') as f:
+        f.write(content)
+    print("   ✅ Updated using regex")
+PYTHON_FIX
+fi
 
 echo "   ✅ Updated API endpoint"
 echo ""
