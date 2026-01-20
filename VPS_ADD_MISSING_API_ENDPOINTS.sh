@@ -29,12 +29,13 @@ echo ""
 # 3. Add missing location blocks
 echo "3. Adding missing location blocks..."
 
-API_HOST="$API_HOST" python3 << PYTHON_FIX
+# Pass API_HOST as command-line argument to Python
+python3 - "$API_HOST" << PYTHON_FIX
 import re
-import os
+import sys
 
-# Get API_HOST from environment or use default
-API_HOST = os.environ.get('API_HOST', '127.0.0.1')
+# Get API_HOST from command-line argument or use default
+API_HOST = sys.argv[1] if len(sys.argv) > 1 else '127.0.0.1'
 print(f"   Using API_HOST: {API_HOST}")
 
 with open('$NGINX_CONFIG', 'r') as f:
