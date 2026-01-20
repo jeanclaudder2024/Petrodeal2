@@ -1,232 +1,229 @@
 #!/bin/bash
-# Fix 502 Bad Gateway - API not responding
+# Fix 502 Bad Gateway error for document-processor API
 
 set -e
 
-cd /opt/petrodealhub/document-processor
-source venv/bin/activate
-
 echo "=========================================="
-echo "FIXING 502 BAD GATEWAY"
+echo "FIX 502 BAD GATEWAY ERROR"
 echo "=========================================="
 echo ""
 
-# 1. Check Python syntax
-echo "1. Checking Python syntax..."
-python3 -m py_compile main.py 2>&1
-SYNTAX_EXIT=$?
+# 1. Check PM2 status
+echo "1. Checking python-api status..."
+pm2 status python-api
+echo ""
 
-if [ $SYNTAX_EXIT -ne 0 ]; then
-    echo "   ❌ Syntax errors found!"
-    python3 -m py_compile main.py 2>&1 | head -15
+# 2. Check if API is responding on localhost
+echo "2. Testing API on localhost:8000..."
+HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/health 2>/dev/null || echo "000")
+if [ "$HTTP_CODE" = "200" ]; then
+    echo "   ✅ API is responding on localhost:8000 (HTTP $HTTP_CODE)"
+    curl -s http://localhost:8000/health | head -1
+else
+    echo "   ❌ API is NOT responding on localhost:8000 (HTTP $HTTP_CODE)"
+    echo "   Checking logs..."
+    pm2 logs python-api --lines 30 --nostream | tail -20
     echo ""
-    echo "   Fixing common issues..."
+    echo "   Attempting to restart API..."
+    cd /opt/petrodealhub/document-processor
     
-    # Fix undefined plan_tiers
-    if grep -q "plan_tiers.*if plan_tiers else plan_ids" main.py; then
-        sed -i 's/plan_tiers if plan_tiers else plan_ids/plan_ids/g' main.py
-        echo "   ✅ Fixed plan_tiers variable"
+    # Stop all python-api processes
+    pm2 delete python-api 2>/dev/null || true
+    sleep 2
+    
+    # Start fresh
+    if [ -d "venv" ] && [ -f "venv/bin/python" ]; then
+        PYTHON_CMD="venv/bin/python"
+    elif [ -d "../venv" ] && [ -f "../venv/bin/python" ]; then
+        PYTHON_CMD="../venv/bin/python"
+    else
+        PYTHON_CMD="python3"
     fi
     
+    pm2 start "$PYTHON_CMD" main.py --name python-api --interpreter python3 --cwd /opt/petrodealhub/document-processor || {
+        pm2 start python3 main.py --name python-api --interpreter python3 --cwd /opt/petrodealhub/document-processor
+    }
+    
+    sleep 5
+    
     # Test again
-    python3 -m py_compile main.py 2>&1
-    if [ $? -ne 0 ]; then
-        echo "   ❌ Syntax still has errors - attempting git restore..."
-        git fetch origin master 2>/dev/null || git fetch origin main 2>/dev/null || true
-        git reset --hard origin/master 2>/dev/null || git reset --hard origin/main 2>/dev/null || true
-        git checkout --force . 2>/dev/null || true
+    HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/health 2>/dev/null || echo "000")
+    if [ "$HTTP_CODE" = "200" ]; then
+        echo "   ✅ API is now responding after restart"
+    else
+        echo "   ❌ API still not responding"
+        echo "   Checking for errors..."
+        pm2 logs python-api --lines 20 --nostream | tail -10
+    fi
+fi
+echo ""
+
+# 3. Check nginx error log
+echo "3. Checking nginx error log for 502 errors..."
+if [ -f /var/log/nginx/error.log ]; then
+    RECENT_502=$(sudo tail -50 /var/log/nginx/error.log | grep -i "502\|bad gateway\|upstream\|connection refused" | tail -10 || true)
+    if [ -n "$RECENT_502" ]; then
+        echo "   Recent 502 errors:"
+        echo "$RECENT_502" | while read line; do
+            echo "   $line"
+        done
+    else
+        echo "   ✅ No recent 502 errors in log"
+    fi
+else
+    echo "   ⚠️  Nginx error log not found"
+fi
+echo ""
+
+# 4. Check nginx configuration for /cms/ location
+echo "4. Checking nginx configuration for /cms/ location..."
+NGINX_CONFIG="/etc/nginx/sites-available/control"
+if [ -f "$NGINX_CONFIG" ]; then
+    if grep -q "location /cms" "$NGINX_CONFIG"; then
+        echo "   ✅ /cms/ location block found"
+        echo "   Configuration:"
+        grep -A 10 "location /cms" "$NGINX_CONFIG" | head -12
         
-        python3 -m py_compile main.py 2>&1
-        if [ $? -ne 0 ]; then
-            echo "   ❌ All fixes failed"
-            python3 -m py_compile main.py 2>&1 | head -10
-            exit 1
+        # Check if it's proxying correctly
+        if grep -A 10 "location /cms" "$NGINX_CONFIG" | grep -q "proxy_pass.*localhost:8000"; then
+            echo "   ✅ Correctly configured to proxy to localhost:8000"
+        else
+            echo "   ⚠️  May not be correctly configured to proxy to localhost:8000"
+            echo "   Current proxy_pass setting:"
+            grep -A 10 "location /cms" "$NGINX_CONFIG" | grep "proxy_pass" || echo "   Not found"
+        fi
+    else
+        echo "   ❌ /cms/ location block NOT found!"
+        echo "   Adding /cms/ location block..."
+        
+        # Find where to insert it (after other location blocks)
+        INSERT_AFTER=$(grep -n "location /health\|location /api\|location /templates" "$NGINX_CONFIG" | tail -1 | cut -d: -f1 || echo "0")
+        
+        if [ "$INSERT_AFTER" != "0" ]; then
+            # Insert after this line
+            CMS_BLOCK='    # CMS static files
+    location /cms {
+        alias /opt/petrodealhub/document-processor/cms;
+        try_files $uri $uri/ /cms/index.html;
+        index index.html;
+        
+        # CORS headers
+        add_header Access-Control-Allow-Origin $http_origin always;
+        add_header Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS" always;
+        add_header Access-Control-Allow-Headers "Content-Type, Authorization" always;
+    }'
+            
+            sudo sed -i "${INSERT_AFTER}a\\$CMS_BLOCK" "$NGINX_CONFIG"
+            echo "   ✅ Added /cms/ location block"
+        else
+            echo "   ⚠️  Could not find insertion point, manual configuration needed"
         fi
     fi
 else
-    echo "   ✅ Python syntax is correct!"
+    echo "   ❌ Nginx config file not found at $NGINX_CONFIG"
 fi
 echo ""
 
-# 2. Check PM2 status
-echo "2. Checking PM2 status..."
-pm2 status python-api
-echo ""
-
-# 3. Check API error logs
-echo "3. Checking API error logs..."
-ERROR_LOG=$(pm2 logs python-api --err --lines 30 --nostream 2>/dev/null)
-if [ ! -z "$ERROR_LOG" ]; then
-    echo "   Recent error logs:"
-    echo "$ERROR_LOG" | tail -20
-    echo ""
-    
-    ERROR_COUNT=$(echo "$ERROR_LOG" | grep -c "IndentationError\|SyntaxError\|NameError\|ModuleNotFoundError" || echo "0")
-    if [ "$ERROR_COUNT" -gt "0" ]; then
-        echo "   ❌ Found $ERROR_COUNT error(s) in logs"
-    else
-        echo "   ✅ No syntax/import errors in logs"
-    fi
+# 5. Check if CMS directory exists
+echo "5. Checking if CMS directory exists..."
+if [ -d "/opt/petrodealhub/document-processor/cms" ]; then
+    echo "   ✅ CMS directory exists"
+    echo "   Contents:"
+    ls -la /opt/petrodealhub/document-processor/cms/ | head -10
 else
-    echo "   ⚠️  No error logs found (API may not have started)"
+    echo "   ❌ CMS directory NOT found!"
+    echo "   Checking document-processor directory..."
+    ls -la /opt/petrodealhub/document-processor/ | head -10
 fi
 echo ""
 
-# 4. Check if port 8000 is in use
-echo "4. Checking if port 8000 is in use..."
-if netstat -tlnp 2>/dev/null | grep -q ":8000 " || ss -tlnp 2>/dev/null | grep -q ":8000 "; then
-    echo "   ✅ Port 8000 is in use"
-    netstat -tlnp 2>/dev/null | grep ":8000 " || ss -tlnp 2>/dev/null | grep ":8000 "
+# 6. Test nginx configuration
+echo "6. Testing nginx configuration..."
+if sudo nginx -t 2>&1 | grep -q "successful"; then
+    echo "   ✅ Nginx configuration is valid"
+    sudo systemctl reload nginx || sudo systemctl restart nginx
+    echo "   ✅ Nginx reloaded"
 else
-    echo "   ❌ Port 8000 is NOT in use - API is not running!"
+    echo "   ❌ Nginx configuration has errors:"
+    sudo nginx -t 2>&1 | head -10
 fi
 echo ""
 
-# 5. Test API health endpoint
-echo "5. Testing API health endpoint..."
-if curl -s http://localhost:8000/health > /dev/null 2>&1; then
-    echo "   ✅ API is responding!"
-    curl -s http://localhost:8000/health | head -3
-else
-    echo "   ❌ API is NOT responding on port 8000"
-fi
-echo ""
-
-# 6. Restart API
-echo "6. Restarting API..."
-pm2 delete python-api 2>/dev/null || true
+# 7. Test /cms/ endpoint
+echo "7. Testing /cms/ endpoint..."
 sleep 2
-cd /opt/petrodealhub/document-processor
-pm2 start venv/bin/python --name python-api -- main.py
-echo "   ✅ API restarted"
-echo ""
-
-# 7. Wait for API to start
-echo "7. Waiting 15 seconds for API to start..."
-sleep 15
-echo ""
-
-# 8. Check PM2 status again
-echo "8. Checking PM2 status after restart..."
-pm2 status python-api
-echo ""
-
-# 9. Check for new errors
-echo "9. Checking for startup errors..."
-ERROR_LOG=$(pm2 logs python-api --err --lines 20 --nostream 2>/dev/null)
-if echo "$ERROR_LOG" | grep -q "IndentationError\|SyntaxError\|NameError\|ModuleNotFoundError"; then
-    echo "   ❌ Found startup errors:"
-    echo "$ERROR_LOG" | grep -E "IndentationError|SyntaxError|NameError|ModuleNotFoundError" | head -10
+CMS_CODE=$(curl -s -k -o /dev/null -w "%{http_code}" https://control.petrodealhub.com/cms/ 2>/dev/null || echo "000")
+if [ "$CMS_CODE" = "200" ] || [ "$CMS_CODE" = "301" ] || [ "$CMS_CODE" = "302" ]; then
+    echo "   ✅ /cms/ endpoint is responding (HTTP $CMS_CODE)"
 else
-    echo "   ✅ No syntax/import errors in logs!"
-fi
-echo ""
-
-# 10. Test API again
-echo "10. Testing API health endpoint again..."
-if curl -s http://localhost:8000/health > /dev/null 2>&1; then
-    echo "   ✅ API is responding!"
-    echo ""
-    echo "   Health check response:"
-    curl -s http://localhost:8000/health | head -5
-    echo ""
-else
-    echo "   ❌ API is still not responding"
-    echo ""
-    echo "   Latest error logs:"
-    pm2 logs python-api --err --lines 30 --nostream | tail -20
-fi
-echo ""
-
-# 11. Check nginx
-echo "11. Checking nginx..."
-if systemctl is-active --quiet nginx; then
-    echo "   ✅ Nginx is running"
+    echo "   ❌ /cms/ endpoint returns HTTP $CMS_CODE"
     
-    if nginx -t 2>/dev/null; then
-        echo "   ✅ Nginx configuration is valid"
-        
-        # Test nginx reload
-        systemctl reload nginx 2>/dev/null || true
-        echo "   ✅ Nginx reloaded"
-    else
-        echo "   ⚠️  Nginx configuration has errors"
-        nginx -t 2>&1 | head -5
-    fi
-else
-    echo "   ❌ Nginx is not running"
-    echo "   Starting nginx..."
-    systemctl start nginx
-    if systemctl is-active --quiet nginx; then
-        echo "   ✅ Nginx started"
-    else
-        echo "   ❌ Failed to start nginx"
+    # Check if API is the issue
+    if [ "$CMS_CODE" = "502" ]; then
+        echo "   502 Bad Gateway - nginx cannot reach the API"
+        echo "   Checking if API process is running..."
+        if pgrep -f "python.*main.py" > /dev/null || pgrep -f "python3.*main.py" > /dev/null; then
+            echo "   ✅ Python process is running"
+        else
+            echo "   ❌ Python process is NOT running!"
+            echo "   Starting API..."
+            cd /opt/petrodealhub/document-processor
+            if [ -d "venv" ] && [ -f "venv/bin/python" ]; then
+                PYTHON_CMD="venv/bin/python"
+            else
+                PYTHON_CMD="python3"
+            fi
+            pm2 start "$PYTHON_CMD" main.py --name python-api --interpreter python3 --cwd /opt/petrodealhub/document-processor
+            sleep 5
+        fi
     fi
 fi
 echo ""
 
-# 12. Final test
-echo "12. Final test - checking all systems..."
-SYNTAX_OK=false
-API_RUNNING=false
-API_RESPONDING=false
-NGINX_OK=false
-
-python3 -m py_compile main.py > /dev/null 2>&1 && SYNTAX_OK=true
-pm2 list | grep -q "python-api.*online" && API_RUNNING=true
-curl -s http://localhost:8000/health > /dev/null 2>&1 && API_RESPONDING=true
-systemctl is-active --quiet nginx && NGINX_OK=true
-
+# 8. Check port 8000
+echo "8. Checking port 8000..."
+if lsof -ti:8000 > /dev/null 2>&1 || netstat -tuln 2>/dev/null | grep -q ":8000 "; then
+    echo "   ✅ Port 8000 is in use"
+    echo "   Process using port 8000:"
+    lsof -i:8000 2>/dev/null | head -3 || netstat -tulpn 2>/dev/null | grep ":8000" | head -2
+else
+    echo "   ❌ Port 8000 is NOT in use!"
+    echo "   API is not listening on port 8000"
+fi
 echo ""
+
+# 9. Final test
+echo "9. Final verification..."
+echo "   Testing localhost:8000/health..."
+LOCAL_HEALTH=$(curl -s http://localhost:8000/health 2>/dev/null || echo "ERROR")
+if echo "$LOCAL_HEALTH" | grep -q "healthy\|status"; then
+    echo "   ✅ API is healthy on localhost:8000"
+else
+    echo "   ❌ API is not healthy: $LOCAL_HEALTH"
+fi
+
+echo "   Testing https://control.petrodealhub.com/cms/..."
+CMS_FINAL=$(curl -s -k -o /dev/null -w "%{http_code}" https://control.petrodealhub.com/cms/ 2>/dev/null || echo "000")
+if [ "$CMS_FINAL" = "200" ]; then
+    echo "   ✅ CMS endpoint is working (HTTP $CMS_FINAL)"
+else
+    echo "   ⚠️  CMS endpoint returns HTTP $CMS_FINAL"
+fi
+echo ""
+
+# 10. Summary
 echo "=========================================="
-echo "DIAGNOSIS SUMMARY"
+echo "502 FIX COMPLETE"
 echo "=========================================="
 echo ""
-
-if [ "$SYNTAX_OK" = true ]; then
-    echo "✅ Python syntax: OK"
-else
-    echo "❌ Python syntax: FAILED"
-fi
-
-if [ "$API_RUNNING" = true ]; then
-    echo "✅ API running: OK"
-else
-    echo "❌ API running: FAILED"
-fi
-
-if [ "$API_RESPONDING" = true ]; then
-    echo "✅ API responding: OK"
-else
-    echo "❌ API responding: FAILED"
-fi
-
-if [ "$NGINX_OK" = true ]; then
-    echo "✅ Nginx: OK"
-else
-    echo "❌ Nginx: FAILED"
-fi
-
+echo "Status:"
+echo "  PM2 python-api: $(pm2 jlist | grep -A 3 python-api | grep status | head -1 | cut -d'"' -f4 || echo 'unknown')"
+echo "  Port 8000: $(lsof -ti:8000 > /dev/null 2>&1 && echo 'in use' || echo 'not in use')"
+echo "  Nginx: $(systemctl is-active nginx && echo 'running' || echo 'not running')"
+echo "  /cms/ endpoint: HTTP $CMS_FINAL"
 echo ""
-
-if [ "$SYNTAX_OK" = true ] && [ "$API_RUNNING" = true ] && [ "$API_RESPONDING" = true ] && [ "$NGINX_OK" = true ]; then
-    echo "🎉 ALL SYSTEMS OPERATIONAL!"
-    echo ""
-    echo "✅ 502 Bad Gateway should be fixed"
-    echo "✅ CMS should be accessible at: https://control.petrodealhub.com/"
-    echo ""
-    echo "Test it: curl -I https://control.petrodealhub.com/"
-else
-    echo "⚠️  Some issues remain"
-    echo ""
-    if [ "$API_RESPONDING" = false ]; then
-        echo "API is not responding. Check logs:"
-        echo "  pm2 logs python-api --err --lines 50"
-        echo ""
-        echo "Or try starting manually to see errors:"
-        echo "  cd /opt/petrodealhub/document-processor"
-        echo "  source venv/bin/activate"
-        echo "  python main.py"
-    fi
-fi
+echo "If 502 persists, check:"
+echo "  pm2 logs python-api"
+echo "  sudo tail -f /var/log/nginx/error.log"
+echo "  curl http://localhost:8000/health"
 echo ""
