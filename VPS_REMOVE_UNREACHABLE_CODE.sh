@@ -3,185 +3,227 @@
 
 set -e
 
-cd /opt/petrodealhub/document-processor
-source venv/bin/activate
-
 echo "=========================================="
-echo "REMOVE UNREACHABLE CODE AFTER RAISE HTTPEXCEPTION"
+echo "REMOVE UNREACHABLE CODE AFTER raise HTTPException"
 echo "=========================================="
 echo ""
+
+cd /opt/petrodealhub/document-processor
 
 # 1. Backup
-BACKUP_FILE="main.py.before_remove_unreachable.$(date +%Y%m%d_%H%M%S)"
-cp main.py "$BACKUP_FILE"
-echo "1. ✅ Backed up to: $BACKUP_FILE"
+echo "1. Backing up main.py..."
+cp main.py main.py.backup.unreachable_fix_$(date +%Y%m%d_%H%M%S)
+echo "   ✅ Backup created"
 echo ""
 
-# 2. Show problematic area
-echo "2. Showing problematic area (lines 2340-2360):"
-sed -n '2340,2360p' main.py | cat -n -A
+# 2. Find the raise HTTPException line
+echo "2. Finding raise HTTPException around line 2349..."
+RAISE_LINE=$(grep -n "raise HTTPException.*Template not found.*template_id" main.py | head -1 | cut -d: -f1 || echo "0")
+echo "   Found at line: $RAISE_LINE"
 echo ""
 
-# 3. Find the raise HTTPException and remove unreachable code
-echo "3. Finding raise HTTPException and removing unreachable code..."
-
-# Use Python to fix this precisely
-python3 << 'PYTHON_FIX'
-import re
-
-with open('main.py', 'r', encoding='utf-8') as f:
+if [ "$RAISE_LINE" != "0" ] && [ "$RAISE_LINE" -gt 0 ]; then
+    echo "3. Checking context around line $RAISE_LINE..."
+    echo "   Lines $(($RAISE_LINE - 2)) to $(($RAISE_LINE + 5)):"
+    sed -n "$(($RAISE_LINE - 2)),$(($RAISE_LINE + 5))p" main.py | cat -n
+    echo ""
+    
+    # Check what comes after the raise
+    LINE_AFTER_RAISE=$(sed -n "$(($RAISE_LINE + 1))p" main.py)
+    echo "   Line after raise: '$LINE_AFTER_RAISE'"
+    
+    # Check if there's unreachable code (indented code after raise in same block)
+    if echo "$LINE_AFTER_RAISE" | grep -q "logger\|continue\|EMPTY"; then
+        echo "   ❌ Found unreachable code after raise statement"
+        echo ""
+        
+        echo "4. Finding all unreachable code after raise..."
+        # Find where the proper next block starts (less indented or empty line then new statement)
+        RAISE_INDENT=$(sed -n "${RAISE_LINE}p" main.py | sed 's/[^ ].*//' | wc -c)
+        RAISE_INDENT=$((RAISE_INDENT - 1))
+        
+        echo "   Raise statement indentation: $RAISE_INDENT spaces"
+        
+        # Find the next line with same or less indentation that's not empty
+        # Start checking from line after raise
+        START_REMOVE=$(($RAISE_LINE + 1))
+        END_REMOVE=$START_REMOVE
+        
+        # Find all lines that are more indented than the raise (unreachable code)
+        # until we find a line with same or less indentation (proper next block)
+        for i in $(seq $(($RAISE_LINE + 1)) $((RAISE_LINE + 50))); do
+            LINE_CONTENT=$(sed -n "${i}p" main.py)
+            if [ -z "$LINE_CONTENT" ]; then
+                # Empty line - check next
+                continue
+            fi
+            
+            LINE_INDENT=$(echo "$LINE_CONTENT" | sed 's/[^ ].*//' | wc -c)
+            LINE_INDENT=$((LINE_INDENT - 1))
+            
+            # If line has more indentation than raise, it's unreachable
+            if [ "$LINE_INDENT" -gt "$RAISE_INDENT" ]; then
+                echo "   Line $i is unreachable (indent: $LINE_INDENT > $RAISE_INDENT): ${LINE_CONTENT:0:60}..."
+                END_REMOVE=$i
+            elif [ "$LINE_INDENT" -le "$RAISE_INDENT" ]; then
+                # Found proper next block
+                break
+            fi
+        done
+        
+        if [ "$END_REMOVE" -gt "$START_REMOVE" ]; then
+            echo ""
+            echo "   Removing lines $START_REMOVE to $END_REMOVE (unreachable code)..."
+            
+            # Use Python to remove these lines safely
+            python3 << PYTHON_REMOVE
+with open('/opt/petrodealhub/document-processor/main.py', 'r') as f:
     lines = f.readlines()
 
-# Find line with "raise HTTPException(status_code=404, detail=f"Template not found: {template_id}")"
-# and check if there's unreachable code after it
-found_raise = False
-raise_line = None
-except_line = None
+# Lines are 0-indexed, but we have 1-indexed line numbers
+# Remove lines from START_REMOVE-1 to END_REMOVE (inclusive, 1-indexed becomes 0-indexed)
+start_idx = $START_REMOVE - 1  # Convert to 0-indexed
+end_idx = $END_REMOVE  # Keep as-is, then we'll exclude
 
-for i, line in enumerate(lines):
-    # Look for the specific raise statement around line 2349
-    if 'raise HTTPException(status_code=404, detail=f"Template not found' in line or \
-       ('raise HTTPException(status_code=404' in line and 'Template not found' in line):
-        raise_line = i
-        found_raise = True
-        print(f"   Found raise HTTPException at line {i+1}: {line.strip()}")
-        
-        # Check next few lines for unreachable code
-        j = i + 1
-        unreachable_start = None
-        unreachable_end = None
-        
-        while j < len(lines) and j < i + 30:  # Check up to 30 lines ahead
-            # Look for except block (should be next)
-            if lines[j].strip().startswith('except'):
-                except_line = j
-                print(f"   Found except block at line {j+1}: {lines[j].strip()}")
-                
-                # If there's code between raise and except, it's unreachable
-                if j > i + 1:
-                    unreachable_start = i + 1
-                    unreachable_end = j
-                    print(f"   ⚠️  Found unreachable code between lines {i+2} and {j+1}")
-                break
-            
-            # Look for misplaced code patterns
-            if 'logger.warning' in lines[j] and 'permission-convert' in lines[j]:
-                print(f"   ⚠️  Found misplaced logger.warning at line {j+1}")
-                if unreachable_start is None:
-                    unreachable_start = j
-            
-            if 'continue' in lines[j] and j < 2400:  # continue outside loop is suspicious
-                print(f"   ⚠️  Found misplaced continue at line {j+1}")
-                if unreachable_end is None or j > unreachable_end:
-                    unreachable_end = j
-            
-            # Check if we hit the next function definition
-            if lines[j].strip().startswith('@app.') or \
-               (lines[j].strip().startswith('def ') and 'async def' not in lines[j-1] if j > 0 else False):
-                except_line = j - 1
-                if unreachable_end is None:
-                    unreachable_end = j - 1
-                print(f"   Found next function at line {j+1}, unreachable code ends at {j}")
-                break
-            
-            j += 1
-        
-        # Remove unreachable code if found
-        if unreachable_start is not None and unreachable_end is not None:
-            print(f"   🗑️  Removing unreachable code from line {unreachable_start+1} to {unreachable_end+1}")
-            
-            # Show what will be removed
-            print("   Lines to be removed:")
-            for k in range(unreachable_start, min(unreachable_end + 1, len(lines))):
-                print(f"      {k+1}: {lines[k].rstrip()}")
-            
-            # Remove the unreachable lines
-            del lines[unreachable_start:unreachable_end + 1]
-            
-            # Write back
-            with open('main.py', 'w', encoding='utf-8') as f:
-                f.writelines(lines)
-            
-            print(f"   ✅ Removed {unreachable_end - unreachable_start + 1} lines of unreachable code")
-            print(f"   ✅ File now has {len(lines)} lines")
-            break
+print(f"Removing lines {start_idx+1} to {end_idx} (0-indexed: {start_idx} to {end_idx-1})")
 
-if not found_raise:
-    print("   ⚠️  Could not find the specific raise HTTPException statement")
-    print("   Checking structure around line 2348...")
-    
-    # Check lines 2345-2355
-    for i in range(2344, min(2355, len(lines))):
-        print(f"   Line {i+1}: {lines[i].rstrip()}")
-PYTHON_FIX
+# Show what we're removing
+print("Lines to remove:")
+for i in range(start_idx, min(end_idx, len(lines))):
+    print(f"  {i+1}: {lines[i].rstrip()}")
 
-echo ""
+# Remove the lines (from end to start to preserve indices)
+for i in range(end_idx - 1, start_idx - 1, -1):
+    if i < len(lines):
+        lines.pop(i)
 
-# 4. Show fixed area
-echo "4. Showing fixed area (lines 2340-2360):"
-sed -n '2340,2360p' main.py | cat -n -A
-echo ""
+# Write back
+with open('/opt/petrodealhub/document-processor/main.py', 'w') as f:
+    f.writelines(lines)
 
-# 5. Test Python syntax
-echo "5. Testing Python syntax..."
-SYNTAX_OUTPUT=$(python3 -m py_compile main.py 2>&1)
-SYNTAX_EXIT=$?
-
-if [ $SYNTAX_EXIT -eq 0 ]; then
-    echo "   ✅ Python syntax is 100% correct!"
+print(f"✅ Removed {end_idx - start_idx} unreachable line(s)")
+PYTHON_REMOVE
+            
+            echo "   ✅ Unreachable code removed"
+        else
+            echo "   No unreachable code found to remove"
+        fi
+    else
+        echo "   ✅ No unreachable code found after raise statement"
+    fi
 else
-    echo "   ❌ Syntax error still present:"
-    echo "$SYNTAX_OUTPUT"
+    echo "   ⚠️  Could not find raise HTTPException statement"
+fi
+echo ""
+
+# 5. Verify syntax
+echo "5. Verifying syntax..."
+if python3 -m py_compile main.py 2>&1; then
+    echo "   ✅ Syntax is valid!"
+else
+    SYNTAX_ERR=$(python3 -m py_compile main.py 2>&1)
+    echo "   ❌ Still has syntax errors:"
+    echo "$SYNTAX_ERR" | head -5
     echo ""
-    echo "   Showing problematic area:"
-    sed -n '2345,2360p' main.py | cat -n -A
-    exit 1
+    
+    # Try to pull completely fresh from submodule
+    echo "   Pulling completely fresh version from submodule..."
+    cd /opt/petrodealhub
+    git submodule deinit -f document-processor 2>/dev/null || true
+    rm -rf document-processor
+    git submodule update --init --recursive document-processor
+    cd document-processor
+    git fetch origin master
+    git reset --hard origin/master || git reset --hard origin/main
+    git pull origin master || git pull origin main
+    
+    # Remove null bytes
+    tr -d '\000' < main.py > main.py.tmp && mv main.py.tmp main.py 2>/dev/null || true
+    
+    # Check syntax again
+    if python3 -m py_compile main.py 2>&1; then
+        echo "   ✅ Syntax is now valid after fresh pull"
+    else
+        echo "   ⚠️  Still has syntax errors after fresh pull"
+        python3 -m py_compile main.py 2>&1 | head -5
+    fi
 fi
 echo ""
 
-# 6. Verify structure
-echo "6. Verifying code structure..."
-if grep -A 5 "raise HTTPException(status_code=404.*Template not found" main.py | grep -q "except Exception"; then
-    echo "   ✅ Correct structure: raise HTTPException followed by except block"
-else
-    echo "   ⚠️  Structure might still be incorrect"
-    grep -A 10 "raise HTTPException(status_code=404.*Template not found" main.py | head -15
-fi
-echo ""
-
-# 7. Restart API
-echo "7. Restarting API..."
+# 6. Delete all python-api and restart
+echo "6. Restarting API..."
 pm2 delete python-api 2>/dev/null || true
 sleep 3
+
 cd /opt/petrodealhub/document-processor
-pm2 start venv/bin/python --name python-api -- main.py
-echo "   ✅ API restarted"
+
+# Find Python
+if [ -d "../venv" ] && [ -f "../venv/bin/python" ]; then
+    PYTHON_CMD="../venv/bin/python"
+else
+    PYTHON_CMD="python3"
+fi
+
+# Start API
+pm2 start "$PYTHON_CMD" main.py \
+    --name python-api \
+    --interpreter python3 \
+    --cwd /opt/petrodealhub/document-processor \
+    --watch false \
+    --instances 1
+
+sleep 6
 echo ""
 
-# 8. Wait and test
-echo "8. Waiting 15 seconds for API to start..."
-sleep 15
-echo ""
-
-# 9. Check status
-echo "9. Checking API status..."
+# 7. Check status
+echo "7. Checking API status..."
 pm2 status python-api
 echo ""
 
-# 10. Test API
-echo "10. Testing API health endpoint..."
-if curl -s http://localhost:8000/health > /dev/null 2>&1; then
-    echo "   ✅ API is responding!"
-    curl -s http://localhost:8000/health | head -3
+# 8. Check for errors
+echo "8. Checking for errors..."
+ERRORS=$(pm2 logs python-api --lines 10 --nostream 2>&1 | grep -i "error\|exception" | tail -3 || true)
+if [ -n "$ERRORS" ]; then
+    echo "   Found errors:"
+    echo "$ERRORS"
 else
-    echo "   ❌ API is not responding"
-    echo ""
-    echo "   Latest error logs:"
-    pm2 logs python-api --err --lines 20 --nostream | tail -20
+    echo "   ✅ No errors"
 fi
 echo ""
 
+# 9. Test API
+echo "9. Testing API..."
+sleep 3
+HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8000/health 2>/dev/null || echo "000")
+if [ "$HTTP_CODE" = "200" ]; then
+    echo "   ✅ API is responding (HTTP $HTTP_CODE)"
+    curl -s http://localhost:8000/health | head -1
+else
+    echo "   ❌ API is not responding (HTTP $HTTP_CODE)"
+fi
+echo ""
+
+# 10. Check port 8000
+echo "10. Checking port 8000..."
+if lsof -ti:8000 > /dev/null 2>&1; then
+    echo "   ✅ Port 8000 is in use"
+else
+    echo "   ❌ Port 8000 is NOT in use"
+fi
+echo ""
+
+# 11. Save PM2
+echo "11. Saving PM2..."
+pm2 save || true
+echo ""
+
+# 12. Summary
 echo "=========================================="
 echo "FIX COMPLETE"
 echo "=========================================="
+echo ""
+echo "Status:"
+echo "  Syntax: $(python3 -m py_compile main.py 2>&1 | grep -q 'SyntaxError\|IndentationError' && echo '❌ Has errors' || echo '✅ Valid')"
+echo "  Port 8000: $(lsof -ti:8000 > /dev/null 2>&1 && echo '✅ In use' || echo '❌ Not in use')"
+echo "  API health: HTTP $HTTP_CODE"
 echo ""
