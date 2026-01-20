@@ -29,14 +29,13 @@ echo ""
 # 3. Add missing location blocks
 echo "3. Adding missing location blocks..."
 
-export API_HOST  # Export to Python environment
-
-python3 << PYTHON_FIX
+API_HOST="$API_HOST" python3 << PYTHON_FIX
 import re
 import os
 
 # Get API_HOST from environment or use default
 API_HOST = os.environ.get('API_HOST', '127.0.0.1')
+print(f"   Using API_HOST: {API_HOST}")
 
 with open('$NGINX_CONFIG', 'r') as f:
     content = f.read()
