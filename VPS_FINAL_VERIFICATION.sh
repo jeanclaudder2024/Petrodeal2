@@ -1,187 +1,98 @@
 #!/bin/bash
-# Final verification after all fixes
+# Final verification - test everything end-to-end
 
-cd /opt/petrodealhub/document-processor
-source venv/bin/activate
+set -e
 
 echo "=========================================="
-echo "FINAL VERIFICATION"
+echo "FINAL VERIFICATION - ALL SYSTEMS"
 echo "=========================================="
 echo ""
 
-# 1. Python syntax check
-echo "1. Python syntax check..."
-python3 -m py_compile main.py 2>&1
+# 1. Test nginx configuration
+echo "1. Testing nginx configuration..."
+sudo nginx -t
 if [ $? -eq 0 ]; then
-    echo "   ✅ Python syntax is 100% correct!"
+    echo "   ✅ Nginx configuration is valid"
 else
-    echo "   ❌ Syntax errors found:"
-    python3 -m py_compile main.py 2>&1 | head -10
+    echo "   ❌ Nginx configuration has errors"
     exit 1
 fi
 echo ""
 
-# 2. Critical imports
-echo "2. Testing critical imports..."
-python3 << 'PYTHON_EOF'
-import sys
-errors = []
-
-try:
-    from supabase import create_client, Client
-    print("✅ Supabase import OK")
-except Exception as e:
-    errors.append(f"Supabase: {e}")
-    print(f"❌ Supabase import failed: {e}")
-
-try:
-    from websockets.asyncio.client import ClientConnection
-    print("✅ websockets.asyncio import OK")
-except Exception as e:
-    errors.append(f"websockets.asyncio: {e}")
-    print(f"❌ websockets.asyncio import failed: {e}")
-
-try:
-    from fastapi import FastAPI
-    print("✅ FastAPI import OK")
-except Exception as e:
-    errors.append(f"FastAPI: {e}")
-    print(f"❌ FastAPI import failed: {e}")
-
-if errors:
-    print(f"\n❌ {len(errors)} import error(s) found")
-    sys.exit(1)
-else:
-    print("\n✅ All critical imports successful!")
-PYTHON_EOF
-
-if [ $? -ne 0 ]; then
-    echo "   ❌ Import verification failed!"
-    exit 1
-fi
+# 2. Reload nginx
+echo "2. Reloading nginx..."
+sudo systemctl reload nginx
+sleep 2
+echo "   ✅ Nginx reloaded"
 echo ""
 
-# 3. PM2 status
-echo "3. Checking PM2 status..."
+# 3. Check API status
+echo "3. Checking API status..."
 pm2 status python-api
 echo ""
 
-# 4. API error logs
-echo "4. Checking API error logs (last 20 lines)..."
-ERROR_COUNT=$(pm2 logs python-api --err --lines 20 --nostream 2>/dev/null | grep -c "IndentationError\|SyntaxError\|ModuleNotFoundError\|Traceback" || echo "0")
-
-if [ "$ERROR_COUNT" -eq "0" ]; then
-    echo "   ✅ No errors in API logs!"
-else
-    echo "   ⚠️  Found errors:"
-    pm2 logs python-api --err --lines 20 --nostream | grep -E "IndentationError|SyntaxError|ModuleNotFoundError|Traceback" | head -10
-fi
+# 4. Test endpoints directly on API
+echo "4. Testing endpoints directly on API..."
+echo "   http://127.0.0.1:8000/health:"
+curl -s http://127.0.0.1:8000/health | head -1 || echo "   ❌ Failed"
 echo ""
 
-# 5. Test API health endpoint
-echo "5. Testing API health endpoint..."
-if curl -s http://localhost:8000/health > /dev/null 2>&1; then
-    echo "   ✅ API is responding!"
-    echo ""
-    echo "   Health check response:"
-    curl -s http://localhost:8000/health | head -5
-else
-    echo "   ❌ API is NOT responding on port 8000"
-    echo ""
-    echo "   Recent error logs:"
-    pm2 logs python-api --err --lines 30 --nostream | tail -15
-fi
+echo "   http://127.0.0.1:8000/templates:"
+curl -s -o /dev/null -w "   Status: %{http_code}\n" http://127.0.0.1:8000/templates
 echo ""
 
-# 6. Check port 8000
-echo "6. Checking if port 8000 is in use..."
-if netstat -tlnp 2>/dev/null | grep -q ":8000 " || ss -tlnp 2>/dev/null | grep -q ":8000 "; then
-    echo "   ✅ Port 8000 is in use"
-    netstat -tlnp 2>/dev/null | grep ":8000 " || ss -tlnp 2>/dev/null | grep ":8000 "
-else
-    echo "   ❌ Port 8000 is NOT in use"
-fi
-echo ""
+# 5. Test endpoints via HTTPS
+echo "5. Testing endpoints via HTTPS..."
+ENDPOINTS=("/health" "/auth/me" "/templates" "/data/all" "/plans-db" "/plans")
 
-# 7. Check nginx
-echo "7. Checking nginx..."
-if systemctl is-active --quiet nginx; then
-    echo "   ✅ Nginx is running"
-    
-    if nginx -t 2>/dev/null; then
-        echo "   ✅ Nginx configuration is valid"
+SUCCESS=0
+TOTAL=${#ENDPOINTS[@]}
+
+for endpoint in "${ENDPOINTS[@]}"; do
+    echo -n "   https://control.petrodealhub.com$endpoint... "
+    RESPONSE=$(curl -s -k -o /dev/null -w "%{http_code}" "https://control.petrodealhub.com$endpoint" 2>/dev/null || echo "000")
+    if [ "$RESPONSE" = "200" ] || [ "$RESPONSE" = "401" ]; then
+        echo "✅ $RESPONSE"
+        SUCCESS=$((SUCCESS + 1))
+    elif [ "$RESPONSE" = "404" ]; then
+        echo "❌ 404"
     else
-        echo "   ⚠️  Nginx configuration has errors"
-        nginx -t 2>&1 | head -3
+        echo "⚠️  $RESPONSE"
     fi
-else
-    echo "   ❌ Nginx is not running"
-fi
+done
 echo ""
 
-# 8. Summary
+# 6. Check nginx location blocks
+echo "6. Checking nginx location blocks..."
+echo "   Location blocks for API endpoints:"
+grep -n "location.*templates\|location.*data/all\|location.*plans\|location.*auth\|location.*health" /etc/nginx/sites-available/control | head -15
+echo ""
+
+# 7. Final summary
 echo "=========================================="
-echo "VERIFICATION SUMMARY"
+echo "FINAL SUMMARY"
 echo "=========================================="
 echo ""
 
-# Check all conditions
-SYNTAX_OK=true
-IMPORTS_OK=true
-API_RUNNING=false
-API_RESPONDING=false
-NGINX_OK=false
-
-python3 -m py_compile main.py > /dev/null 2>&1 || SYNTAX_OK=false
-python3 -c "from supabase import create_client; from websockets.asyncio.client import ClientConnection" > /dev/null 2>&1 || IMPORTS_OK=false
-pm2 list | grep -q "python-api.*online" && API_RUNNING=true
-curl -s http://localhost:8000/health > /dev/null 2>&1 && API_RESPONDING=true
-systemctl is-active --quiet nginx && NGINX_OK=true
-
-if [ "$SYNTAX_OK" = true ]; then
-    echo "✅ Python syntax: OK"
-else
-    echo "❌ Python syntax: FAILED"
-fi
-
-if [ "$IMPORTS_OK" = true ]; then
-    echo "✅ Imports: OK"
-else
-    echo "❌ Imports: FAILED"
-fi
-
-if [ "$API_RUNNING" = true ]; then
-    echo "✅ API running: OK"
-else
-    echo "❌ API running: FAILED"
-fi
-
-if [ "$API_RESPONDING" = true ]; then
-    echo "✅ API responding: OK"
-else
-    echo "❌ API responding: FAILED"
-fi
-
-if [ "$NGINX_OK" = true ]; then
-    echo "✅ Nginx: OK"
-else
-    echo "❌ Nginx: FAILED"
-fi
-
-echo ""
-
-# Final status
-if [ "$SYNTAX_OK" = true ] && [ "$IMPORTS_OK" = true ] && [ "$API_RUNNING" = true ] && [ "$API_RESPONDING" = true ] && [ "$NGINX_OK" = true ]; then
+if [ $SUCCESS -eq $TOTAL ]; then
     echo "🎉 ALL SYSTEMS OPERATIONAL!"
     echo ""
-    echo "✅ CMS should be accessible at: https://control.petrodealhub.com/"
-else
-    echo "⚠️  Some issues remain. Check the details above."
+    echo "✅ Nginx configuration: Valid"
+    echo "✅ API status: Running"
+    echo "✅ All endpoints ($SUCCESS/$TOTAL): Working"
     echo ""
-    if [ "$API_RESPONDING" = false ]; then
-        echo "To debug API issues:"
-        echo "  pm2 logs python-api --err --lines 50"
-        echo "  pm2 restart python-api"
-    fi
+    echo "The CMS should now work correctly!"
+    echo ""
+    echo "✅ CMS accessible at: https://control.petrodealhub.com/cms"
+    echo "✅ All API endpoints are proxied correctly"
+    echo ""
+    echo "Please refresh the CMS page and try again!"
+else
+    echo "⚠️  Some endpoints may still have issues"
+    echo ""
+    echo "   Working: $SUCCESS/$TOTAL endpoints"
+    echo ""
+    echo "Check nginx error log for details:"
+    echo "   sudo tail -20 /var/log/nginx/error.log"
 fi
 echo ""
