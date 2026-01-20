@@ -29,14 +29,11 @@ echo ""
 # 3. Add missing location blocks
 echo "3. Adding missing location blocks..."
 
-# Pass API_HOST as command-line argument to Python
-python3 - "$API_HOST" << PYTHON_FIX
+# Create temporary Python script with API_HOST substituted
+cat > /tmp/add_endpoints.py << PYTHON_SCRIPT
 import re
-import sys
 
-# Get API_HOST from command-line argument or use default
-API_HOST = sys.argv[1] if len(sys.argv) > 1 else '127.0.0.1'
-print(f"   Using API_HOST: {API_HOST}")
+API_HOST = "$API_HOST"
 
 with open('$NGINX_CONFIG', 'r') as f:
     content = f.read()
@@ -132,7 +129,11 @@ if location_blocks:
     
     print(f"   ✅ Added {len(location_blocks)} location block(s)")
 
-PYTHON_FIX
+PYTHON_SCRIPT
+
+# Run the Python script
+python3 /tmp/add_endpoints.py
+rm -f /tmp/add_endpoints.py
 
 echo ""
 
