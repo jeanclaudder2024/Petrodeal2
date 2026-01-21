@@ -3,8 +3,7 @@ module.exports = {
     {
       name: 'python-api',
       cwd: '/opt/petrodealhub/document-processor',
-      script: 'python',
-      args: 'main.py',
+      script: 'main.py',
       interpreter: '/opt/petrodealhub/document-processor/venv/bin/python',
       env: {
         FASTAPI_PORT: 8000
