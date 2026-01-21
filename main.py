@@ -27,12 +27,28 @@ logger = logging.getLogger(__name__)
 app = FastAPI(title="Document Processing API", version="1.0.0")
 
 # Load environment variables
-load_dotenv()
+try:
+    load_dotenv()
+except Exception as e:
+    logger.warning(f"Could not load .env file: {e}")
 
-# CORS middleware
+# CORS middleware - Must use specific origins when credentials=True
+ALLOWED_ORIGINS = [
+    "http://127.0.0.1:8080",
+    "http://localhost:8080",
+    "http://127.0.0.1:8081",
+    "http://localhost:8081",
+    "http://127.0.0.1:5173",
+    "http://localhost:5173",
+    "http://127.0.0.1:3000",
+    "http://localhost:3000",
+    "http://127.0.0.1:5500",
+    "http://localhost:5500",
+]
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Allow all origins for development
+    allow_origins=ALLOWED_ORIGINS,  # Specific origins required when credentials=True
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -42,15 +58,18 @@ app.add_middleware(
 SUPABASE_URL = os.getenv("SUPABASE_URL")
 SUPABASE_KEY = os.getenv("SUPABASE_KEY")
 
+# Allow running without Supabase for testing (will use mock data)
 if not SUPABASE_URL or not SUPABASE_KEY:
-    raise ValueError("SUPABASE_URL and SUPABASE_KEY must be set as environment variables")
-
-try:
-    supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
-    logger.info("Successfully connected to Supabase")
-except Exception as e:
-    logger.error(f"Failed to connect to Supabase: {e}")
+    logger.warning("⚠️  SUPABASE_URL and SUPABASE_KEY not set - API will run with limited functionality (mock data only)")
+    logger.warning("⚠️  Set environment variables for full functionality")
     supabase = None
+else:
+    try:
+        supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
+        logger.info("Successfully connected to Supabase")
+    except Exception as e:
+        logger.error(f"Failed to connect to Supabase: {e}")
+        supabase = None
 
 # Create directories
 TEMPLATES_DIR = "./templates"
