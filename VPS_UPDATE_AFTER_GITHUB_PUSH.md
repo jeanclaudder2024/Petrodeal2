@@ -49,12 +49,11 @@ npm run build
 
 ## 5. Restart frontend (PM2 or your server)
 
-**If you use PM2 for the frontend (e.g. `serve` or Node):**
+**If you use PM2 for the frontend:**
 
 ```bash
-pm2 restart frontend
-# or whatever your frontend app name is, e.g.:
-# pm2 restart all
+pm2 restart react-app
+# or petrodealhub-app, depending on your setup – see pm2 list
 ```
 
 **If you serve built files with Nginx only** (no PM2 for frontend):
@@ -67,20 +66,20 @@ pm2 restart frontend
 
 ## 6. Restart document API (Python)
 
-**If you use PM2 for the Python document API:**
+**You use PM2 for the API** (app name: `python-api`). **Do not use** `systemctl restart document-processor` – that service does not exist.
+
+```bash
+pm2 restart python-api
+```
+
+Optional, if dependencies changed:
 
 ```bash
 cd /opt/petrodealhub/document-processor
 source venv/bin/activate
-pip install -r requirements.txt   # optional, if deps changed
+pip install -r requirements.txt
+cd /opt/petrodealhub
 pm2 restart python-api
-```
-
-**If you use systemd:**
-
-```bash
-sudo systemctl restart document-processor
-# or whatever your service name is
 ```
 
 ---
@@ -100,17 +99,17 @@ curl -I http://localhost:3000
 
 ## One-liner (pull + build + restart)
 
-Adjust paths and PM2 app names to match your setup:
-
 ```bash
 cd /opt/petrodealhub && \
 git pull origin main && \
 git submodule update --init --recursive document-processor 2>/dev/null || true && \
 npm install && \
 npm run build && \
-pm2 restart python-api frontend 2>/dev/null || true && \
-echo "Done. Check: curl http://localhost:8000/health"
+pm2 restart python-api react-app && \
+echo "Done. Check: curl http://localhost:8000/health && curl -I http://localhost:3000"
 ```
+
+If your frontend app is named `petrodealhub-app` instead of `react-app`, use that. Run `pm2 list` to see app names.
 
 ---
 
@@ -118,6 +117,9 @@ echo "Done. Check: curl http://localhost:8000/health"
 
 | Issue | What to do |
 |-------|------------|
+| `Unit document-processor.service not found` | You use **PM2** for the API. Use `pm2 restart python-api` instead. See **VPS_FIX_PM2_AND_FRONTEND.md**. |
+| `Process or Namespace frontend not found` | Your frontend app may be `react-app` or `petrodealhub-app`. Run `pm2 list` and use that name. See **VPS_FIX_PM2_AND_FRONTEND.md**. |
+| `petrodealhub-app` or `react-app` **errored** | Frontend serves `dist/` (Vite), not `build/`. Ensure `npm run build` ran, then restart. See **VPS_FIX_PM2_AND_FRONTEND.md**. |
 | `git pull` conflicts | `git stash` then `git pull`, then re-apply changes, or `git reset --hard origin/main` if you don’t need local edits |
 | `npm run build` fails | Run `npm install` again, check Node version (`node -v`), fix any build errors shown |
 | API won’t start | `cd document-processor && source venv/bin/activate && python -m py_compile main.py` to check syntax; check `pm2 logs python-api` |

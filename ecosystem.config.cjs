@@ -18,9 +18,9 @@ module.exports = {
     },
     {
       name: 'react-app',
-      cwd: '/opt/petrodealhub/src',
-      script: 'serve',
-      args: '-s build -l 3000',
+      cwd: '/opt/petrodealhub',
+      script: 'npx',
+      args: ['serve', '-s', 'dist', '-l', '3000'],
       instances: 1,
       autorestart: true,
       watch: false,
