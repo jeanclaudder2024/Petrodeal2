@@ -10,6 +10,7 @@ import { AuthProvider } from "@/contexts/AuthContext";
 import { SubscriptionProvider } from "@/contexts/SubscriptionContext";
 import { AccessProvider } from "@/contexts/AccessContext";
 import { LanguageProvider } from "@/contexts/LanguageContext";
+import { DealFlowProvider } from "@/contexts/DealFlowContext";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { MobileLayout } from "@/components/MobileLayout";
@@ -28,6 +29,9 @@ import APIIntegration from "./pages/APIIntegration";
 import Blog from "./pages/Blog";
 import BlogPostPage from "./pages/BlogPost";
 import Careers from "./pages/Careers";
+import JobListings from "./pages/JobListings";
+import JobDetail from "./pages/JobDetail";
+import RewardProgram from "./pages/RewardProgram";
 import ContactUs from "./pages/ContactUs";
 import CookiePolicy from "./pages/CookiePolicy";
 import Auth from "./pages/Auth";
@@ -47,6 +51,9 @@ import BrokerDetail from "./pages/BrokerDetail";
 import BrokerMembership from "./pages/BrokerMembership";
 import BrokerSetup from "./pages/BrokerSetup";
 import BrokerDashboard from "./pages/BrokerDashboard";
+import SelectDealCompany from "./pages/broker/SelectDealCompany";
+import DealOverview from "./pages/broker/DealOverview";
+import CreateDealWithCompany from "./pages/broker/CreateDealWithCompany";
 import BrokerVerificationWaiting from "./pages/BrokerVerificationWaiting";
 import OilPrices from "./pages/OilPrices";
 import CompanyDetail from "./pages/CompanyDetail";
@@ -127,10 +134,16 @@ const App = () => (
         <SubscriptionProvider>
           <AccessProvider>
           <LanguageProvider>
+          <DealFlowProvider>
           <TooltipProvider>
             <Toaster />
             <Sonner />
-            <BrowserRouter>
+            <BrowserRouter
+              future={{
+                v7_startTransition: true,
+                v7_relativeSplatPath: true,
+              }}
+            >
               <MarketingPixelLoader />
               <MarketingPopupDisplay />
           <Routes>
@@ -151,6 +164,9 @@ const App = () => (
             <Route path="/blog" element={<Blog />} />
             <Route path="/blog/:slug" element={<BlogPostPage />} />
             <Route path="/careers" element={<Careers />} />
+            <Route path="/careers/jobs" element={<JobListings />} />
+            <Route path="/careers/jobs/:slug" element={<JobDetail />} />
+            <Route path="/rewards/:slug" element={<RewardProgram />} />
             <Route path="/contact" element={<ContactUs />} />
             <Route path="/cookies" element={<CookiePolicy />} />
             <Route path="/news" element={<News />} />
@@ -358,6 +374,36 @@ const App = () => (
               } 
             />
             <Route 
+              path="/broker-dashboard/select-company" 
+              element={
+                <AppLayout>
+                  <ProtectedRoute requireSubscription={false}>
+                    <SelectDealCompany />
+                  </ProtectedRoute>
+                </AppLayout>
+              } 
+            />
+            <Route 
+              path="/broker-dashboard/deal-overview" 
+              element={
+                <AppLayout>
+                  <ProtectedRoute requireSubscription={false}>
+                    <DealOverview />
+                  </ProtectedRoute>
+                </AppLayout>
+              } 
+            />
+            <Route 
+              path="/broker-dashboard/create-deal" 
+              element={
+                <AppLayout>
+                  <ProtectedRoute requireSubscription={false}>
+                    <CreateDealWithCompany />
+                  </ProtectedRoute>
+                </AppLayout>
+              } 
+            />
+            <Route 
               path="/broker-verification-waiting" 
               element={
                 <AppLayout>
@@ -440,6 +486,7 @@ const App = () => (
           </Routes>
             </BrowserRouter>
           </TooltipProvider>
+          </DealFlowProvider>
           </LanguageProvider>
         </AccessProvider>
       </SubscriptionProvider>

@@ -59,7 +59,7 @@ export default function DocumentTemplateManager() {
       if (response.ok) {
         const data = await response.json();
         let templatesList = data.templates || [];
-
+        
         // Enrich templates with plan information from database
         try {
           // Get all templates from database to match by file_name
@@ -67,7 +67,7 @@ export default function DocumentTemplateManager() {
             .from('document_templates')
             .select('id, file_name, title, description')
             .eq('is_active', true);
-
+          
           if (dbTemplates) {
             // Get plan permissions for templates
             const templateIds = dbTemplates.map(t => t.id);
@@ -76,7 +76,7 @@ export default function DocumentTemplateManager() {
               .select('template_id, plan_id, can_download')
               .in('template_id', templateIds)
               .eq('can_download', true);
-
+            
             // Get plan details
             let planDetails: Record<string, any> = {};
             if (permissions && permissions.length > 0) {
@@ -85,14 +85,14 @@ export default function DocumentTemplateManager() {
                 .from('subscription_plans')
                 .select('id, plan_name, plan_tier')
                 .in('id', planIds);
-
+              
               if (plans) {
                 planDetails = Object.fromEntries(
                   plans.map(p => [p.id, { plan_name: p.plan_name, plan_tier: p.plan_tier }])
                 );
               }
             }
-
+            
             // Create a map of file_name to template info
             const templateMap = new Map<string, any>();
             dbTemplates.forEach(t => {
@@ -105,12 +105,12 @@ export default function DocumentTemplateManager() {
                 });
               }
             });
-
+            
             // Enrich templates with plan information
             templatesList = templatesList.map((t: DocumentTemplate) => {
               const fileName = (t.file_name || t.name || '').replace('.docx', '').toLowerCase();
               const dbTemplate = templateMap.get(fileName);
-
+              
               if (dbTemplate && permissions) {
                 // Find plan permission for this template
                 const templatePerm = permissions.find(p => p.template_id === dbTemplate.id);
@@ -124,14 +124,14 @@ export default function DocumentTemplateManager() {
                   };
                 }
               }
-
+              
               return t;
             });
           }
         } catch (planError) {
           // If plan enrichment fails, just use templates without plan info
         }
-
+        
         setTemplates(templatesList);
       } else {
         toast.error('Failed to fetch templates');
@@ -211,7 +211,7 @@ export default function DocumentTemplateManager() {
   const processDocument = async (templateId: string, vesselImo: string) => {
     try {
       setLoading(true);
-
+      
       // Create a dummy file for the template_file parameter (required by API but not used)
       const dummyFile = new File(['dummy'], 'dummy.docx', {
         type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'
@@ -235,10 +235,10 @@ export default function DocumentTemplateManager() {
 
       if (response.ok) {
         const result = JSON.parse(responseText);
-
+        
         if (result.success) {
           toast.success('Document processed successfully');
-
+          
           // Auto-download the document
           setTimeout(() => {
             window.open(`${API_BASE_URL}/download/${result.document_id}`, '_blank');
@@ -309,7 +309,7 @@ export default function DocumentTemplateManager() {
             <p className="text-sm text-muted-foreground">
               Manage Word document templates with placeholders for automatic data filling
             </p>
-            <Button
+            <Button 
               onClick={() => setShowUploadForm(!showUploadForm)}
               className="flex items-center gap-2"
             >
@@ -335,7 +335,7 @@ export default function DocumentTemplateManager() {
                       required
                     />
                   </div>
-
+                  
                   <div>
                     <Label htmlFor="description">Description</Label>
                     <Textarea
@@ -346,7 +346,7 @@ export default function DocumentTemplateManager() {
                       rows={3}
                     />
                   </div>
-
+                  
                   <div>
                     <Label htmlFor="file">Word Document (.docx)</Label>
                     <Input
@@ -360,7 +360,7 @@ export default function DocumentTemplateManager() {
                       Upload a Word document with placeholders like {`{{vessel_name}}`}, {`{{imo}}`}, etc.
                     </p>
                   </div>
-
+                  
                   <div className="flex gap-2">
                     <Button type="submit" disabled={uploading || !newTemplate.file}>
                       {uploading ? (
@@ -375,9 +375,9 @@ export default function DocumentTemplateManager() {
                         </>
                       )}
                     </Button>
-                    <Button
-                      type="button"
-                      variant="outline"
+                    <Button 
+                      type="button" 
+                      variant="outline" 
                       onClick={() => setShowUploadForm(false)}
                     >
                       Cancel
@@ -412,11 +412,11 @@ export default function DocumentTemplateManager() {
                             {template.is_active ? "Active" : "Inactive"}
                           </Badge>
                         </div>
-
+                        
                         <p className="text-sm text-muted-foreground mb-3">
                           {template.description}
                         </p>
-
+                        
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                           <div>
                             <span className="font-medium">File:</span>
@@ -444,7 +444,7 @@ export default function DocumentTemplateManager() {
                             </Badge>
                           </div>
                         )}
-
+                        
                         {template.placeholders && template.placeholders.length > 0 && (
                           <div className="mt-3">
                             <span className="font-medium text-sm">Placeholders:</span>
@@ -463,7 +463,7 @@ export default function DocumentTemplateManager() {
                           </div>
                         )}
                       </div>
-
+                      
                       <div className="flex items-center gap-2 ml-4">
                         <Button
                           variant="outline"
@@ -517,7 +517,7 @@ export default function DocumentTemplateManager() {
                   ))}
                 </select>
               </div>
-
+              
               <div className="flex gap-2">
                 <Button
                   variant="outline"

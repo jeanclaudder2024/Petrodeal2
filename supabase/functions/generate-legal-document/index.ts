@@ -1,5 +1,4 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -87,16 +86,16 @@ serve(async (req) => {
   }
 
   try {
-    const { title, documentType, entityTypes, entityId, prompt } = await req.json();
+    const { title, documentType, entityTypes, entityId, prompt, minPages = 10, maxPages = 25 } = await req.json();
 
     // Support both single entityType (legacy) and array of entityTypes
     const entityTypeArray: string[] = Array.isArray(entityTypes) ? entityTypes : (entityTypes ? [entityTypes] : []);
     
-    console.log('Generating legal document:', { title, documentType, entityTypes: entityTypeArray });
+    console.log('Generating legal document:', { title, documentType, entityTypes: entityTypeArray, minPages, maxPages });
 
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
+    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+    if (!OPENAI_API_KEY) {
+      throw new Error("OPENAI_API_KEY is not configured. Please add your OpenAI API key in Supabase secrets.");
     }
 
     // Get available placeholders for all selected entity types (combined)
@@ -112,118 +111,345 @@ serve(async (req) => {
     
     const placeholderList = availablePlaceholders.map(p => `{{${p}}}`).join(', ');
 
-    // Build the system prompt for HTML output
-    const systemPrompt = `You are an expert international legal document drafter specializing in oil trading, maritime law, and commodity transactions. You work as if you are from a certified international law firm or notary public.
+    // Professional document structure with exact formatting examples
+    const systemPrompt = `You are a senior partner at an elite international law firm (Clyde & Co, Norton Rose Fulbright, or Ince & Co) specializing in oil trading, maritime law, and commodity transactions.
 
-CRITICAL OUTPUT FORMAT:
-Generate the document in clean HTML format. Do NOT use Markdown syntax (no ** for bold, no # for headers, no | for tables).
-Use proper HTML tags:
-- <h1>, <h2>, <h3> for headers
-- <p> for paragraphs
-- <strong> for bold text
-- <em> for italic text
-- <ul> and <ol> for lists
-- <table>, <thead>, <tbody>, <tr>, <th>, <td> for tables
+=======================================================================
+CRITICAL DOCUMENT REQUIREMENTS - READ CAREFULLY
+=======================================================================
 
-TABLE FORMAT EXAMPLE:
-<table style="width: 100%; border-collapse: collapse; margin: 16px 0;">
+OUTPUT FORMAT: Clean HTML only. NO Markdown. NO code blocks.
+
+MINIMUM WORD COUNT: ${minPages * 500} words (approximately ${minPages}-${maxPages} pages)
+You MUST write comprehensive, detailed content. This is a REAL legal document, not a summary.
+
+=======================================================================
+EXACT DOCUMENT HEADER FORMAT (USE THIS EXACTLY):
+=======================================================================
+
+<div style="text-align: center; margin-bottom: 30px;">
+  <p style="font-size: 11pt; font-weight: bold; margin: 0;">STRICTLY PRIVATE & CONFIDENTIAL</p>
+  <p style="font-size: 11pt; font-weight: bold; margin: 5px 0;">SUBJECT TO CONTRACT</p>
+</div>
+
+<table style="width: 100%; border: none; margin-bottom: 20px;">
+  <tr>
+    <td style="border: none; width: 50%;"><strong>Reference:</strong> {{contract_reference_number}}</td>
+    <td style="border: none; width: 50%; text-align: right;"><strong>Date:</strong> {{effective_date}}</td>
+  </tr>
+</table>
+
+<h1 style="text-align: center; font-size: 16pt; text-transform: uppercase; margin: 30px 0; border-top: 2px solid #000; border-bottom: 2px solid #000; padding: 15px 0;">
+${title.toUpperCase()}
+</h1>
+
+=======================================================================
+PARTIES SECTION FORMAT (USE THIS EXACTLY):
+=======================================================================
+
+<h2>PARTIES</h2>
+
+<p><strong>THIS AGREEMENT</strong> is made on {{effective_date}}</p>
+
+<p><strong>BETWEEN:</strong></p>
+
+<p style="margin-left: 20px;">
+<strong>(1) {{seller_company_name}}</strong>, a company duly incorporated and existing under the laws of {{seller_registration_country}}, having its registered office at {{seller_legal_address}}, with registration number {{seller_registration_number}}, represented herein by {{seller_representative_name}}, {{seller_representative_title}}, duly authorized to sign on behalf of the company (hereinafter referred to as "<strong>SELLER</strong>")
+</p>
+
+<p><strong>AND:</strong></p>
+
+<p style="margin-left: 20px;">
+<strong>(2) {{buyer_company_name}}</strong>, a company duly incorporated and existing under the laws of {{buyer_registration_country}}, having its registered office at {{buyer_legal_address}}, with registration number {{buyer_registration_number}}, represented herein by {{buyer_representative_name}}, {{buyer_representative_title}}, duly authorized to sign on behalf of the company (hereinafter referred to as "<strong>BUYER</strong>")
+</p>
+
+<p>(SELLER and BUYER are hereinafter individually referred to as a "<strong>Party</strong>" and collectively as the "<strong>Parties</strong>")</p>
+
+=======================================================================
+RECITALS FORMAT:
+=======================================================================
+
+<h2>RECITALS</h2>
+
+<p><strong>WHEREAS:</strong></p>
+
+<ol type="A" style="margin-left: 20px;">
+  <li style="margin-bottom: 10px;"><p>SELLER is engaged in the business of [describe seller's business in detail, including refinery operations, production capacity, product range, and market presence];</p></li>
+  <li style="margin-bottom: 10px;"><p>BUYER is engaged in the business of [describe buyer's business, including trading operations, distribution network, storage facilities, and end-use applications];</p></li>
+  <li style="margin-bottom: 10px;"><p>SELLER desires to sell and BUYER desires to purchase petroleum products on the terms and conditions set forth herein;</p></li>
+  <li style="margin-bottom: 10px;"><p>The Parties have negotiated and agreed upon the commercial terms for the sale and purchase of the Products as detailed in this Agreement;</p></li>
+</ol>
+
+<p><strong>NOW, THEREFORE,</strong> in consideration of the mutual covenants, promises, and agreements contained herein, and for other good and valuable consideration, the receipt and sufficiency of which are hereby acknowledged, the Parties agree as follows:</p>
+
+=======================================================================
+DEFINITIONS SECTION (MINIMUM 35 DEFINITIONS):
+=======================================================================
+
+<h2>ARTICLE I - DEFINITIONS AND INTERPRETATION</h2>
+
+<h3>1.1 Definitions</h3>
+
+<p>In this Agreement, unless the context otherwise requires, the following terms shall have the meanings set out below:</p>
+
+<ul style="list-style-type: none; padding-left: 0;">
+  <li style="margin-bottom: 12px;"><strong>"Affiliate"</strong> means, with respect to any Party, any entity that directly or indirectly controls, is controlled by, or is under common control with such Party, where "control" means the ownership of more than fifty percent (50%) of the voting shares or equivalent ownership interest;</li>
+  <li style="margin-bottom: 12px;"><strong>"Agreement"</strong> means this ${documentType} together with all Schedules, Annexures, and Exhibits attached hereto, as may be amended from time to time;</li>
+  <li style="margin-bottom: 12px;"><strong>"API Gravity"</strong> means the American Petroleum Institute gravity scale, a measure of how heavy or light a petroleum liquid is compared to water;</li>
+  <li style="margin-bottom: 12px;"><strong>"Banking Day"</strong> means any day other than a Saturday, Sunday, or public holiday on which banks are open for general business in {{banking_jurisdiction}};</li>
+  <li style="margin-bottom: 12px;"><strong>"Barrel" or "BBL"</strong> means a unit of volume equal to forty-two (42) United States gallons at sixty degrees Fahrenheit (60°F);</li>
+  [Continue with at least 30 more definitions including: Bill of Lading, Cargo, Demurrage, Discharge Port, Force Majeure, FOB, CIF, DES, Incoterms, Independent Inspector, Laytime, Letter of Credit, Loading Port, Metric Ton, NOR, Performance Bond, Price, Product, Quality Specifications, Quantity, Shipment Period, Vessel, etc.]
+</ul>
+
+=======================================================================
+REQUIRED TABLES FORMAT:
+=======================================================================
+
+TABLE 1 - PRODUCT SPECIFICATIONS:
+<table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
   <thead>
-    <tr style="background-color: #f0f0f0;">
-      <th style="border: 1px solid #000; padding: 8px; text-align: left;">Header 1</th>
-      <th style="border: 1px solid #000; padding: 8px; text-align: left;">Header 2</th>
+    <tr style="background-color: #1a365d; color: white;">
+      <th style="border: 1px solid #000; padding: 12px; text-align: left;">Property</th>
+      <th style="border: 1px solid #000; padding: 12px; text-align: center;">Specification</th>
+      <th style="border: 1px solid #000; padding: 12px; text-align: center;">Test Method</th>
+      <th style="border: 1px solid #000; padding: 12px; text-align: center;">Typical Value</th>
     </tr>
   </thead>
   <tbody>
-    <tr>
-      <td style="border: 1px solid #000; padding: 8px;">Data 1</td>
-      <td style="border: 1px solid #000; padding: 8px;">Data 2</td>
+    <tr style="background-color: #f8f9fa;">
+      <td style="border: 1px solid #000; padding: 10px;">API Gravity @ 60°F</td>
+      <td style="border: 1px solid #000; padding: 10px; text-align: center;">{{api_gravity_min}} - {{api_gravity_max}}</td>
+      <td style="border: 1px solid #000; padding: 10px; text-align: center;">ASTM D287</td>
+      <td style="border: 1px solid #000; padding: 10px; text-align: center;">{{api_gravity_typical}}</td>
     </tr>
+    <tr>
+      <td style="border: 1px solid #000; padding: 10px;">Sulfur Content (% wt)</td>
+      <td style="border: 1px solid #000; padding: 10px; text-align: center;">Max {{sulfur_max}}</td>
+      <td style="border: 1px solid #000; padding: 10px; text-align: center;">ASTM D4294</td>
+      <td style="border: 1px solid #000; padding: 10px; text-align: center;">{{sulfur_typical}}</td>
+    </tr>
+    [Include at least 10 more specification rows]
   </tbody>
 </table>
 
-DOCUMENT REQUIREMENTS:
-1. Write in formal legal language used by international law firms
-2. Follow oil industry legal standards and ICC/INCOTERMS 2020 rules
-3. Structure with numbered Articles using HTML (ARTICLE I, ARTICLE II, etc.)
-4. Include all required legal sections:
-   - Document Header with Reference Number and Date
-   - Definitions Section (define all key terms)
-   - Recitals/Whereas Clauses
-   - Terms and Conditions
-   - Representations and Warranties
-   - Obligations of Parties
-   - Delivery Terms (per INCOTERMS 2020)
-   - Payment Terms and Banking Details
-   - Inspection and Quality Standards
-   - Force Majeure
-   - Dispute Resolution (ICC Arbitration, specify venue)
-   - Governing Law (specify jurisdiction)
-   - Confidentiality
-   - Signature Blocks with Witness Lines
-5. Generate 8-25 pages of content (approximately 4,000-12,000 words)
-6. Use formal headers with <h2> for Articles, <h3> for sub-sections
-7. Use proper legal formatting with <strong>CAPITALIZED</strong> party names
-8. Add signature blocks at the end with:
-   - Company name and registration details
-   - Authorized signatory name and title
-   - Date and place of signing
-   - Witness signature lines
+TABLE 2 - PAYMENT SCHEDULE:
+<table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+  <thead>
+    <tr style="background-color: #1a365d; color: white;">
+      <th style="border: 1px solid #000; padding: 12px;">Payment Stage</th>
+      <th style="border: 1px solid #000; padding: 12px;">Percentage</th>
+      <th style="border: 1px solid #000; padding: 12px;">Timing</th>
+      <th style="border: 1px solid #000; padding: 12px;">Conditions</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr style="background-color: #f8f9fa;">
+      <td style="border: 1px solid #000; padding: 10px;">Performance Bond</td>
+      <td style="border: 1px solid #000; padding: 10px; text-align: center;">2%</td>
+      <td style="border: 1px solid #000; padding: 10px;">Within 5 Banking Days of signing</td>
+      <td style="border: 1px solid #000; padding: 10px;">Irrevocable Bank Guarantee</td>
+    </tr>
+    [Include payment milestones]
+  </tbody>
+</table>
 
+TABLE 3 - VESSEL REQUIREMENTS:
+<table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+  <thead>
+    <tr style="background-color: #1a365d; color: white;">
+      <th style="border: 1px solid #000; padding: 12px;">Vessel Parameter</th>
+      <th style="border: 1px solid #000; padding: 12px;">Minimum</th>
+      <th style="border: 1px solid #000; padding: 12px;">Maximum</th>
+      <th style="border: 1px solid #000; padding: 12px;">Notes</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr style="background-color: #f8f9fa;">
+      <td style="border: 1px solid #000; padding: 10px;">Deadweight Tonnage (DWT)</td>
+      <td style="border: 1px solid #000; padding: 10px; text-align: center;">{{vessel_min_dwt}}</td>
+      <td style="border: 1px solid #000; padding: 10px; text-align: center;">{{vessel_max_dwt}}</td>
+      <td style="border: 1px solid #000; padding: 10px;">As per port restrictions</td>
+    </tr>
+    [Include LOA, Beam, Draft, Age requirements]
+  </tbody>
+</table>
+
+TABLE 4 - CONTACT DETAILS:
+<table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+  <thead>
+    <tr style="background-color: #1a365d; color: white;">
+      <th style="border: 1px solid #000; padding: 12px;">Role</th>
+      <th style="border: 1px solid #000; padding: 12px;">Party</th>
+      <th style="border: 1px solid #000; padding: 12px;">Contact Person</th>
+      <th style="border: 1px solid #000; padding: 12px;">Email</th>
+      <th style="border: 1px solid #000; padding: 12px;">Phone</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr style="background-color: #f8f9fa;">
+      <td style="border: 1px solid #000; padding: 10px;">Commercial Contact</td>
+      <td style="border: 1px solid #000; padding: 10px;">SELLER</td>
+      <td style="border: 1px solid #000; padding: 10px;">{{seller_representative_name}}</td>
+      <td style="border: 1px solid #000; padding: 10px;">{{seller_email}}</td>
+      <td style="border: 1px solid #000; padding: 10px;">{{seller_phone}}</td>
+    </tr>
+    [Include Operations, Legal, Finance contacts for both parties]
+  </tbody>
+</table>
+
+=======================================================================
+SIGNATURE BLOCK FORMAT:
+=======================================================================
+
+<h2>EXECUTION</h2>
+
+<p>IN WITNESS WHEREOF, the Parties have executed this Agreement as of the date first written above.</p>
+
+<table style="width: 100%; border: none; margin-top: 40px;">
+  <tr>
+    <td style="width: 48%; vertical-align: top; border: none; padding: 20px;">
+      <p><strong>FOR AND ON BEHALF OF SELLER:</strong></p>
+      <p><strong>{{seller_company_name}}</strong></p>
+      <br><br>
+      <p>_________________________________</p>
+      <p>Signature</p>
+      <br>
+      <p>Name: {{seller_representative_name}}</p>
+      <p>Title: {{seller_representative_title}}</p>
+      <p>Date: ___________________________</p>
+      <br>
+      <p><strong>WITNESS:</strong></p>
+      <p>_________________________________</p>
+      <p>Name: {{seller_witness_name}}</p>
+      <p>Title: {{seller_witness_title}}</p>
+    </td>
+    <td style="width: 4%; border: none;"></td>
+    <td style="width: 48%; vertical-align: top; border: none; padding: 20px;">
+      <p><strong>FOR AND ON BEHALF OF BUYER:</strong></p>
+      <p><strong>{{buyer_company_name}}</strong></p>
+      <br><br>
+      <p>_________________________________</p>
+      <p>Signature</p>
+      <br>
+      <p>Name: {{buyer_representative_name}}</p>
+      <p>Title: {{buyer_representative_title}}</p>
+      <p>Date: ___________________________</p>
+      <br>
+      <p><strong>WITNESS:</strong></p>
+      <p>_________________________________</p>
+      <p>Name: {{buyer_witness_name}}</p>
+      <p>Title: {{buyer_witness_title}}</p>
+    </td>
+  </tr>
+</table>
+
+=======================================================================
+REQUIRED ARTICLES TO INCLUDE (FULLY DETAILED):
+=======================================================================
+
+ARTICLE I - DEFINITIONS AND INTERPRETATION (with 35+ definitions)
+ARTICLE II - SUBJECT MATTER AND SCOPE
+ARTICLE III - QUANTITY (with tolerances, measurement, calibration)
+ARTICLE IV - QUALITY AND SPECIFICATIONS (with Table 1)
+ARTICLE V - PRICE AND PRICING MECHANISM
+ARTICLE VI - PAYMENT TERMS (with Table 2, banking details, LC requirements)
+ARTICLE VII - DELIVERY TERMS (INCOTERMS 2020)
+ARTICLE VIII - LOADING AND DISCHARGE (with Table 3 vessel requirements)
+ARTICLE IX - VESSEL NOMINATION AND APPROVAL
+ARTICLE X - INSPECTION AND TESTING
+ARTICLE XI - TITLE AND RISK OF LOSS
+ARTICLE XII - TAXES AND DUTIES
+ARTICLE XIII - INSURANCE
+ARTICLE XIV - REPRESENTATIONS AND WARRANTIES
+ARTICLE XV - INDEMNIFICATION
+ARTICLE XVI - LIMITATION OF LIABILITY
+ARTICLE XVII - FORCE MAJEURE
+ARTICLE XVIII - TERMINATION
+ARTICLE XIX - CONFIDENTIALITY
+ARTICLE XX - DISPUTE RESOLUTION (negotiation, mediation, ICC arbitration)
+ARTICLE XXI - GOVERNING LAW AND JURISDICTION
+ARTICLE XXII - NOTICES (with Table 4 contact details)
+ARTICLE XXIII - ASSIGNMENT
+ARTICLE XXIV - ENTIRE AGREEMENT
+ARTICLE XXV - AMENDMENTS AND WAIVERS
+ARTICLE XXVI - SEVERABILITY
+ARTICLE XXVII - GENERAL PROVISIONS
+
+ANNEXURE A - TECHNICAL SPECIFICATIONS
+ANNEXURE B - BANKING DETAILS AND PAYMENT INSTRUCTIONS
+ANNEXURE C - VESSEL NOMINATION FORM
+ANNEXURE D - CERTIFICATE OF ORIGIN TEMPLATE
+ANNEXURE E - BILL OF LADING REQUIREMENTS
+
+=======================================================================
 PLACEHOLDER RULES:
-- Use {{placeholder_name}} format for all variable data from the database
-- For fields from the database, use these exact placeholder names: ${placeholderList}
-- For additional fields needed but NOT in the database, create new placeholders and list them at the end under a section titled "GENERATED_PLACEHOLDERS" (as an HTML list)
-- Examples of generated placeholders: {{contract_reference_number}}, {{effective_date}}, {{notary_name}}, {{witness_name}}, {{arbitration_venue}}
+=======================================================================
+- Use {{placeholder_name}} format for ALL variable data
+- Available database placeholders: ${placeholderList}
+- Create additional placeholders as needed: {{contract_reference_number}}, {{effective_date}}, {{contract_term_years}}, {{arbitration_venue}}, {{governing_law_country}}, etc.
 
 DOCUMENT TYPE: ${documentType}
 ENTITY TYPES: ${entityTypeArray.join(', ')}
-DOCUMENT TITLE: ${title}
 
-USER INSTRUCTIONS:
-${prompt || 'Generate a comprehensive legal document following all standard oil trading industry practices.'}
+USER ADDITIONAL INSTRUCTIONS:
+${prompt || 'Generate a comprehensive legal document following all standard oil trading industry practices.'}`;
 
-Generate the complete legal document template now in HTML format. At the very end, add a section titled "GENERATED_PLACEHOLDERS" as an HTML list showing any placeholder names you created that are NOT from the provided database placeholders.`;
+    console.log('Calling OpenAI API for document generation...');
 
-    // Call Lovable AI Gateway
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+    // Single API call with maximum tokens for complete document
+    const response = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        "Authorization": `Bearer ${OPENAI_API_KEY}`,
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: "gpt-4o",
         messages: [
           { role: "system", content: systemPrompt },
-          { role: "user", content: `Generate a ${documentType} document template with the title "${title}". Make it comprehensive, professional, and legally binding. Output in clean HTML format only.` }
+          { role: "user", content: `Generate a complete ${documentType} document template with the title "${title}". 
+
+CRITICAL REQUIREMENTS:
+1. Write AT LEAST ${minPages * 500} words - this is a comprehensive legal document
+2. Include ALL 27 Articles listed in the requirements with full legal detail
+3. Include ALL 5 Annexures with complete content
+4. Use the EXACT header, parties, recitals, and signature block formats shown
+5. Include ALL 4 required tables with proper styling
+6. Write in formal legal language - every clause must be complete and detailed
+7. Include at least 35 defined terms in the Definitions section
+8. Each Article should have multiple numbered sub-clauses (e.g., 5.1, 5.2, 5.3)
+9. Use proper HTML formatting - no Markdown
+
+Start the document now. Begin with the CONFIDENTIAL header and continue through all sections to the signature blocks and annexures.` }
         ],
         max_tokens: 16000,
-        temperature: 0.7,
+        temperature: 0.5,
       }),
     });
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("AI gateway error:", response.status, errorText);
+      console.error("OpenAI API error:", response.status, errorText);
       
+      if (response.status === 401) {
+        throw new Error("Invalid OpenAI API key. Please check your OPENAI_API_KEY.");
+      }
       if (response.status === 429) {
-        return new Response(
-          JSON.stringify({ error: "Rate limits exceeded, please try again later." }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+        throw new Error("OpenAI rate limit exceeded. Please try again in a moment.");
       }
-      if (response.status === 402) {
-        return new Response(
-          JSON.stringify({ error: "Payment required, please add funds to your Lovable AI workspace." }),
-          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+      if (response.status === 402 || errorText.includes('insufficient')) {
+        throw new Error("OpenAI payment required. Please check your OpenAI account billing.");
       }
       
-      throw new Error(`AI gateway error: ${response.status}`);
+      throw new Error(`OpenAI API error: ${response.status}`);
     }
 
     const aiResponse = await response.json();
     let generatedContent = aiResponse.choices?.[0]?.message?.content || '';
+
+    if (!generatedContent || generatedContent.length < 100) {
+      throw new Error("Failed to generate document content. Please try again.");
+    }
 
     // Clean up any markdown code blocks if present
     generatedContent = generatedContent.replace(/```html\n?/g, '').replace(/```\n?/g, '');
@@ -250,9 +476,11 @@ Generate the complete legal document template now in HTML format. At the very en
       }
     });
 
-    // Estimate pages (roughly 400 words per page)
-    const wordCount = generatedContent.replace(/<[^>]*>/g, '').split(/\s+/).length;
-    const estimatedPages = Math.max(8, Math.ceil(wordCount / 400));
+    // Calculate word count and pages
+    const wordCount = generatedContent.replace(/<[^>]*>/g, '').split(/\s+/).filter((w: string) => w.length > 0).length;
+    const estimatedPages = Math.max(minPages, Math.ceil(wordCount / 400));
+
+    console.log(`Final document: ${wordCount} words, ~${estimatedPages} pages`);
 
     return new Response(
       JSON.stringify({
@@ -268,8 +496,11 @@ Generate the complete legal document template now in HTML format. At the very en
 
   } catch (error) {
     console.error("Error generating document:", error);
+    
+    const errorMessage = error instanceof Error ? error.message : "Unknown error";
+    
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
+      JSON.stringify({ error: errorMessage }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }

@@ -22,12 +22,16 @@ interface CreateDealFormProps {
   onSuccess?: (dealId: string) => void;
   onCancel?: () => void;
   preselectedVessel?: Vessel | null;
+  selectedCompanyId?: string;
+  isEmbedded?: boolean;
 }
 
 const CreateDealForm: React.FC<CreateDealFormProps> = ({ 
   onSuccess, 
   onCancel, 
-  preselectedVessel 
+  preselectedVessel,
+  selectedCompanyId,
+  isEmbedded = false
 }) => {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -118,7 +122,7 @@ const CreateDealForm: React.FC<CreateDealFormProps> = ({
 
     setLoading(true);
     try {
-      const dealData = {
+      const dealData: any = {
         broker_id: brokerProfile.id,
         deal_type: formData.deal_type,
         cargo_type: formData.cargo_type,
@@ -135,6 +139,11 @@ const CreateDealForm: React.FC<CreateDealFormProps> = ({
         total_steps: 8,
         steps_completed: 0
       };
+
+      // Add selected company if provided from deal flow
+      if (selectedCompanyId) {
+        dealData.selected_company_id = selectedCompanyId;
+      }
 
       const { data, error } = await supabase
         .from('broker_deals')
@@ -164,6 +173,243 @@ const CreateDealForm: React.FC<CreateDealFormProps> = ({
     }
   };
 
+  // Form content component to avoid duplication
+  const formContent = (
+    <form onSubmit={handleSubmit} className="space-y-6">
+      {/* Deal Type & Cargo */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <Label htmlFor="deal_type">Deal Type *</Label>
+          <Select value={formData.deal_type} onValueChange={(value) => handleSelectChange('deal_type', value)}>
+            <SelectTrigger>
+              <SelectValue placeholder="Select deal type" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="brokerage">Brokerage</SelectItem>
+              <SelectItem value="spot">Spot Sale</SelectItem>
+              <SelectItem value="contract">Contract Sale</SelectItem>
+              <SelectItem value="futures">Futures</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+        <div>
+          <Label htmlFor="cargo_type">Cargo Type *</Label>
+          <Select value={formData.cargo_type} onValueChange={(value) => handleSelectChange('cargo_type', value)}>
+            <SelectTrigger>
+              <SelectValue placeholder="Select cargo type" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="crude_oil">Crude Oil</SelectItem>
+              <SelectItem value="diesel">Diesel</SelectItem>
+              <SelectItem value="gasoline">Gasoline</SelectItem>
+              <SelectItem value="jet_fuel">Jet Fuel</SelectItem>
+              <SelectItem value="fuel_oil">Fuel Oil</SelectItem>
+              <SelectItem value="lng">LNG</SelectItem>
+              <SelectItem value="lpg">LPG</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+
+      {/* Vessel Selection */}
+      {!preselectedVessel && (
+        <div>
+          <Label htmlFor="vessel_id">Vessel</Label>
+          <Select value={formData.vessel_id} onValueChange={(value) => handleSelectChange('vessel_id', value)}>
+            <SelectTrigger>
+              <SelectValue placeholder="Select vessel (optional)" />
+            </SelectTrigger>
+            <SelectContent>
+              {vessels.map((vessel) => (
+                <SelectItem key={vessel.id} value={vessel.id.toString()}>
+                  {vessel.name} - {vessel.vessel_type} ({vessel.cargo_capacity?.toLocaleString()} MT)
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+      )}
+
+      {preselectedVessel && (
+        <div className="p-3 bg-muted rounded-lg">
+          <div className="flex items-center gap-2">
+            <Ship className="h-4 w-4" />
+            <span className="font-medium">{preselectedVessel.name}</span>
+            <span className="text-sm text-muted-foreground">
+              {preselectedVessel.vessel_type} - {preselectedVessel.cargo_capacity?.toLocaleString()} MT
+            </span>
+          </div>
+        </div>
+      )}
+
+      {/* Quantity & Pricing */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div>
+          <Label htmlFor="quantity">Quantity (MT) *</Label>
+          <div className="relative">
+            <Package className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+            <Input
+              id="quantity"
+              name="quantity"
+              type="number"
+              step="0.01"
+              value={formData.quantity}
+              onChange={handleInputChange}
+              className="pl-10"
+              required
+            />
+          </div>
+        </div>
+        <div>
+          <Label htmlFor="price_per_unit">Price per MT (USD) *</Label>
+          <div className="relative">
+            <DollarSign className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+            <Input
+              id="price_per_unit"
+              name="price_per_unit"
+              type="number"
+              step="0.01"
+              value={formData.price_per_unit}
+              onChange={handleInputChange}
+              className="pl-10"
+              required
+            />
+          </div>
+        </div>
+        <div>
+          <Label htmlFor="total_value">Total Value (USD)</Label>
+          <div className="relative">
+            <DollarSign className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+            <Input
+              id="total_value"
+              name="total_value"
+              type="number"
+              step="0.01"
+              value={formData.total_value}
+              onChange={handleInputChange}
+              className="pl-10 bg-muted"
+              readOnly
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Ports */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <Label htmlFor="source_port">Source Port *</Label>
+          <Input
+            id="source_port"
+            name="source_port"
+            value={formData.source_port}
+            onChange={handleInputChange}
+            placeholder="e.g., Houston, TX"
+            required
+          />
+        </div>
+        <div>
+          <Label htmlFor="destination_port">Destination Port *</Label>
+          <Input
+            id="destination_port"
+            name="destination_port"
+            value={formData.destination_port}
+            onChange={handleInputChange}
+            placeholder="e.g., Rotterdam, Netherlands"
+            required
+          />
+        </div>
+      </div>
+
+      {/* Delivery Date & Commission */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <Label htmlFor="delivery_date">Expected Delivery Date</Label>
+          <Input
+            id="delivery_date"
+            name="delivery_date"
+            type="date"
+            value={formData.delivery_date}
+            onChange={handleInputChange}
+          />
+        </div>
+        <div>
+          <Label htmlFor="commission_rate">Commission Rate (%)</Label>
+          <Input
+            id="commission_rate"
+            name="commission_rate"
+            type="number"
+            step="0.1"
+            min="0"
+            max="10"
+            value={formData.commission_rate}
+            onChange={handleInputChange}
+          />
+        </div>
+      </div>
+
+      {/* Terms & Conditions */}
+      <div>
+        <Label htmlFor="terms_conditions">Terms & Conditions</Label>
+        <Textarea
+          id="terms_conditions"
+          name="terms_conditions"
+          value={formData.terms_conditions}
+          onChange={handleInputChange}
+          placeholder="Enter any specific terms, conditions, or notes for this deal..."
+          rows={4}
+        />
+      </div>
+
+      {/* Action Buttons */}
+      <div className="flex gap-4">
+        {onCancel && (
+          <Button type="button" variant="outline" onClick={onCancel}>
+            Cancel
+          </Button>
+        )}
+        <Button type="submit" disabled={loading} className="flex-1">
+          {loading ? (
+            <>
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              Creating Deal...
+            </>
+          ) : (
+            'Create Deal'
+          )}
+        </Button>
+      </div>
+    </form>
+  );
+
+  // If embedded mode, render form directly without dialog
+  if (isEmbedded) {
+    if (!brokerProfile) {
+      return (
+        <div className="flex items-center justify-center py-8">
+          <div className="text-center">
+            <Loader2 className="h-8 w-8 animate-spin mx-auto mb-4" />
+            <p className="text-muted-foreground">Loading broker profile...</p>
+          </div>
+        </div>
+      );
+    }
+
+    if (!brokerProfile.verified_at) {
+      return (
+        <div className="text-center py-8">
+          <Ship className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+          <h3 className="text-lg font-semibold mb-2">Verification Required</h3>
+          <p className="text-muted-foreground">
+            Your broker profile needs to be verified by an admin before you can create deals.
+          </p>
+        </div>
+      );
+    }
+
+    return formContent;
+  }
+
+  // Default: render with dialog wrapper
   if (!brokerProfile) {
     return (
       <Dialog>
@@ -222,206 +468,7 @@ const CreateDealForm: React.FC<CreateDealFormProps> = ({
             Create New Broker Deal
           </DialogTitle>
         </DialogHeader>
-        
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Deal Type & Cargo */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="deal_type">Deal Type *</Label>
-              <Select value={formData.deal_type} onValueChange={(value) => handleSelectChange('deal_type', value)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select deal type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="brokerage">Brokerage</SelectItem>
-                  <SelectItem value="spot">Spot Sale</SelectItem>
-                  <SelectItem value="contract">Contract Sale</SelectItem>
-                  <SelectItem value="futures">Futures</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <Label htmlFor="cargo_type">Cargo Type *</Label>
-              <Select value={formData.cargo_type} onValueChange={(value) => handleSelectChange('cargo_type', value)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select cargo type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="crude_oil">Crude Oil</SelectItem>
-                  <SelectItem value="diesel">Diesel</SelectItem>
-                  <SelectItem value="gasoline">Gasoline</SelectItem>
-                  <SelectItem value="jet_fuel">Jet Fuel</SelectItem>
-                  <SelectItem value="fuel_oil">Fuel Oil</SelectItem>
-                  <SelectItem value="lng">LNG</SelectItem>
-                  <SelectItem value="lpg">LPG</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
-
-          {/* Vessel Selection */}
-          {!preselectedVessel && (
-            <div>
-              <Label htmlFor="vessel_id">Vessel</Label>
-              <Select value={formData.vessel_id} onValueChange={(value) => handleSelectChange('vessel_id', value)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select vessel (optional)" />
-                </SelectTrigger>
-                <SelectContent>
-                  {vessels.map((vessel) => (
-                    <SelectItem key={vessel.id} value={vessel.id.toString()}>
-                      {vessel.name} - {vessel.vessel_type} ({vessel.cargo_capacity?.toLocaleString()} MT)
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-
-          {preselectedVessel && (
-            <div className="p-3 bg-muted rounded-lg">
-              <div className="flex items-center gap-2">
-                <Ship className="h-4 w-4" />
-                <span className="font-medium">{preselectedVessel.name}</span>
-                <span className="text-sm text-muted-foreground">
-                  {preselectedVessel.vessel_type} - {preselectedVessel.cargo_capacity?.toLocaleString()} MT
-                </span>
-              </div>
-            </div>
-          )}
-
-          {/* Quantity & Pricing */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <Label htmlFor="quantity">Quantity (MT) *</Label>
-              <div className="relative">
-                <Package className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                <Input
-                  id="quantity"
-                  name="quantity"
-                  type="number"
-                  step="0.01"
-                  value={formData.quantity}
-                  onChange={handleInputChange}
-                  className="pl-10"
-                  required
-                />
-              </div>
-            </div>
-            <div>
-              <Label htmlFor="price_per_unit">Price per MT (USD) *</Label>
-              <div className="relative">
-                <DollarSign className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                <Input
-                  id="price_per_unit"
-                  name="price_per_unit"
-                  type="number"
-                  step="0.01"
-                  value={formData.price_per_unit}
-                  onChange={handleInputChange}
-                  className="pl-10"
-                  required
-                />
-              </div>
-            </div>
-            <div>
-              <Label htmlFor="total_value">Total Value (USD)</Label>
-              <div className="relative">
-                <DollarSign className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
-                <Input
-                  id="total_value"
-                  name="total_value"
-                  type="number"
-                  step="0.01"
-                  value={formData.total_value}
-                  onChange={handleInputChange}
-                  className="pl-10 bg-muted"
-                  readOnly
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Ports */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="source_port">Source Port *</Label>
-              <Input
-                id="source_port"
-                name="source_port"
-                value={formData.source_port}
-                onChange={handleInputChange}
-                placeholder="e.g., Houston, TX"
-                required
-              />
-            </div>
-            <div>
-              <Label htmlFor="destination_port">Destination Port *</Label>
-              <Input
-                id="destination_port"
-                name="destination_port"
-                value={formData.destination_port}
-                onChange={handleInputChange}
-                placeholder="e.g., Rotterdam, Netherlands"
-                required
-              />
-            </div>
-          </div>
-
-          {/* Delivery Date & Commission */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="delivery_date">Expected Delivery Date</Label>
-              <Input
-                id="delivery_date"
-                name="delivery_date"
-                type="date"
-                value={formData.delivery_date}
-                onChange={handleInputChange}
-              />
-            </div>
-            <div>
-              <Label htmlFor="commission_rate">Commission Rate (%)</Label>
-              <Input
-                id="commission_rate"
-                name="commission_rate"
-                type="number"
-                step="0.1"
-                min="0"
-                max="10"
-                value={formData.commission_rate}
-                onChange={handleInputChange}
-              />
-            </div>
-          </div>
-
-          {/* Terms & Conditions */}
-          <div>
-            <Label htmlFor="terms_conditions">Terms & Conditions</Label>
-            <Textarea
-              id="terms_conditions"
-              name="terms_conditions"
-              value={formData.terms_conditions}
-              onChange={handleInputChange}
-              placeholder="Enter any specific terms, conditions, or notes for this deal..."
-              rows={4}
-            />
-          </div>
-
-          {/* Action Buttons */}
-          <div className="flex gap-4">
-            <Button type="submit" disabled={loading} className="flex-1">
-              {loading ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Creating Deal...
-                </>
-              ) : (
-                'Create Deal'
-              )}
-            </Button>
-          </div>
-        </form>
+        {formContent}
       </DialogContent>
     </Dialog>
   );

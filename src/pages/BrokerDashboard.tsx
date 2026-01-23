@@ -18,7 +18,9 @@ import {
   FileText,
   Settings,
   Send,
-  Paperclip
+  Paperclip,
+  Plus,
+  HelpCircle
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -30,6 +32,8 @@ import EditProfileForm from '@/components/broker/EditProfileForm';
 import CompanyContacts from '@/components/broker/CompanyContacts';
 import IMFPAAgreement from '@/components/broker/IMFPAAgreement';
 import IMFPAInfoNotice from '@/components/broker/IMFPAInfoNotice';
+import EnhancedDealCard from '@/components/broker/EnhancedDealCard';
+import DealInfoNotice from '@/components/broker/DealInfoNotice';
 import { useToast } from '@/hooks/use-toast';
 
 interface BrokerProfile {
@@ -414,11 +418,30 @@ const BrokerDashboard = () => {
         <TabsContent value="deals" className="space-y-6">
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-semibold">My Deals</h2>
-            <CreateDealForm onSuccess={(dealId) => {
-              setSelectedDeal(dealId);
-              fetchBrokerData();
-            }} />
+            <div className="flex items-center gap-2">
+              <Button 
+                variant="outline"
+                size="sm"
+                onClick={() => setSelectedDeal('explainer')}
+                className="flex items-center gap-2"
+              >
+                <HelpCircle className="h-4 w-4" />
+                <span className="hidden sm:inline">How Deals Work</span>
+              </Button>
+              <Button 
+                onClick={() => navigate('/broker-dashboard/select-company')}
+                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700"
+              >
+                <Plus className="h-4 w-4" />
+                Create Deal
+              </Button>
+            </div>
           </div>
+
+          {/* Deal Process Explainer Modal */}
+          {selectedDeal === 'explainer' && (
+            <DealInfoNotice />
+          )}
           
           <Card className="trading-card">
             <CardHeader>
@@ -428,72 +451,29 @@ const BrokerDashboard = () => {
               {deals.length === 0 ? (
                 <div className="text-center py-8">
                   <Briefcase className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                  <p className="text-muted-foreground">
+                  <p className="text-muted-foreground mb-4">
                     No deals yet. Start by browsing vessels and creating your first deal.
                   </p>
+                  <Button 
+                    variant="outline"
+                    onClick={() => setSelectedDeal('explainer')}
+                    className="flex items-center gap-2"
+                  >
+                    <HelpCircle className="h-4 w-4" />
+                    Learn How Deals Work
+                  </Button>
                 </div>
               ) : (
                 <div className="space-y-4">
                   {deals.map((deal, index) => {
-                    // Calculate deal number (oldest deal = 1, newest = last number)
-                    // Since deals are sorted newest first, we need to reverse the index
                     const dealNumber = deals.length - index;
-                    const dealName = deal.cargo_type 
-                      ? `Deal #${dealNumber} - ${deal.cargo_type}` 
-                      : `Deal #${dealNumber}`;
-                    
                     return (
-                    <div key={deal.id} className="border rounded-lg p-4">
-                      <div className="flex items-center justify-between mb-3">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-semibold text-primary">{dealName}</span>
-                          <Badge variant="outline">{deal.deal_type}</Badge>
-                          <span className="text-xs text-muted-foreground">ID: {deal.id.substring(0, 8)}...</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {getStatusIcon(deal.status)}
-                          <Badge variant="outline" className={getStatusColor(deal.status)}>
-                            {deal.status}
-                          </Badge>
-                        </div>
-                      </div>
-                      
-                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                        <div>
-                          <p className="text-muted-foreground">Quantity</p>
-                          <p className="font-medium">{deal.quantity?.toLocaleString()} MT</p>
-                        </div>
-                        <div>
-                          <p className="text-muted-foreground">Value</p>
-                          <p className="font-medium">${deal.total_value?.toLocaleString()}</p>
-                        </div>
-                        <div>
-                          <p className="text-muted-foreground">Progress</p>
-                          <div className="flex items-center gap-2">
-                            <div className="flex-1 bg-muted rounded-full h-2">
-                              <div 
-                                className="bg-primary h-2 rounded-full" 
-                                style={{ width: `${(deal.steps_completed / deal.total_steps) * 100}%` }}
-                              />
-                            </div>
-                            <span className="text-xs">{deal.steps_completed}/{deal.total_steps}</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center justify-between mt-4">
-                        <div className="text-sm text-muted-foreground">
-                          {deal.source_port} → {deal.destination_port}
-                        </div>
-                        <Button 
-                          variant="outline" 
-                          size="sm"
-                          onClick={() => setSelectedDeal(deal.id)}
-                        >
-                          View Steps
-                        </Button>
-                      </div>
-                    </div>
+                      <EnhancedDealCard
+                        key={deal.id}
+                        deal={deal}
+                        dealNumber={dealNumber}
+                        onViewSteps={(dealId) => setSelectedDeal(dealId)}
+                      />
                     );
                   })}
                 </div>

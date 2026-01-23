@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef } from 'react';
 import { useAuth } from './AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/hooks/use-toast';
@@ -9,7 +9,8 @@ interface AccessInfo {
   accessType: 'subscription' | 'trial' | 'expired' | 'preview';
   trialDaysLeft: number;
   isSubscribed: boolean;
-  loading: boolean;}
+  loading: boolean;
+}
 
 interface AccessContextType extends AccessInfo {
   checkAccess: () => Promise<void>;
@@ -27,6 +28,9 @@ export const AccessProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     isSubscribed: false,
     loading: true,
   });
+  
+  // Track if initial check is complete to prevent page unmount on tab switch
+  const initialCheckComplete = useRef(false);
 
   const checkAccess = async () => {
     if (!user?.email) {
@@ -37,11 +41,17 @@ export const AccessProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         isSubscribed: false,
         loading: false,
       });
+      initialCheckComplete.current = true;
       return;
     }
 
     try {
-      setAccessInfo(prev => ({ ...prev, loading: true }));
+      // Only set loading=true during initial check
+      // After initial check, updates happen silently to prevent page unmount
+      if (!initialCheckComplete.current) {
+        setAccessInfo(prev => ({ ...prev, loading: true }));
+      }
+      
       // Use the new check-subscription function
       const { data, error } = await supabase.functions.invoke('check-subscription');
       if (error) {
@@ -52,6 +62,7 @@ export const AccessProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           isSubscribed: false,
           loading: false,
         });
+        initialCheckComplete.current = true;
         return;
       }
       if (data) {
@@ -71,6 +82,7 @@ export const AccessProvider: React.FC<{ children: React.ReactNode }> = ({ childr
           loading: false,
         });
       }
+      initialCheckComplete.current = true;
     } catch (error) {
       setAccessInfo({
         hasAccess: false,
@@ -79,6 +91,7 @@ export const AccessProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         isSubscribed: false,
         loading: false,
       });
+      initialCheckComplete.current = true;
     }
   };
 
@@ -132,7 +145,11 @@ export const AccessProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     }
   };
 
+  // Reset initial check flag when user logs out, then check access
   useEffect(() => {
+    if (!user) {
+      initialCheckComplete.current = false;
+    }
     checkAccess();
   }, [user]);
 

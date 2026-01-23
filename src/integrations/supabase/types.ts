@@ -603,6 +603,9 @@ export type Database = {
           created_at: string
           excerpt: string | null
           featured_image: string | null
+          geo_ai_summary: string | null
+          geo_authority_statement: string | null
+          geo_qa_block: Json | null
           id: string
           meta_description: string | null
           meta_keywords: string[] | null
@@ -622,6 +625,9 @@ export type Database = {
           created_at?: string
           excerpt?: string | null
           featured_image?: string | null
+          geo_ai_summary?: string | null
+          geo_authority_statement?: string | null
+          geo_qa_block?: Json | null
           id?: string
           meta_description?: string | null
           meta_keywords?: string[] | null
@@ -641,6 +647,9 @@ export type Database = {
           created_at?: string
           excerpt?: string | null
           featured_image?: string | null
+          geo_ai_summary?: string | null
+          geo_authority_statement?: string | null
+          geo_qa_block?: Json | null
           id?: string
           meta_description?: string | null
           meta_keywords?: string[] | null
@@ -724,24 +733,76 @@ export type Database = {
           },
         ]
       }
+      broker_deal_companies: {
+        Row: {
+          company_id: number
+          created_at: string | null
+          display_order: number
+          id: string
+          is_enabled: boolean | null
+          product_tags: string[] | null
+          role: string
+          updated_at: string | null
+        }
+        Insert: {
+          company_id: number
+          created_at?: string | null
+          display_order: number
+          id?: string
+          is_enabled?: boolean | null
+          product_tags?: string[] | null
+          role: string
+          updated_at?: string | null
+        }
+        Update: {
+          company_id?: number
+          created_at?: string | null
+          display_order?: number
+          id?: string
+          is_enabled?: boolean | null
+          product_tags?: string[] | null
+          role?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "broker_deal_companies_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       broker_deals: {
         Row: {
           admin_notes: string | null
           approved_at: string | null
           approved_by: string | null
           broker_id: string
+          broker_role: string | null
+          buyer_company_name: string | null
           cargo_type: string | null
           commission_amount: number | null
           commission_rate: number | null
+          commission_status: string | null
           created_at: string
           currency: string | null
           deal_date: string | null
           deal_type: string
+          deal_validity: string | null
           delivery_date: string | null
           destination_port: string | null
           id: string
+          laycan_end: string | null
+          laycan_start: string | null
+          payment_method: string | null
+          price_basis: string | null
           price_per_unit: number | null
+          pricing_formula: string | null
           quantity: number | null
+          selected_company_id: string | null
+          seller_company_name: string | null
           source_port: string | null
           status: string | null
           steps_completed: number | null
@@ -756,18 +817,29 @@ export type Database = {
           approved_at?: string | null
           approved_by?: string | null
           broker_id: string
+          broker_role?: string | null
+          buyer_company_name?: string | null
           cargo_type?: string | null
           commission_amount?: number | null
           commission_rate?: number | null
+          commission_status?: string | null
           created_at?: string
           currency?: string | null
           deal_date?: string | null
           deal_type: string
+          deal_validity?: string | null
           delivery_date?: string | null
           destination_port?: string | null
           id?: string
+          laycan_end?: string | null
+          laycan_start?: string | null
+          payment_method?: string | null
+          price_basis?: string | null
           price_per_unit?: number | null
+          pricing_formula?: string | null
           quantity?: number | null
+          selected_company_id?: string | null
+          seller_company_name?: string | null
           source_port?: string | null
           status?: string | null
           steps_completed?: number | null
@@ -782,18 +854,29 @@ export type Database = {
           approved_at?: string | null
           approved_by?: string | null
           broker_id?: string
+          broker_role?: string | null
+          buyer_company_name?: string | null
           cargo_type?: string | null
           commission_amount?: number | null
           commission_rate?: number | null
+          commission_status?: string | null
           created_at?: string
           currency?: string | null
           deal_date?: string | null
           deal_type?: string
+          deal_validity?: string | null
           delivery_date?: string | null
           destination_port?: string | null
           id?: string
+          laycan_end?: string | null
+          laycan_start?: string | null
+          payment_method?: string | null
+          price_basis?: string | null
           price_per_unit?: number | null
+          pricing_formula?: string | null
           quantity?: number | null
+          selected_company_id?: string | null
+          seller_company_name?: string | null
           source_port?: string | null
           status?: string | null
           steps_completed?: number | null
@@ -816,6 +899,13 @@ export type Database = {
             columns: ["broker_id"]
             isOneToOne: false
             referencedRelation: "broker_profiles_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "broker_deals_selected_company_id_fkey"
+            columns: ["selected_company_id"]
+            isOneToOne: false
+            referencedRelation: "broker_deal_companies"
             referencedColumns: ["id"]
           },
           {
@@ -1382,6 +1472,39 @@ export type Database = {
           },
         ]
       }
+      career_settings: {
+        Row: {
+          application_email: string | null
+          created_at: string
+          hero_image_url: string | null
+          hero_subtitle: string | null
+          hero_title: string | null
+          id: string
+          show_salary_ranges: boolean | null
+          updated_at: string
+        }
+        Insert: {
+          application_email?: string | null
+          created_at?: string
+          hero_image_url?: string | null
+          hero_subtitle?: string | null
+          hero_title?: string | null
+          id?: string
+          show_salary_ranges?: boolean | null
+          updated_at?: string
+        }
+        Update: {
+          application_email?: string | null
+          created_at?: string
+          hero_image_url?: string | null
+          hero_subtitle?: string | null
+          hero_title?: string | null
+          id?: string
+          show_salary_ranges?: boolean | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
       chatbot_configs: {
         Row: {
           allowed_topics: string[] | null
@@ -1665,6 +1788,9 @@ export type Database = {
         Row: {
           content_sections: Json | null
           created_at: string | null
+          geo_ai_summary: string | null
+          geo_authority_statement: string | null
+          geo_qa_block: Json | null
           hero_cta_link: string | null
           hero_cta_text: string | null
           hero_image_url: string | null
@@ -1686,6 +1812,9 @@ export type Database = {
         Insert: {
           content_sections?: Json | null
           created_at?: string | null
+          geo_ai_summary?: string | null
+          geo_authority_statement?: string | null
+          geo_qa_block?: Json | null
           hero_cta_link?: string | null
           hero_cta_text?: string | null
           hero_image_url?: string | null
@@ -1707,6 +1836,9 @@ export type Database = {
         Update: {
           content_sections?: Json | null
           created_at?: string | null
+          geo_ai_summary?: string | null
+          geo_authority_statement?: string | null
+          geo_qa_block?: Json | null
           hero_cta_link?: string | null
           hero_cta_text?: string | null
           hero_image_url?: string | null
@@ -3141,6 +3273,143 @@ export type Database = {
         }
         Relationships: []
       }
+      job_applications: {
+        Row: {
+          applicant_name: string
+          cover_letter: string | null
+          created_at: string
+          email: string
+          id: string
+          job_id: string
+          notes: string | null
+          phone: string | null
+          resume_url: string
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          applicant_name: string
+          cover_letter?: string | null
+          created_at?: string
+          email: string
+          id?: string
+          job_id: string
+          notes?: string | null
+          phone?: string | null
+          resume_url: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          applicant_name?: string
+          cover_letter?: string | null
+          created_at?: string
+          email?: string
+          id?: string
+          job_id?: string
+          notes?: string | null
+          phone?: string | null
+          resume_url?: string
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "job_applications_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "job_listings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      job_listings: {
+        Row: {
+          benefits: string[] | null
+          created_at: string
+          department: string
+          description: string
+          employment_type: string
+          expires_at: string | null
+          featured: boolean | null
+          geo_compliance_context: string | null
+          geo_direct_answers: Json | null
+          geo_job_definition: string | null
+          geo_technical_highlights: string | null
+          id: string
+          location: string
+          meta_description: string | null
+          meta_keywords: string[] | null
+          meta_title: string | null
+          posted_at: string | null
+          requirements: string[]
+          responsibilities: string[]
+          salary_range: string | null
+          slug: string
+          status: string
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          benefits?: string[] | null
+          created_at?: string
+          department: string
+          description: string
+          employment_type: string
+          expires_at?: string | null
+          featured?: boolean | null
+          geo_compliance_context?: string | null
+          geo_direct_answers?: Json | null
+          geo_job_definition?: string | null
+          geo_technical_highlights?: string | null
+          id?: string
+          location: string
+          meta_description?: string | null
+          meta_keywords?: string[] | null
+          meta_title?: string | null
+          posted_at?: string | null
+          requirements?: string[]
+          responsibilities?: string[]
+          salary_range?: string | null
+          slug: string
+          status?: string
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          benefits?: string[] | null
+          created_at?: string
+          department?: string
+          description?: string
+          employment_type?: string
+          expires_at?: string | null
+          featured?: boolean | null
+          geo_compliance_context?: string | null
+          geo_direct_answers?: Json | null
+          geo_job_definition?: string | null
+          geo_technical_highlights?: string | null
+          id?: string
+          location?: string
+          meta_description?: string | null
+          meta_keywords?: string[] | null
+          meta_title?: string | null
+          posted_at?: string | null
+          requirements?: string[]
+          responsibilities?: string[]
+          salary_range?: string | null
+          slug?: string
+          status?: string
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       landing_page_content: {
         Row: {
           content: Json | null
@@ -3179,6 +3448,287 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      linkedin_comments: {
+        Row: {
+          author_image_url: string | null
+          author_name: string | null
+          author_profile_url: string | null
+          comment_urn: string
+          content: string
+          created_at: string | null
+          created_at_linkedin: string | null
+          id: string
+          is_hidden: boolean | null
+          is_reply: boolean | null
+          our_reply: string | null
+          our_reply_urn: string | null
+          parent_comment_urn: string | null
+          post_id: string | null
+          replied_at: string | null
+        }
+        Insert: {
+          author_image_url?: string | null
+          author_name?: string | null
+          author_profile_url?: string | null
+          comment_urn: string
+          content: string
+          created_at?: string | null
+          created_at_linkedin?: string | null
+          id?: string
+          is_hidden?: boolean | null
+          is_reply?: boolean | null
+          our_reply?: string | null
+          our_reply_urn?: string | null
+          parent_comment_urn?: string | null
+          post_id?: string | null
+          replied_at?: string | null
+        }
+        Update: {
+          author_image_url?: string | null
+          author_name?: string | null
+          author_profile_url?: string | null
+          comment_urn?: string
+          content?: string
+          created_at?: string | null
+          created_at_linkedin?: string | null
+          id?: string
+          is_hidden?: boolean | null
+          is_reply?: boolean | null
+          our_reply?: string | null
+          our_reply_urn?: string | null
+          parent_comment_urn?: string | null
+          post_id?: string | null
+          replied_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "linkedin_comments_post_id_fkey"
+            columns: ["post_id"]
+            isOneToOne: false
+            referencedRelation: "linkedin_published_posts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      linkedin_connected_pages: {
+        Row: {
+          access_token: string
+          connected_by: string | null
+          created_at: string | null
+          follower_count: number | null
+          id: string
+          is_active: boolean | null
+          organization_urn: string
+          page_name: string
+          profile_image_url: string | null
+          refresh_token: string | null
+          token_expires_at: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          access_token: string
+          connected_by?: string | null
+          created_at?: string | null
+          follower_count?: number | null
+          id?: string
+          is_active?: boolean | null
+          organization_urn: string
+          page_name: string
+          profile_image_url?: string | null
+          refresh_token?: string | null
+          token_expires_at?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          access_token?: string
+          connected_by?: string | null
+          created_at?: string | null
+          follower_count?: number | null
+          id?: string
+          is_active?: boolean | null
+          organization_urn?: string
+          page_name?: string
+          profile_image_url?: string | null
+          refresh_token?: string | null
+          token_expires_at?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      linkedin_media_library: {
+        Row: {
+          created_at: string | null
+          duration_seconds: number | null
+          file_name: string
+          file_size: number | null
+          file_type: string
+          file_url: string
+          height: number | null
+          id: string
+          linkedin_asset_urn: string | null
+          page_id: string | null
+          thumbnail_url: string | null
+          uploaded_by: string | null
+          width: number | null
+        }
+        Insert: {
+          created_at?: string | null
+          duration_seconds?: number | null
+          file_name: string
+          file_size?: number | null
+          file_type: string
+          file_url: string
+          height?: number | null
+          id?: string
+          linkedin_asset_urn?: string | null
+          page_id?: string | null
+          thumbnail_url?: string | null
+          uploaded_by?: string | null
+          width?: number | null
+        }
+        Update: {
+          created_at?: string | null
+          duration_seconds?: number | null
+          file_name?: string
+          file_size?: number | null
+          file_type?: string
+          file_url?: string
+          height?: number | null
+          id?: string
+          linkedin_asset_urn?: string | null
+          page_id?: string | null
+          thumbnail_url?: string | null
+          uploaded_by?: string | null
+          width?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "linkedin_media_library_page_id_fkey"
+            columns: ["page_id"]
+            isOneToOne: false
+            referencedRelation: "linkedin_connected_pages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      linkedin_published_posts: {
+        Row: {
+          clicks: number | null
+          comments_count: number | null
+          content: string | null
+          created_at: string | null
+          engagement_rate: number | null
+          id: string
+          impressions: number | null
+          last_synced_at: string | null
+          likes: number | null
+          media_type: string | null
+          media_urls: string[] | null
+          page_id: string | null
+          post_urn: string
+          published_at: string | null
+          shares: number | null
+        }
+        Insert: {
+          clicks?: number | null
+          comments_count?: number | null
+          content?: string | null
+          created_at?: string | null
+          engagement_rate?: number | null
+          id?: string
+          impressions?: number | null
+          last_synced_at?: string | null
+          likes?: number | null
+          media_type?: string | null
+          media_urls?: string[] | null
+          page_id?: string | null
+          post_urn: string
+          published_at?: string | null
+          shares?: number | null
+        }
+        Update: {
+          clicks?: number | null
+          comments_count?: number | null
+          content?: string | null
+          created_at?: string | null
+          engagement_rate?: number | null
+          id?: string
+          impressions?: number | null
+          last_synced_at?: string | null
+          likes?: number | null
+          media_type?: string | null
+          media_urls?: string[] | null
+          page_id?: string | null
+          post_urn?: string
+          published_at?: string | null
+          shares?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "linkedin_published_posts_page_id_fkey"
+            columns: ["page_id"]
+            isOneToOne: false
+            referencedRelation: "linkedin_connected_pages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      linkedin_scheduled_posts: {
+        Row: {
+          content: string
+          created_at: string | null
+          created_by: string | null
+          error_message: string | null
+          id: string
+          media_type: string | null
+          media_urls: string[] | null
+          media_urns: string[] | null
+          page_id: string | null
+          published_post_urn: string | null
+          scheduled_for: string
+          status: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          content: string
+          created_at?: string | null
+          created_by?: string | null
+          error_message?: string | null
+          id?: string
+          media_type?: string | null
+          media_urls?: string[] | null
+          media_urns?: string[] | null
+          page_id?: string | null
+          published_post_urn?: string | null
+          scheduled_for: string
+          status?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          content?: string
+          created_at?: string | null
+          created_by?: string | null
+          error_message?: string | null
+          id?: string
+          media_type?: string | null
+          media_urls?: string[] | null
+          media_urns?: string[] | null
+          page_id?: string | null
+          published_post_urn?: string | null
+          scheduled_for?: string
+          status?: string | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "linkedin_scheduled_posts_page_id_fkey"
+            columns: ["page_id"]
+            isOneToOne: false
+            referencedRelation: "linkedin_connected_pages"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       marketing_events: {
         Row: {
@@ -4507,6 +5057,315 @@ export type Database = {
         }
         Relationships: []
       }
+      reward_program_participants: {
+        Row: {
+          company_name: string | null
+          created_at: string
+          email: string
+          id: string
+          name: string | null
+          program_id: string
+          referral_code: string | null
+          source: string
+          total_points: number
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          company_name?: string | null
+          created_at?: string
+          email: string
+          id?: string
+          name?: string | null
+          program_id: string
+          referral_code?: string | null
+          source?: string
+          total_points?: number
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          company_name?: string | null
+          created_at?: string
+          email?: string
+          id?: string
+          name?: string | null
+          program_id?: string
+          referral_code?: string | null
+          source?: string
+          total_points?: number
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reward_program_participants_program_id_fkey"
+            columns: ["program_id"]
+            isOneToOne: false
+            referencedRelation: "reward_programs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      reward_program_rewards: {
+        Row: {
+          auto_apply: boolean
+          created_at: string
+          expires_at: string | null
+          id: string
+          is_active: boolean
+          name: string
+          program_id: string
+          required_points: number
+          reward_type: string
+          reward_value: string | null
+          updated_at: string
+        }
+        Insert: {
+          auto_apply?: boolean
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean
+          name: string
+          program_id: string
+          required_points?: number
+          reward_type: string
+          reward_value?: string | null
+          updated_at?: string
+        }
+        Update: {
+          auto_apply?: boolean
+          created_at?: string
+          expires_at?: string | null
+          id?: string
+          is_active?: boolean
+          name?: string
+          program_id?: string
+          required_points?: number
+          reward_type?: string
+          reward_value?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reward_program_rewards_program_id_fkey"
+            columns: ["program_id"]
+            isOneToOne: false
+            referencedRelation: "reward_programs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      reward_program_tasks: {
+        Row: {
+          category: string
+          completion_method: string
+          created_at: string
+          description: string | null
+          id: string
+          is_enabled: boolean
+          name: string
+          points: number
+          program_id: string
+          task_order: number
+          updated_at: string
+          validation_config: Json | null
+        }
+        Insert: {
+          category: string
+          completion_method: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_enabled?: boolean
+          name: string
+          points?: number
+          program_id: string
+          task_order?: number
+          updated_at?: string
+          validation_config?: Json | null
+        }
+        Update: {
+          category?: string
+          completion_method?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_enabled?: boolean
+          name?: string
+          points?: number
+          program_id?: string
+          task_order?: number
+          updated_at?: string
+          validation_config?: Json | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reward_program_tasks_program_id_fkey"
+            columns: ["program_id"]
+            isOneToOne: false
+            referencedRelation: "reward_programs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      reward_programs: {
+        Row: {
+          banner_image_url: string | null
+          created_at: string
+          description: string | null
+          disclaimer_text: string | null
+          end_date: string | null
+          external_slug: string | null
+          icon: string | null
+          id: string
+          name: string
+          program_type: string
+          start_date: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          banner_image_url?: string | null
+          created_at?: string
+          description?: string | null
+          disclaimer_text?: string | null
+          end_date?: string | null
+          external_slug?: string | null
+          icon?: string | null
+          id?: string
+          name: string
+          program_type?: string
+          start_date?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          banner_image_url?: string | null
+          created_at?: string
+          description?: string | null
+          disclaimer_text?: string | null
+          end_date?: string | null
+          external_slug?: string | null
+          icon?: string | null
+          id?: string
+          name?: string
+          program_type?: string
+          start_date?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      reward_redemptions: {
+        Row: {
+          applied_at: string | null
+          created_at: string
+          id: string
+          participant_id: string
+          redemption_code: string | null
+          reward_id: string
+          status: string
+        }
+        Insert: {
+          applied_at?: string | null
+          created_at?: string
+          id?: string
+          participant_id: string
+          redemption_code?: string | null
+          reward_id: string
+          status?: string
+        }
+        Update: {
+          applied_at?: string | null
+          created_at?: string
+          id?: string
+          participant_id?: string
+          redemption_code?: string | null
+          reward_id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reward_redemptions_participant_id_fkey"
+            columns: ["participant_id"]
+            isOneToOne: false
+            referencedRelation: "reward_program_participants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reward_redemptions_reward_id_fkey"
+            columns: ["reward_id"]
+            isOneToOne: false
+            referencedRelation: "reward_program_rewards"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      reward_task_submissions: {
+        Row: {
+          admin_notes: string | null
+          created_at: string
+          id: string
+          participant_id: string
+          points_awarded: number | null
+          proof_metadata: Json | null
+          proof_type: string
+          proof_url: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+          task_id: string
+          updated_at: string
+        }
+        Insert: {
+          admin_notes?: string | null
+          created_at?: string
+          id?: string
+          participant_id: string
+          points_awarded?: number | null
+          proof_metadata?: Json | null
+          proof_type: string
+          proof_url?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          task_id: string
+          updated_at?: string
+        }
+        Update: {
+          admin_notes?: string | null
+          created_at?: string
+          id?: string
+          participant_id?: string
+          points_awarded?: number | null
+          proof_metadata?: Json | null
+          proof_type?: string
+          proof_url?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          task_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "reward_task_submissions_participant_id_fkey"
+            columns: ["participant_id"]
+            isOneToOne: false
+            referencedRelation: "reward_program_participants"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "reward_task_submissions_task_id_fkey"
+            columns: ["task_id"]
+            isOneToOne: false
+            referencedRelation: "reward_program_tasks"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       seller_companies: {
         Row: {
           address: string | null
@@ -5336,6 +6195,569 @@ export type Database = {
           updated_by?: string | null
         }
         Relationships: []
+      }
+      talent_assessment_links: {
+        Row: {
+          candidate_id: string
+          created_at: string
+          created_by: string | null
+          current_sessions: number | null
+          expires_at: string
+          id: string
+          is_used: boolean | null
+          max_sessions: number | null
+          token: string
+        }
+        Insert: {
+          candidate_id: string
+          created_at?: string
+          created_by?: string | null
+          current_sessions?: number | null
+          expires_at: string
+          id?: string
+          is_used?: boolean | null
+          max_sessions?: number | null
+          token: string
+        }
+        Update: {
+          candidate_id?: string
+          created_at?: string
+          created_by?: string | null
+          current_sessions?: number | null
+          expires_at?: string
+          id?: string
+          is_used?: boolean | null
+          max_sessions?: number | null
+          token?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "talent_assessment_links_candidate_id_fkey"
+            columns: ["candidate_id"]
+            isOneToOne: false
+            referencedRelation: "talent_candidates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      talent_candidates: {
+        Row: {
+          admin_notes: string | null
+          area_of_interest: string | null
+          city: string | null
+          completed_at: string | null
+          country: string | null
+          created_at: string
+          email: string
+          final_score: number | null
+          full_name: string
+          id: string
+          invited_at: string | null
+          linkedin_url: string | null
+          preferred_language: string | null
+          professional_background: string | null
+          program_id: string | null
+          started_at: string | null
+          status: string | null
+          updated_at: string
+        }
+        Insert: {
+          admin_notes?: string | null
+          area_of_interest?: string | null
+          city?: string | null
+          completed_at?: string | null
+          country?: string | null
+          created_at?: string
+          email: string
+          final_score?: number | null
+          full_name: string
+          id?: string
+          invited_at?: string | null
+          linkedin_url?: string | null
+          preferred_language?: string | null
+          professional_background?: string | null
+          program_id?: string | null
+          started_at?: string | null
+          status?: string | null
+          updated_at?: string
+        }
+        Update: {
+          admin_notes?: string | null
+          area_of_interest?: string | null
+          city?: string | null
+          completed_at?: string | null
+          country?: string | null
+          created_at?: string
+          email?: string
+          final_score?: number | null
+          full_name?: string
+          id?: string
+          invited_at?: string | null
+          linkedin_url?: string | null
+          preferred_language?: string | null
+          professional_background?: string | null
+          program_id?: string | null
+          started_at?: string | null
+          status?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "talent_candidates_program_id_fkey"
+            columns: ["program_id"]
+            isOneToOne: false
+            referencedRelation: "talent_programs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      talent_content_translations: {
+        Row: {
+          content_key: string
+          content_text: string
+          content_type: string | null
+          created_at: string
+          id: string
+          language_code: string
+          updated_at: string
+        }
+        Insert: {
+          content_key: string
+          content_text: string
+          content_type?: string | null
+          created_at?: string
+          id?: string
+          language_code?: string
+          updated_at?: string
+        }
+        Update: {
+          content_key?: string
+          content_text?: string
+          content_type?: string | null
+          created_at?: string
+          id?: string
+          language_code?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      talent_email_templates: {
+        Row: {
+          body_html: string
+          body_text: string | null
+          created_at: string
+          id: string
+          is_active: boolean | null
+          language_code: string
+          placeholders: Json | null
+          subject: string
+          template_name: string
+          updated_at: string
+        }
+        Insert: {
+          body_html: string
+          body_text?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean | null
+          language_code?: string
+          placeholders?: Json | null
+          subject: string
+          template_name: string
+          updated_at?: string
+        }
+        Update: {
+          body_html?: string
+          body_text?: string | null
+          created_at?: string
+          id?: string
+          is_active?: boolean | null
+          language_code?: string
+          placeholders?: Json | null
+          subject?: string
+          template_name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      talent_programs: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          is_active: boolean | null
+          name: string
+          settings: Json | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          name: string
+          settings?: Json | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_active?: boolean | null
+          name?: string
+          settings?: Json | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      talent_question_translations: {
+        Row: {
+          correct_answer: string | null
+          created_at: string
+          explanation: string | null
+          id: string
+          language_code: string
+          options: Json | null
+          question_id: string
+          question_text: string
+          updated_at: string
+        }
+        Insert: {
+          correct_answer?: string | null
+          created_at?: string
+          explanation?: string | null
+          id?: string
+          language_code?: string
+          options?: Json | null
+          question_id: string
+          question_text: string
+          updated_at?: string
+        }
+        Update: {
+          correct_answer?: string | null
+          created_at?: string
+          explanation?: string | null
+          id?: string
+          language_code?: string
+          options?: Json | null
+          question_id?: string
+          question_text?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "talent_question_translations_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "talent_questions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      talent_questions: {
+        Row: {
+          created_at: string
+          id: string
+          is_enabled: boolean | null
+          metadata: Json | null
+          points: number | null
+          question_order: number
+          question_type: string
+          stage_id: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          is_enabled?: boolean | null
+          metadata?: Json | null
+          points?: number | null
+          question_order: number
+          question_type: string
+          stage_id: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          is_enabled?: boolean | null
+          metadata?: Json | null
+          points?: number | null
+          question_order?: number
+          question_type?: string
+          stage_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "talent_questions_stage_id_fkey"
+            columns: ["stage_id"]
+            isOneToOne: false
+            referencedRelation: "talent_stages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      talent_responses: {
+        Row: {
+          admin_feedback: string | null
+          admin_override_score: number | null
+          ai_feedback: string | null
+          ai_score: number | null
+          answered_at: string | null
+          candidate_id: string
+          created_at: string
+          id: string
+          question_id: string
+          ranking_data: Json | null
+          response_text: string | null
+          score: number | null
+          selected_option: string | null
+        }
+        Insert: {
+          admin_feedback?: string | null
+          admin_override_score?: number | null
+          ai_feedback?: string | null
+          ai_score?: number | null
+          answered_at?: string | null
+          candidate_id: string
+          created_at?: string
+          id?: string
+          question_id: string
+          ranking_data?: Json | null
+          response_text?: string | null
+          score?: number | null
+          selected_option?: string | null
+        }
+        Update: {
+          admin_feedback?: string | null
+          admin_override_score?: number | null
+          ai_feedback?: string | null
+          ai_score?: number | null
+          answered_at?: string | null
+          candidate_id?: string
+          created_at?: string
+          id?: string
+          question_id?: string
+          ranking_data?: Json | null
+          response_text?: string | null
+          score?: number | null
+          selected_option?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "talent_responses_candidate_id_fkey"
+            columns: ["candidate_id"]
+            isOneToOne: false
+            referencedRelation: "talent_candidates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "talent_responses_question_id_fkey"
+            columns: ["question_id"]
+            isOneToOne: false
+            referencedRelation: "talent_questions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      talent_simulation_profile_translations: {
+        Row: {
+          bio: string | null
+          challenge_description: string | null
+          created_at: string
+          id: string
+          language_code: string
+          objection_scenario: string | null
+          profile_id: string
+        }
+        Insert: {
+          bio?: string | null
+          challenge_description?: string | null
+          created_at?: string
+          id?: string
+          language_code?: string
+          objection_scenario?: string | null
+          profile_id: string
+        }
+        Update: {
+          bio?: string | null
+          challenge_description?: string | null
+          created_at?: string
+          id?: string
+          language_code?: string
+          objection_scenario?: string | null
+          profile_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "talent_simulation_profile_translations_profile_id_fkey"
+            columns: ["profile_id"]
+            isOneToOne: false
+            referencedRelation: "talent_simulation_profiles"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      talent_simulation_profiles: {
+        Row: {
+          company_type: string | null
+          created_at: string
+          display_order: number | null
+          id: string
+          industry: string | null
+          is_enabled: boolean | null
+          name: string
+          profile_image_url: string | null
+          program_id: string | null
+          role: string
+          seniority: string | null
+          updated_at: string
+        }
+        Insert: {
+          company_type?: string | null
+          created_at?: string
+          display_order?: number | null
+          id?: string
+          industry?: string | null
+          is_enabled?: boolean | null
+          name: string
+          profile_image_url?: string | null
+          program_id?: string | null
+          role: string
+          seniority?: string | null
+          updated_at?: string
+        }
+        Update: {
+          company_type?: string | null
+          created_at?: string
+          display_order?: number | null
+          id?: string
+          industry?: string | null
+          is_enabled?: boolean | null
+          name?: string
+          profile_image_url?: string | null
+          program_id?: string | null
+          role?: string
+          seniority?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "talent_simulation_profiles_program_id_fkey"
+            columns: ["program_id"]
+            isOneToOne: false
+            referencedRelation: "talent_programs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      talent_stage_progress: {
+        Row: {
+          candidate_id: string
+          completed_at: string | null
+          created_at: string
+          id: string
+          score: number | null
+          stage_id: string
+          started_at: string | null
+          status: string | null
+          time_spent_seconds: number | null
+          updated_at: string
+        }
+        Insert: {
+          candidate_id: string
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          score?: number | null
+          stage_id: string
+          started_at?: string | null
+          status?: string | null
+          time_spent_seconds?: number | null
+          updated_at?: string
+        }
+        Update: {
+          candidate_id?: string
+          completed_at?: string | null
+          created_at?: string
+          id?: string
+          score?: number | null
+          stage_id?: string
+          started_at?: string | null
+          status?: string | null
+          time_spent_seconds?: number | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "talent_stage_progress_candidate_id_fkey"
+            columns: ["candidate_id"]
+            isOneToOne: false
+            referencedRelation: "talent_candidates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "talent_stage_progress_stage_id_fkey"
+            columns: ["stage_id"]
+            isOneToOne: false
+            referencedRelation: "talent_stages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      talent_stages: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          is_enabled: boolean | null
+          name: string
+          passing_threshold: number | null
+          program_id: string | null
+          stage_number: number
+          stage_order: number
+          time_limit_minutes: number | null
+          updated_at: string
+          weight_percentage: number | null
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_enabled?: boolean | null
+          name: string
+          passing_threshold?: number | null
+          program_id?: string | null
+          stage_number: number
+          stage_order: number
+          time_limit_minutes?: number | null
+          updated_at?: string
+          weight_percentage?: number | null
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_enabled?: boolean | null
+          name?: string
+          passing_threshold?: number | null
+          program_id?: string | null
+          stage_number?: number
+          stage_order?: number
+          time_limit_minutes?: number | null
+          updated_at?: string
+          weight_percentage?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "talent_stages_program_id_fkey"
+            columns: ["program_id"]
+            isOneToOne: false
+            referencedRelation: "talent_programs"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       template_files: {
         Row: {

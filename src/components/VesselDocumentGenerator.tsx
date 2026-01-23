@@ -45,9 +45,15 @@ interface VesselDocumentGeneratorProps {
 }
 
 // For VPS deployment - use production API
-const API_BASE_URL = process.env.NODE_ENV === 'production'
+const API_BASE_URL = process.env.NODE_ENV === 'production' 
   ? 'https://petrodealhub.com/api'  // Production API
   : 'http://localhost:8000'; // Development
+
+function normalizeTemplateName(name: string): string {
+  if (!name) return '';
+  const n = name.trim();
+  return n.endsWith('.docx') ? n : `${n}.docx`;
+}
 
 export default function VesselDocumentGenerator({ vesselImo, vesselName }: VesselDocumentGeneratorProps) {
   const { user } = useAuth();
@@ -58,6 +64,8 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
   // Store user's plan information to check against template requirements
   const [userPlanTier, setUserPlanTier] = useState<string | null>(null);
   const [userPlanName, setUserPlanName] = useState<string | null>(null);
+  // Plans from document API (PlansTab source of truth) – used to lock downloads by plan
+  const [plansFromApi, setPlansFromApi] = useState<Record<string, { can_download: string[] | ['*']; name?: string }> | null>(null);
   // Dialog state for locked templates
   const [upgradeDialogOpen, setUpgradeDialogOpen] = useState(false);
   const [lockedTemplate, setLockedTemplate] = useState<DocumentTemplate | null>(null);
@@ -78,6 +86,28 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
     try {
       setLoading(true);
 
+      // Fetch /plans from document API (same as PlansTab) for plan-based download locking
+      try {
+        const plansRes = await fetch(`${API_BASE_URL}/plans`, {
+          method: 'GET',
+          headers: { 'Content-Type': 'application/json' },
+          credentials: 'include',
+        });
+        if (plansRes.ok) {
+          const plansData = await plansRes.json();
+          const raw = plansData?.plans || {};
+          const normalized: Record<string, { can_download: string[] | ['*']; name?: string }> = {};
+          for (const [k, v] of Object.entries(raw as Record<string, { can_download?: unknown; name?: string }>)) {
+            const cd = (v as { can_download?: unknown }).can_download;
+            const list = Array.isArray(cd) ? cd : cd === '*' || cd === true ? ['*'] : cd ? [String(cd)] : [];
+            normalized[k] = { can_download: list as string[] | ['*'], name: (v as { name?: string }).name };
+          }
+          setPlansFromApi(normalized);
+        }
+      } catch {
+        setPlansFromApi(null);
+      }
+      
       // If user is logged in, try user-downloadable-templates endpoint
       // But if it fails (500 error), silently fallback to public templates
       if (user?.id) {
@@ -88,11 +118,11 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
             // Skip user endpoint if user.id is invalid
             throw new Error('Invalid user ID');
           }
-
+          
           // FIRST: Pre-fetch user's plan info BEFORE processing templates
           let userPlanTierForTemplates: string | null = null;
           let userPlanNameForTemplates: string | null = null;
-
+          
           if (user?.id) {
             try {
               const { data: subscriber } = await supabase
@@ -101,7 +131,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                 .eq('user_id', user.id)
                 .limit(1)
                 .maybeSingle();
-
+              
               if (subscriber?.subscription_tier) {
                 const { data: plan } = await supabase
                   .from('subscription_plans')
@@ -109,7 +139,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                   .eq('plan_tier', subscriber.subscription_tier)
                   .limit(1)
                   .single();
-
+                
                 if (plan) {
                   userPlanTierForTemplates = plan.plan_tier;
                   userPlanNameForTemplates = plan.plan_name;
@@ -119,7 +149,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
               // Error handled silently for security
             }
           }
-
+          
           // Add cache busting to ensure fresh data
           const cacheBuster = `?t=${Date.now()}`;
           const response = await fetch(`${API_BASE_URL}/user-downloadable-templates${cacheBuster}`, {
@@ -131,30 +161,30 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
             credentials: 'include',
             body: JSON.stringify({ user_id: String(userId).trim() }),
           });
-
+          
           // Only process if response is successful (200-299)
           if (response.ok) {
             const data = await response.json();
-
+            
             if (data.templates && Array.isArray(data.templates)) {
               // Process templates from backend
               const processedTemplates = data.templates.map((t: any) => {
                 // Backend returns: name (display_name), description, plan_name, metadata
-                const displayName = t.name ||
-                  t.metadata?.display_name ||
-                  t.title ||
-                  (t.file_name ? t.file_name.replace('.docx', '') : '') ||
-                  'Unknown Template';
-
-                const description = t.description ||
-                  t.metadata?.description ||
-                  '';
-
+                const displayName = t.name || 
+                                   t.metadata?.display_name || 
+                                   t.title || 
+                                   (t.file_name ? t.file_name.replace('.docx', '') : '') || 
+                                   'Unknown Template';
+                
+                const description = t.description || 
+                                   t.metadata?.description || 
+                                   '';
+                
                 // CRITICAL: Use plan_name directly from backend
                 // Backend returns template's required plan (which plan allows downloading this template)
                 // This is what the user configured in CMS, not the user's current plan
                 const planName = t.plan_name || null;  // Don't fallback to plan_tier, use only plan_name from API
-
+                
                 // Process max_downloads: -1 means unlimited (convert to null), otherwise use as-is
                 let maxDownloads = t.max_downloads;
                 if (maxDownloads === -1 || maxDownloads === '-1') {
@@ -166,7 +196,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                     maxDownloads = undefined; // Invalid value
                   }
                 }
-
+                
                 return {
                   id: t.id || t.template_id || String(t.id),
                   name: displayName,
@@ -192,7 +222,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                   }
                 } as DocumentTemplate;
               });
-
+              
               setTemplates(processedTemplates);
               setLoading(false);
               return;
@@ -206,7 +236,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
           // No need to log or show error to user
         }
       }
-
+      
       // Fallback: fetch all templates
       const response = await fetch(`${API_BASE_URL}/templates`, {
         method: 'GET',
@@ -215,14 +245,14 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
         },
         credentials: 'include',
       });
-
+      
       if (response.ok) {
         const data = await response.json();
         const templatesList = data.templates || [];
         // Don't set can_download here - it will be determined by plan permissions below
         let activeTemplates = templatesList
           .filter((t: DocumentTemplate) => t.is_active !== false);
-
+        
         // Enrich templates with plan information and check user permissions
         try {
           // Get user's plan information
@@ -231,7 +261,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
           let userMaxDownloads: number | null | undefined = undefined; // undefined = not fetched yet, null = unlimited, number = limit
           let userCurrentDownloads: number = 0;
           let userPlanDetails: { plan_name: string; plan_tier: string; max_downloads_per_month: number | null } | null = null;
-
+          
           if (user?.id) {
             try {
               const { data: subscriber, error: subscriberError } = await supabase
@@ -240,14 +270,14 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                 .eq('user_id', user.id)
                 .limit(1)
                 .maybeSingle(); // Use maybeSingle() instead of single() to handle no results gracefully
-
+              
               if (subscriberError) {
                 // Error handled silently for security
               }
-
+              
               if (subscriber) {
                 userPlanTier = subscriber.subscription_tier || null;
-
+                
                 // Get plan details including max downloads
                 if (userPlanTier) {
                   const { data: plan } = await supabase
@@ -256,7 +286,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                     .eq('plan_tier', userPlanTier)
                     .limit(1)
                     .single();
-
+                  
                   if (plan) {
                     userPlanId = plan.id;
                     // Store plan details for later use
@@ -268,10 +298,10 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                     // Store user's plan in state so it's available in render function
                     setUserPlanTier(plan.plan_tier);
                     setUserPlanName(plan.plan_name);
-
+                    
                     // Handle unlimited downloads: -1 means unlimited, null/undefined means use default
                     const maxDownloadsValue = plan.max_downloads_per_month;
-
+                    
                     if (maxDownloadsValue === -1 || maxDownloadsValue === '-1' as unknown) {
                       userMaxDownloads = null; // null means unlimited
                     } else if (maxDownloadsValue === null || maxDownloadsValue === undefined || (maxDownloadsValue as unknown) === '') {
@@ -286,19 +316,19 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                         userMaxDownloads = numValue;
                       }
                     }
-
+                    
                     // Get current month's download count for user (only if not unlimited)
                     if (userMaxDownloads !== null) {
                       const startOfMonth = new Date();
                       startOfMonth.setDate(1);
                       startOfMonth.setHours(0, 0, 0, 0);
-
+                      
                       const { count } = await supabase
                         .from('processed_documents')
                         .select('*', { count: 'exact', head: true })
                         .eq('created_by', user.id)
                         .gte('created_at', startOfMonth.toISOString());
-
+                      
                       userCurrentDownloads = count || 0;
                     } else {
                       userCurrentDownloads = 0; // Unlimited, so no need to count
@@ -310,13 +340,13 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
               // Error handled silently for security
             }
           }
-
+          
           // Get all templates from database to match by file_name
           const { data: dbTemplates } = await supabase
             .from('document_templates')
             .select('id, file_name, title, description')
             .eq('is_active', true);
-
+          
           if (dbTemplates) {
             // Check if user has broker membership
             let hasBrokerMembership = false;
@@ -330,7 +360,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                   .eq('payment_status', 'paid')
                   .eq('membership_status', 'active')
                   .single();
-
+                
                 if (brokerMembership) {
                   hasBrokerMembership = true;
                   brokerMembershipId = brokerMembership.id;
@@ -339,13 +369,13 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                 // No broker membership
               }
             }
-
+            
             const templateIds = dbTemplates.map(t => t.id);
-
+            
             // Get permissions based on user type (broker or subscription plan)
             let permissions: any[] = [];
             let planDetails: Record<string, any> = {};
-
+            
             if (hasBrokerMembership && brokerMembershipId) {
               // Get broker template permissions with per-template limits
               const { data: brokerPerms } = await supabase
@@ -353,7 +383,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                 .select('template_id, can_download, max_downloads_per_template')
                 .eq('broker_membership_id', brokerMembershipId)
                 .in('template_id', templateIds);
-
+              
               if (brokerPerms) {
                 permissions = brokerPerms.map(p => ({
                   template_id: p.template_id,
@@ -370,11 +400,11 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                 .select('template_id, plan_id, can_download, max_downloads_per_template')
                 .eq('plan_id', userPlanId)
                 .in('template_id', templateIds);
-
+              
               if (planPerms) {
                 permissions = planPerms;
               }
-
+              
               // Get plan details (including max_downloads_per_month as fallback)
               if (permissions && permissions.length > 0) {
                 const planIds = [...new Set(permissions.map(p => p.plan_id))];
@@ -382,11 +412,11 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                   .from('subscription_plans')
                   .select('id, plan_name, plan_tier, max_downloads_per_month')
                   .in('id', planIds);
-
+                
                 if (plans) {
                   planDetails = Object.fromEntries(
-                    plans.map(p => [p.id, {
-                      plan_name: p.plan_name,
+                    plans.map(p => [p.id, { 
+                      plan_name: p.plan_name, 
                       plan_tier: p.plan_tier,
                       max_downloads_per_month: p.max_downloads_per_month
                     }])
@@ -394,10 +424,10 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                 }
               }
             }
-
-
+            
+            
             // userPlanDetails is already set above if user is logged in
-
+            
             // Create a map of file_name to template info
             const templateMap = new Map<string, any>();
             dbTemplates.forEach(t => {
@@ -410,7 +440,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                 });
               }
             });
-
+            
             // Fetch all template download counts in parallel first (if user is logged in)
             const templateDownloadCounts = new Map<string, number>();
             if (user && dbTemplates && dbTemplates.length > 0) {
@@ -418,7 +448,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                 const startOfMonth = new Date();
                 startOfMonth.setDate(1);
                 startOfMonth.setHours(0, 0, 0, 0);
-
+                
                 const templateIds = dbTemplates.map(t => t.id);
                 const { data: downloads } = await supabase
                   .from('user_document_downloads')
@@ -426,7 +456,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                   .eq('user_id', user.id)
                   .in('template_id', templateIds)
                   .gte('created_at', startOfMonth.toISOString());
-
+                
                 // Count downloads per template
                 if (downloads) {
                   downloads.forEach(d => {
@@ -439,7 +469,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                 // Error handled silently for security
               }
             }
-
+            
             // Fetch broker membership template requirements in parallel
             const brokerTemplateRequirements = new Map<string, boolean>();
             if (hasBrokerMembership && dbTemplates) {
@@ -449,7 +479,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                   .from('document_templates')
                   .select('id, requires_broker_membership')
                   .in('id', templateIds);
-
+                
                 if (templateData) {
                   templateData.forEach(t => {
                     brokerTemplateRequirements.set(t.id, t.requires_broker_membership || false);
@@ -459,12 +489,12 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                 // Error handled silently for security
               }
             }
-
+            
             // Enrich activeTemplates with plan information and check permissions
             activeTemplates = activeTemplates.map(t => {
               const fileName = (t.file_name || t.name || '').replace('.docx', '').toLowerCase();
               const dbTemplate = templateMap.get(fileName);
-
+              
               let canDownload = false; // Default to false - must have explicit permission
               // CRITICAL: Preserve plan_name from API (template's required plan from CMS)
               // Don't override with user's plan - API already returns the correct template restriction
@@ -472,7 +502,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
               let planTier: string | null = t.plan_tier || null;  // Use plan_tier from API response
               let remainingDownloads: number | null = null;
               let maxDownloads: number | null = null;
-
+              
               // Always use user's plan max_downloads if user is logged in
               // This ensures we show the correct limit even if template doesn't have restrictions
               if (userPlanId && userPlanDetails) {
@@ -500,15 +530,15 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                     }
                   }
                 }
-
+                
                 // DON'T override plan_name here - keep the template's required plan from API
                 // planName and planTier are already set from API response above
               }
-
+              
               if (dbTemplate) {
                 // Find permission for this template
                 const templatePerm = permissions?.find(p => p.template_id === dbTemplate.id);
-
+                
                 // Get per-template download limit
                 let perTemplateLimit: number | null = null;
                 if (templatePerm && templatePerm.max_downloads_per_template !== null && templatePerm.max_downloads_per_template !== undefined) {
@@ -520,20 +550,20 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                     perTemplateLimit = typeof planMaxValue === 'string' ? parseInt(planMaxValue, 10) : planMaxValue;
                   }
                 }
-
+                
                 // Get download count for THIS template from pre-fetched data
                 const templateCurrentDownloads = templateDownloadCounts.get(dbTemplate.id) || 0;
-
+                
                 // Calculate remaining downloads for this template
                 let templateRemainingDownloads: number | null = null;
                 if (perTemplateLimit !== null) {
                   templateRemainingDownloads = Math.max(0, perTemplateLimit - templateCurrentDownloads);
                 }
-
+                
                 // Use per-template limit instead of plan-level
                 maxDownloads = perTemplateLimit;
                 remainingDownloads = templateRemainingDownloads;
-
+                
                 // CRITICAL: Don't override plan_name here - use what came from API
                 // The API already returns the template's required plan from CMS
                 // Only override for broker membership (special case)
@@ -559,28 +589,11 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                     }
                   }
                 } else if (userPlanId) {
-                  // Subscription plan check
-                  // CRITICAL: First check if template has plan_tiers from API
-                  // If user's plan tier is in template's plan_tiers array, allow access
-                  const templatePlanTiers = t.plan_tiers || [];
-                  const userPlanTier = userPlanDetails?.plan_tier || null;
-
-                  let planMatchFromTiers = false;
-                  if (templatePlanTiers.length > 0 && userPlanTier) {
-                    const normalizedUserTier = userPlanTier.toLowerCase().trim();
-                    const normalizedTemplateTiers = templatePlanTiers.map(tier => String(tier).toLowerCase().trim());
-                    planMatchFromTiers = normalizedTemplateTiers.includes(normalizedUserTier);
-                  }
-
-                  if (planMatchFromTiers) {
-                    // User's plan tier matches template's plan_tiers - allow access
-                    canDownload = true;
-                  } else if (templatePerm) {
-                    // Fallback to permission table check
+                  // Subscription plan check - use can_download from API, don't override plan_name
+                  if (templatePerm) {
                     canDownload = templatePerm.plan_id === userPlanId && templatePerm.can_download === true;
                     // Don't override plan_name - keep what came from API
                   } else {
-                    // No permission found and plan_tiers don't match - deny access
                     canDownload = false;
                     // Don't override plan_name - keep what came from API (template's required plan)
                   }
@@ -600,7 +613,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                 // Template not in database and user not logged in - allow (public template)
                 canDownload = true;
               }
-
+              
               return {
                 ...t,
                 id: dbTemplate?.id || t.id,
@@ -620,7 +633,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
             activeTemplates = activeTemplates.map(t => ({
               ...t,
               max_downloads: userMaxDownloads,
-              remaining_downloads: userMaxDownloads !== null
+              remaining_downloads: userMaxDownloads !== null 
                 ? Math.max(0, userMaxDownloads - userCurrentDownloads)
                 : null,
               current_downloads: userCurrentDownloads
@@ -630,7 +643,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
           // If plan enrichment fails, just use templates without plan info
           // This is expected if database is not available or user doesn't have access
         }
-
+        
         setTemplates(activeTemplates);
       } else {
         const errorText = await response.text();
@@ -647,15 +660,15 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
 
   const processDocument = async (template: DocumentTemplate) => {
     const templateKey = template.id || template.file_name || template.name;
-
+    
     // Enhanced lock/unlock check - MUST MATCH the render logic exactly
     // Use the SAME plan matching logic as the render section
     let hasPermission = true; // Start with true, then check restrictions
-
+    
     // Get template's plan info
     const planName = template.plan_name || null;
     const templatePlanTiers = template.plan_tiers || [];
-
+    
     // Check 1: If user is not logged in and template requires a plan, lock it
     if (!user?.id) {
       if (planName && planName !== 'All Plans' && planName !== null) {
@@ -664,17 +677,17 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
         hasPermission = false;
       }
     }
-
+    
     // Check 2: If user is logged in, compare template's required plan with user's plan
     if (user?.id) {
       // Get user's plan from template object (stored during enrichment) or from state (fallback)
       const templateUserPlanTier = template._user_plan_tier !== undefined ? template._user_plan_tier : userPlanTier;
       const templateUserPlanName = template._user_plan_name !== undefined ? template._user_plan_name : userPlanName;
-
+      
       // Normalize plan tiers to lowercase for comparison
       const normalizedUserPlanTier = templateUserPlanTier ? templateUserPlanTier.toLowerCase().trim() : null;
       const normalizedTemplatePlanTiers = templatePlanTiers.map(tier => tier ? tier.toLowerCase().trim() : '').filter(tier => tier);
-
+      
       // First check plan_tiers array
       if (normalizedTemplatePlanTiers.length > 0) {
         if (!normalizedUserPlanTier || !normalizedTemplatePlanTiers.includes(normalizedUserPlanTier)) {
@@ -688,20 +701,20 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
         // If no plan_tiers but has plan_name, compare plan names (case-insensitive)
         const normalizedPlanName = planName.toLowerCase().trim();
         const normalizedUserPlanName = templateUserPlanName ? templateUserPlanName.toLowerCase().trim() : null;
-
+        
         // Extract tier from plan name (e.g., "Enterprise Plan" -> "enterprise")
         const planNameTier = normalizedPlanName.replace(/\s*plan\s*$/i, '').trim();
         const userPlanNameTier = normalizedUserPlanName ? normalizedUserPlanName.replace(/\s*plan\s*$/i, '').trim() : null;
-
+        
         // Check if plan names match OR if extracted tiers match OR if user tier matches plan name tier
         const planNamesMatch = normalizedPlanName === normalizedUserPlanName;
         const tiersMatch = planNameTier === userPlanNameTier || planNameTier === normalizedUserPlanTier;
         const userTierMatchesPlanName = normalizedUserPlanTier && (normalizedPlanName.includes(normalizedUserPlanTier) || planNameTier === normalizedUserPlanTier);
-
+        
         // Also check if plan name contains user tier or vice versa (e.g., "Professional Plan" contains "professional")
         const planNameContainsTier = normalizedUserPlanTier && normalizedPlanName.includes(normalizedUserPlanTier);
         const tierMatchesPlanName = normalizedUserPlanTier && planNameTier === normalizedUserPlanTier;
-
+        
         if (!normalizedUserPlanName && !normalizedUserPlanTier) {
           // User has no plan but template requires one - LOCK IT
           hasPermission = false;
@@ -714,7 +727,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
         }
       }
     }
-
+    
     // Check 3: If can_download is explicitly false (API says user can't download), 
     // BUT: If our plan check says the user has access, TRUST THE PLAN CHECK over API
     if (template.can_download === false) {
@@ -724,27 +737,27 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
       }
       // If plan check says yes, keep hasPermission = true (trust plan check)
     }
-
+    
     // Check 4: Remaining downloads (per-template or plan-level)
-    const hasRemainingDownloads = template.remaining_downloads === undefined ||
-      template.remaining_downloads === null ||
-      template.remaining_downloads > 0;
-
+    const hasRemainingDownloads = template.remaining_downloads === undefined || 
+                                 template.remaining_downloads === null || 
+                                 template.remaining_downloads > 0;
+    
     // Final check: Both permission AND remaining downloads must be true
     const canDownload = hasPermission && hasRemainingDownloads;
     const isLocked = !canDownload;
-
+    
     // Lock check with detailed error messages
     if (isLocked) {
       const templateName = template.title || template.name || template.file_name || 'this template';
-
+      
       if (!hasPermission) {
         // Locked due to plan permission
         if (template.plan_name) {
           toast.error(`This template requires ${template.plan_name} plan. Please upgrade to access this template.`, {
             duration: 5000
           });
-        } else {
+      } else {
           toast.error('This template is not available in your current plan. Please upgrade to access this template.', {
             duration: 5000
           });
@@ -768,7 +781,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
       }
       return;
     }
-
+    
     try {
       setProcessingStatus(prev => ({
         ...prev,
@@ -811,7 +824,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
 
       // Send request to backend - EXACTLY like CMS does (which works perfectly!)
       // CMS sends ONLY: template_name and vessel_imo (no template_id, no user_id)
-
+      
       // Validate vessel_imo first
       const vesselImoTrimmed = String(vesselImo || '').trim();
       if (!vesselImoTrimmed || vesselImoTrimmed === '') {
@@ -868,7 +881,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
         template_name: templateName,
         vessel_imo: vesselImoTrimmed
       };
-
+      
       // DO NOT send template_id or user_id - CMS doesn't send them and it works!
 
       let response;
@@ -901,15 +914,15 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
         const contentDisposition = response.headers.get('Content-Disposition');
         const templateName = template.file_name || template.name || 'template';
         const apiTemplateName = templateName.replace('.docx', '');
-        let filename = `${apiTemplateName}_${vesselImo}.pdf`;
-
+        let filename = `${apiTemplateName}_${vesselImoTrimmed}.pdf`;
+        
         if (contentDisposition) {
           const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
           if (filenameMatch) {
             filename = filenameMatch[1].replace(/['"]/g, '').trim();
           }
         }
-
+        
         const blob = await response.blob();
         const url = window.URL.createObjectURL(blob);
         const a = document.createElement('a');
@@ -919,7 +932,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
         a.click();
         window.URL.revokeObjectURL(url);
         document.body.removeChild(a);
-
+        
         setProcessingStatus(prev => ({
           ...prev,
           [templateKey]: {
@@ -928,7 +941,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
             progress: 100
           }
         }));
-
+        
         toast.success('Document downloaded successfully');
       } else {
         // Try to get error message from response
@@ -957,7 +970,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
             // Use default message
           }
         }
-
+        
         setProcessingStatus(prev => ({
           ...prev,
           [templateKey]: {
@@ -965,7 +978,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
             message: `Failed (${response.status})`
           }
         }));
-
+        
         // Handle different error status codes with actual error message
         if (response.status === 404) {
           toast.error(`Template or vessel not found: ${errorMessage}`);
@@ -1028,356 +1041,458 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
 
   return (
     <div>
-      {templates.length === 0 ? (
-        <div className="text-center py-8 text-muted-foreground">
-          <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
-          <p>No documents available for this deal.</p>
-          <p className="text-sm">Please contact your administrator to activate document access.</p>
-          <Button
-            variant="outline"
-            className="mt-4"
-            onClick={fetchTemplates}
-          >
-            Refresh Documents
-          </Button>
-        </div>
-      ) : (
-        <Card className="mt-4">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <FileText className="h-5 w-5" />
-              Trade Documentation
-            </CardTitle>
-            <p className="text-sm text-muted-foreground mt-1">
-              Commercial and inspection documents available for active deals
-            </p>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {templates.map((template) => {
-                const templateKey = template.id || template.file_name || template.name;
-                const status = processingStatus[templateKey];
-                const isProcessing = status?.status === 'processing';
-
-                // SIMPLIFIED PERMISSION LOGIC - Trust backend's can_download flag
-                // The backend has already checked user's plan and permissions via RPC function
-                // We just need to use its result and check remaining downloads
+        {templates.length === 0 ? (
+          <div className="text-center py-8 text-muted-foreground">
+            <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
+            <p>No documents available for this deal.</p>
+            <p className="text-sm">Please contact your administrator to activate document access.</p>
+            <Button 
+              variant="outline" 
+              className="mt-4"
+              onClick={fetchTemplates}
+            >
+              Refresh Documents
+            </Button>
+          </div>
+        ) : (
+          <Card className="mt-4">
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <FileText className="h-5 w-5" />
+                Trade Documentation
+              </CardTitle>
+              <p className="text-sm text-muted-foreground mt-1">
+                Commercial and inspection documents available for active deals
+              </p>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-4">
+                {templates.map((template) => {
+              const templateKey = template.id || template.file_name || template.name;
+              const status = processingStatus[templateKey];
+              const isProcessing = status?.status === 'processing';
+              
+              // Get display values
+              const displayName = template.metadata?.display_name || 
+                                 template.name || 
+                                 template.title || 
+                                 (template.file_name ? template.file_name.replace('.docx', '') : '') || 
+                                 'Unknown Template';
+              
+              const description = template.description || 
+                                 template.metadata?.description || 
+                                 '';
+              
+              // CRITICAL: Use plan_name directly from template (comes from backend with template's required plan from CMS)
+              const planName = template.plan_name || null;  // Don't fallback to plan_tier, use only plan_name from API
+              
+              // Enhanced lock/unlock check - matches plan system logic
+              // CRITICAL: Check if template's required plan matches user's plan FIRST
+              // Then check can_download from API
+              let hasPermission = true; // Start with true, then check restrictions
+              
+              // Get template's plan tiers (array of tiers that can access this template)
+              const templatePlanTiers = template.plan_tiers || [];
+              
+              // Check 1: If user is not logged in and template requires a plan, lock it
+              if (!user?.id) {
+                if (planName && planName !== 'All Plans' && planName !== null) {
+                  hasPermission = false;
+                } else if (templatePlanTiers.length > 0) {
+                  hasPermission = false;
+                }
+              }
+              
+              // Check 2: If user is logged in, compare template's required plan with user's plan
+              // Use plan info stored in template object (more reliable than state)
+              if (user?.id) {
+                // Get user's plan from template object (stored during enrichment) or from state (fallback)
+                const templateUserPlanTier = template._user_plan_tier !== undefined ? template._user_plan_tier : userPlanTier;
+                const templateUserPlanName = template._user_plan_name !== undefined ? template._user_plan_name : userPlanName;
                 
-                const displayName = template.metadata?.display_name ||
-                  template.name ||
-                  template.title ||
-                  (template.file_name ? template.file_name.replace('.docx', '') : '') ||
-                  'Unknown Template';
-
-                const description = template.description ||
-                  template.metadata?.description ||
-                  '';
-
-                // Backend already determined if user can download this template
-                const canDownloadFromBackend = template.can_download === true;
+                // Normalize plan tiers to lowercase for comparison
+                const normalizedUserPlanTier = templateUserPlanTier ? templateUserPlanTier.toLowerCase().trim() : null;
+                const normalizedTemplatePlanTiers = templatePlanTiers.map(tier => tier ? tier.toLowerCase().trim() : '').filter(tier => tier);
                 
-                // Check if user has remaining downloads
-                const hasRemainingDownloads = template.remaining_downloads === undefined ||
-                  template.remaining_downloads === null ||
-                  template.remaining_downloads > 0;
+                // First check plan_tiers array
+                if (normalizedTemplatePlanTiers.length > 0) {
+                  if (!normalizedUserPlanTier || !normalizedTemplatePlanTiers.includes(normalizedUserPlanTier)) {
+                    // User's plan tier is not in template's allowed tiers - LOCK IT
+                    hasPermission = false;
+                  } else {
+                    // User's tier IS in the allowed tiers - UNLOCK IT
+                    hasPermission = true;
+                  }
+                } else if (planName && planName !== 'All Plans' && planName !== null) {
+                  // If no plan_tiers but has plan_name, compare plan names (case-insensitive)
+                  const normalizedPlanName = planName.toLowerCase().trim();
+                  const normalizedUserPlanName = templateUserPlanName ? templateUserPlanName.toLowerCase().trim() : null;
+                  
+                  // Extract tier from plan name (e.g., "Enterprise Plan" -> "enterprise")
+                  const planNameTier = normalizedPlanName.replace(/\s*plan\s*$/i, '').trim();
+                  const userPlanNameTier = normalizedUserPlanName ? normalizedUserPlanName.replace(/\s*plan\s*$/i, '').trim() : null;
+                  
+                  // Check if plan names match OR if extracted tiers match OR if user tier matches plan name tier
+                  const planNamesMatch = normalizedPlanName === normalizedUserPlanName;
+                  const tiersMatch = planNameTier === userPlanNameTier || planNameTier === normalizedUserPlanTier;
+                  const userTierMatchesPlanName = normalizedUserPlanTier && (normalizedPlanName.includes(normalizedUserPlanTier) || planNameTier === normalizedUserPlanTier);
+                  
+                  // Also check if plan name contains user tier or vice versa (e.g., "Professional Plan" contains "professional")
+                  const planNameContainsTier = normalizedUserPlanTier && normalizedPlanName.includes(normalizedUserPlanTier);
+                  const tierMatchesPlanName = normalizedUserPlanTier && planNameTier === normalizedUserPlanTier;
+                  
+                  if (!normalizedUserPlanName && !normalizedUserPlanTier) {
+                    // User has no plan but template requires one - LOCK IT
+                    hasPermission = false;
+                  } else if (planNamesMatch || tiersMatch || userTierMatchesPlanName || planNameContainsTier || tierMatchesPlanName) {
+                    // Plan matches - UNLOCK IT (multiple ways to match)
+                    hasPermission = true;
+                  } else {
+                    // Template requires different plan than user has - LOCK IT
+                    hasPermission = false;
+                  }
+                }
+              }
 
-                // Final decision: Can download only if backend says yes AND downloads remain
-                const canDownload = canDownloadFromBackend && hasRemainingDownloads;
-                const isLocked = !canDownload;
-                
-                // Get plan name to display (which plan allows this)
-                const planName = template.plan_name || null;
-
-                return (
-                  <div key={template.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/50 transition-colors">
-                    <div className="flex-1">
-                      <div className="flex items-start gap-3">
-                        {getStatusIcon(status?.status || 'idle')}
-                        <div className="flex-1 min-w-0">
-                          {/* Template Display Name */}
-                          <h4 className="font-medium text-base">{displayName}</h4>
-
-                          {/* Plan Information - Show if user is logged in or template requires a plan */}
-                          {planName && (
-                            <div className="mt-1">
-                              <p className="text-sm text-muted-foreground">
-                                <span className="font-medium text-primary">Plan:</span> {planName}
-                                {!canDownload && (
-                                  <span className="ml-2 text-xs text-orange-600 dark:text-orange-400">
-                                    (Required)
-                                  </span>
-                                )}
-                              </p>
-                            </div>
-                          )}
-
-                          {/* Description - Always show */}
-                          <div className="mt-1.5">
-                            {description && description.trim() ? (
-                              <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap">
-                                {description}
-                              </p>
-                            ) : (
-                              <p className="text-xs text-muted-foreground/60 italic">
-                                No description available
-                              </p>
-                            )}
+              // Check 2b: Plans from document API (PlansTab source of truth) – lock when template not in user's plan
+              if (plansFromApi && Object.keys(plansFromApi).length > 0) {
+                const tier = (template._user_plan_tier ?? userPlanTier)?.toLowerCase().trim() || null;
+                if (!tier) {
+                  hasPermission = false;
+                } else {
+                  const plan = plansFromApi[tier] ?? Object.entries(plansFromApi).find(([k]) => k.toLowerCase() === tier)?.[1];
+                  if (!plan) {
+                    hasPermission = false;
+                  } else {
+                    const cd = plan.can_download;
+                    const isAll = Array.isArray(cd) && (cd as unknown[]).includes('*');
+                    if (!isAll && Array.isArray(cd)) {
+                      const allowed = new Set((cd as string[]).map(normalizeTemplateName));
+                      const templateKey = normalizeTemplateName(template.file_name || template.name || '');
+                      if (!allowed.has(templateKey)) {
+                        hasPermission = false;
+                      }
+                    }
+                  }
+                }
+              }
+              
+              // Check 3: If can_download is explicitly false (API says user can't download), lock it
+              // BUT: If our plan check says the user has access, TRUST THE PLAN CHECK over API
+              // The API might return can_download: false even if plan matches, so we trust our plan check first
+              if (template.can_download === false) {
+                if (hasPermission) {
+                  // API says no, but our plan check says yes - trust the plan check
+                  // Keep hasPermission = true (don't override)
+                } else {
+                  // API says no and plan check also says no - lock it
+                  hasPermission = false;
+                }
+              } else if (template.can_download === true && !hasPermission) {
+                // API says yes but plan check says no - trust the plan check (more restrictive)
+                // Keep hasPermission = false (don't override)
+              }
+              
+              // Check 2: Remaining downloads (per-template or plan-level)
+              const hasRemainingDownloads = template.remaining_downloads === undefined || 
+                                           template.remaining_downloads === null || 
+                                           template.remaining_downloads > 0;
+              
+              // Final check: Both permission AND remaining downloads must be true
+              const canDownload = hasPermission && hasRemainingDownloads;
+              const isLocked = !canDownload;
+              
+              return (
+                <div key={template.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-accent/50 transition-colors">
+                  <div className="flex-1">
+                    <div className="flex items-start gap-3">
+                      {getStatusIcon(status?.status || 'idle')}
+                      <div className="flex-1 min-w-0">
+                        {/* Template Display Name */}
+                        <h4 className="font-medium text-base">{displayName}</h4>
+                        
+                        {/* Plan Information - Show if user is logged in or template requires a plan */}
+                        {planName && (
+                          <div className="mt-1">
+                            <p className="text-sm text-muted-foreground">
+                              <span className="font-medium text-primary">Plan:</span> {planName}
+                              {!canDownload && (
+                                <span className="ml-2 text-xs text-orange-600 dark:text-orange-400">
+                                  (Required)
+                                </span>
+                              )}
+                            </p>
                           </div>
-
-                          {/* Download Counter - Per-template limit display */}
-                          {user?.id && (
-                            <div className="mt-2">
-                              {/* Only show unlimited if max_downloads is explicitly null */}
-                              {template.max_downloads === null ? (
-                                <div className="text-xs text-muted-foreground">
-                                  <span className="font-medium">Downloads for {displayName}:</span> <span className="text-blue-600 dark:text-blue-400 font-semibold">Unlimited</span>
-                                </div>
-                              ) : template.max_downloads !== undefined && template.max_downloads !== null ? (
-                                <div className="flex items-center gap-2">
-                                  <div className="flex items-center gap-1.5 text-xs">
-                                    <span className="font-medium text-muted-foreground">
-                                      {template.remaining_downloads !== undefined &&
-                                        template.remaining_downloads !== null
-                                        ? `${template.remaining_downloads} / ${template.max_downloads} downloads remaining for ${displayName}`
-                                        : `${template.max_downloads} downloads per month for ${displayName}`}
-                                    </span>
-                                    <span className={`font-semibold ${template.remaining_downloads !== undefined &&
-                                        template.remaining_downloads !== null &&
-                                        template.remaining_downloads > 0
-                                        ? 'text-green-600 dark:text-green-400'
-                                        : template.remaining_downloads === 0
-                                          ? 'text-red-600 dark:text-red-400'
-                                          : 'text-gray-600 dark:text-gray-400'
-                                      }`}>
-                                    </span>
-                                  </div>
-                                  {template.remaining_downloads !== undefined &&
-                                    template.remaining_downloads !== null &&
-                                    template.remaining_downloads === 0 && (
-                                      <Badge variant="destructive" className="text-xs">
-                                        Limit Reached
-                                      </Badge>
-                                    )}
-                                </div>
-                              ) : (
-                                <div className="text-xs text-muted-foreground">
-                                  <span className="font-medium">Downloads for {displayName}:</span> <span className="text-gray-500">Loading limit...</span>
-                                </div>
-                              )}
-                            </div>
-                          )}
-
-                          {/* Enhanced Lock Message - Show if cannot download */}
-                          {isLocked && (
-                            <div className="flex items-center gap-2 mt-2 p-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md">
-                              <Lock className="h-4 w-4 text-amber-600 dark:text-amber-400 flex-shrink-0" />
-                              <div className="flex-1">
-                                {template.remaining_downloads !== undefined &&
-                                  template.remaining_downloads !== null &&
-                                  template.remaining_downloads <= 0 ? (
-                                  <div>
-                                    <span className="text-xs font-medium text-amber-800 dark:text-amber-200 block">
-                                      🔒 Locked: Your monthly downloads for {displayName} are finished
-                                    </span>
-                                    {template.max_downloads !== null && template.max_downloads !== undefined && (
-                                      <span className="text-xs text-amber-700 dark:text-amber-300 mt-1 block">
-                                        Used: {template.max_downloads} / {template.max_downloads} downloads this month
-                                      </span>
-                                    )}
-                                    {planName && (
-                                      <span className="text-xs text-amber-700 dark:text-amber-300 mt-1 block">
-                                        Upgrade to <strong>{planName}</strong> plan for more downloads
-                                      </span>
-                                    )}
-                                  </div>
-                                ) : (
-                                  <div>
-                                    <span className="text-xs font-medium text-amber-800 dark:text-amber-200 block">
-                                      🔒 Locked: This template is not available in your current plan
-                                    </span>
-                                    {planName && (
-                                      <span className="text-xs text-amber-700 dark:text-amber-300 mt-1 block">
-                                        Upgrade to <strong>{planName}</strong> plan to download this document
-                                      </span>
-                                    )}
-                                  </div>
-                                )}
-                              </div>
-                            </div>
-                          )}
-
-                          {/* Processing Status */}
-                          {status && (
-                            <div className="mt-3">
-                              {status.status === 'processing' && status.progress !== undefined && (
-                                <div className="space-y-2">
-                                  <div className="flex items-center justify-between mb-1">
-                                    <span className="text-xs font-medium text-blue-600 dark:text-blue-400">
-                                      {status.message}
-                                    </span>
-                                    <span className="text-xs font-semibold text-blue-600 dark:text-blue-400">
-                                      {status.progress}%
-                                    </span>
-                                  </div>
-                                  <Progress value={status.progress} className="h-2" />
-                                </div>
-                              )}
-                              {status.status !== 'processing' && (
-                                <div className="flex items-center gap-2 mt-2">
-                                  <Badge className={getStatusColor(status.status)}>
-                                    {status.status}
-                                  </Badge>
-                                  <span className="text-xs text-muted-foreground">
-                                    {status.message}
-                                  </span>
-                                </div>
-                              )}
-                            </div>
+                        )}
+                        
+                        {/* Description - Always show */}
+                        <div className="mt-1.5">
+                          {description && description.trim() ? (
+                            <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap">
+                              {description}
+                            </p>
+                          ) : (
+                            <p className="text-xs text-muted-foreground/60 italic">
+                              No description available
+                            </p>
                           )}
                         </div>
+                        
+                        {/* Download Counter - Per-template limit display */}
+                        {user?.id && (
+                          <div className="mt-2">
+                            {/* Only show unlimited if max_downloads is explicitly null */}
+                            {template.max_downloads === null ? (
+                              <div className="text-xs text-muted-foreground">
+                                <span className="font-medium">Downloads for {displayName}:</span> <span className="text-blue-600 dark:text-blue-400 font-semibold">Unlimited</span>
+                              </div>
+                            ) : template.max_downloads !== undefined && template.max_downloads !== null ? (
+                              <div className="flex items-center gap-2">
+                                <div className="flex items-center gap-1.5 text-xs">
+                                  <span className="font-medium text-muted-foreground">
+                                    {template.remaining_downloads !== undefined && 
+                                     template.remaining_downloads !== null 
+                                      ? `${template.remaining_downloads} / ${template.max_downloads} downloads remaining for ${displayName}`
+                                      : `${template.max_downloads} downloads per month for ${displayName}`}
+                                  </span>
+                                  <span className={`font-semibold ${
+                                    template.remaining_downloads !== undefined && 
+                                    template.remaining_downloads !== null && 
+                                    template.remaining_downloads > 0 
+                                      ? 'text-green-600 dark:text-green-400' 
+                                      : template.remaining_downloads === 0
+                                      ? 'text-red-600 dark:text-red-400'
+                                      : 'text-gray-600 dark:text-gray-400'
+                                  }`}>
+                                  </span>
+                                </div>
+                                {template.remaining_downloads !== undefined && 
+                                 template.remaining_downloads !== null && 
+                                 template.remaining_downloads === 0 && (
+                                  <Badge variant="destructive" className="text-xs">
+                                    Limit Reached
+                                  </Badge>
+                                )}
+                              </div>
+                            ) : (
+                              <div className="text-xs text-muted-foreground">
+                                <span className="font-medium">Downloads for {displayName}:</span> <span className="text-gray-500">Loading limit...</span>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                        
+                        {/* Enhanced Lock Message - Show if cannot download */}
+                        {isLocked && (
+                          <div className="flex items-center gap-2 mt-2 p-2 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md">
+                            <Lock className="h-4 w-4 text-amber-600 dark:text-amber-400 flex-shrink-0" />
+                            <div className="flex-1">
+                              {template.remaining_downloads !== undefined && 
+                               template.remaining_downloads !== null && 
+                               template.remaining_downloads <= 0 ? (
+                                <div>
+                                <span className="text-xs font-medium text-amber-800 dark:text-amber-200 block">
+                                    🔒 Locked: Your monthly downloads for {displayName} are finished
+                                </span>
+                                  {template.max_downloads !== null && template.max_downloads !== undefined && (
+                                    <span className="text-xs text-amber-700 dark:text-amber-300 mt-1 block">
+                                      Used: {template.max_downloads} / {template.max_downloads} downloads this month
+                                    </span>
+                                  )}
+                                  {planName && (
+                                    <span className="text-xs text-amber-700 dark:text-amber-300 mt-1 block">
+                                      Upgrade to <strong>{planName}</strong> plan for more downloads
+                                    </span>
+                                  )}
+                                </div>
+                              ) : (
+                                <div>
+                                  <span className="text-xs font-medium text-amber-800 dark:text-amber-200 block">
+                                    🔒 Locked: This document is not available in your current plan
+                                  </span>
+                                  <span className="text-xs text-amber-700 dark:text-amber-300 mt-1 block">
+                                    {planName
+                                      ? <>Upgrade to <strong>{planName}</strong> plan to download this document</>
+                                      : 'Update your plan to download this document'}
+                                  </span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                        )}
+                        
+                        {/* Processing Status */}
+                        {status && (
+                          <div className="mt-3">
+                            {status.status === 'processing' && status.progress !== undefined && (
+                              <div className="space-y-2">
+                                <div className="flex items-center justify-between mb-1">
+                                  <span className="text-xs font-medium text-blue-600 dark:text-blue-400">
+                                    {status.message}
+                                  </span>
+                                  <span className="text-xs font-semibold text-blue-600 dark:text-blue-400">
+                                    {status.progress}%
+                                  </span>
+                                </div>
+                                <Progress value={status.progress} className="h-2" />
+                              </div>
+                            )}
+                            {status.status !== 'processing' && (
+                              <div className="flex items-center gap-2 mt-2">
+                                <Badge className={getStatusColor(status.status)}>
+                                  {status.status}
+                                </Badge>
+                                <span className="text-xs text-muted-foreground">
+                                  {status.message}
+                                </span>
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
-
-                    <div className="flex items-center gap-2">
-                      <Button
-                        onClick={() => {
-                          if (isLocked) {
-                            // Open upgrade dialog instead of processing
-                            setLockedTemplate(template);
-                            setUpgradeDialogOpen(true);
-                          } else if (!isProcessing) {
-                            // Process document only if not locked and not processing
-                            processDocument(template);
-                          }
-                        }}
-                        disabled={isProcessing}
-                        className={`${isLocked
-                            ? 'bg-amber-600 hover:bg-amber-700 dark:bg-amber-500 dark:hover:bg-amber-600 cursor-pointer'
-                            : 'bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600'
-                          } text-white transition-colors`}
-                        title={isLocked ? (
-                          template.remaining_downloads !== undefined &&
-                            template.remaining_downloads !== null &&
-                            template.remaining_downloads <= 0
-                            ? `🔒 Click to upgrade: Your monthly downloads for ${displayName} are finished (${template.max_downloads || 0}/${template.max_downloads || 0} used)`
-                            : planName
-                              ? `🔒 Click to upgrade to ${planName} plan`
-                              : '🔒 Click to view upgrade options'
-                        ) : canDownload
-                          ? `Download ${displayName}`
-                          : ''}
-                      >
-                        {isProcessing ? (
-                          <>
-                            <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                            Downloading...
-                          </>
-                        ) : isLocked ? (
-                          <>
-                            <Lock className="h-4 w-4 mr-2" />
-                            Upgrade to Unlock
-                          </>
-                        ) : (
-                          <>
-                            <Download className="h-4 w-4 mr-2" />
-                            Download
-                          </>
-                        )}
-                      </Button>
-                    </div>
                   </div>
-                );
-              })}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Upgrade Dialog for Locked Templates */}
-      <Dialog open={upgradeDialogOpen} onOpenChange={setUpgradeDialogOpen}>
-        <DialogContent className="sm:max-w-[500px]">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Lock className="h-5 w-5 text-amber-600" />
-              Upgrade Required
-            </DialogTitle>
-            <DialogDescription>
-              {lockedTemplate && (
-                <div className="mt-2">
-                  <p className="font-medium text-base text-foreground mb-2">
-                    {lockedTemplate.metadata?.display_name || lockedTemplate.name || lockedTemplate.title || 'This template'}
-                  </p>
-                  {lockedTemplate.remaining_downloads !== undefined &&
-                    lockedTemplate.remaining_downloads !== null &&
-                    lockedTemplate.remaining_downloads <= 0 ? (
-                    <div className="space-y-2">
-                      <p className="text-sm text-muted-foreground">
-                        Your monthly download limit for this template has been reached.
-                      </p>
-                      {lockedTemplate.max_downloads !== null && lockedTemplate.max_downloads !== undefined && (
-                        <p className="text-sm text-muted-foreground">
-                          You've used <strong>{lockedTemplate.max_downloads}</strong> out of <strong>{lockedTemplate.max_downloads}</strong> downloads for this month.
-                        </p>
+                  
+                  <div className="flex items-center gap-2">
+                    <Button
+                      onClick={() => {
+                        if (isLocked) {
+                          // Open upgrade dialog instead of processing
+                          setLockedTemplate(template);
+                          setUpgradeDialogOpen(true);
+                        } else if (!isProcessing) {
+                          // Process document only if not locked and not processing
+                          processDocument(template);
+                        }
+                      }}
+                      disabled={isProcessing}
+                      className={`${
+                        isLocked 
+                          ? 'bg-amber-600 hover:bg-amber-700 dark:bg-amber-500 dark:hover:bg-amber-600 cursor-pointer' 
+                          : 'bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600'
+                      } text-white transition-colors`}
+                      title={isLocked ? (
+                        template.remaining_downloads !== undefined && 
+                        template.remaining_downloads !== null && 
+                        template.remaining_downloads <= 0
+                          ? `🔒 Click to upgrade: Your monthly downloads for ${displayName} are finished (${template.max_downloads || 0}/${template.max_downloads || 0} used)`
+                          : planName 
+                            ? `🔒 Click to upgrade to ${planName} plan`
+                            : '🔒 Click to view upgrade options'
+                      ) : canDownload 
+                        ? `Download ${displayName}`
+                        : ''}
+                    >
+                      {isProcessing ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                          Downloading...
+                        </>
+                      ) : isLocked ? (
+                        <>
+                          <Lock className="h-4 w-4 mr-2" />
+                          Upgrade to Unlock
+                        </>
+                      ) : (
+                        <>
+                          <Download className="h-4 w-4 mr-2" />
+                          Download
+                        </>
                       )}
-                    </div>
-                  ) : lockedTemplate.plan_name ? (
-                    <p className="text-sm text-muted-foreground">
-                      This template requires the <strong>{lockedTemplate.plan_name}</strong> plan to access.
-                      Upgrade your plan to download this document.
-                    </p>
-                  ) : (
-                    <p className="text-sm text-muted-foreground">
-                      This template is not available in your current plan. Upgrade to access this document.
-                    </p>
-                  )}
+                    </Button>
+                  </div>
                 </div>
-              )}
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="py-4">
-            <div className="p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
-              <div className="flex items-start gap-3">
-                <CreditCard className="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5" />
-                <div className="flex-1">
-                  <h4 className="font-semibold text-amber-900 dark:text-amber-100 mb-1">
-                    Benefits of Upgrading:
-                  </h4>
-                  <ul className="text-sm text-amber-800 dark:text-amber-200 space-y-1 list-disc list-inside">
-                    {lockedTemplate?.plan_name && (
-                      <li>Access to <strong>{lockedTemplate.plan_name}</strong> plan templates</li>
+              );
+            })}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+        
+        {/* Upgrade Dialog for Locked Templates */}
+        <Dialog open={upgradeDialogOpen} onOpenChange={setUpgradeDialogOpen}>
+          <DialogContent className="sm:max-w-[500px]">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <Lock className="h-5 w-5 text-amber-600" />
+                Upgrade Required
+              </DialogTitle>
+              <DialogDescription>
+                {lockedTemplate && (
+                  <div className="mt-2">
+                    <p className="font-medium text-base text-foreground mb-2">
+                      {lockedTemplate.metadata?.display_name || lockedTemplate.name || lockedTemplate.title || 'This template'}
+                    </p>
+                    {lockedTemplate.remaining_downloads !== undefined && 
+                     lockedTemplate.remaining_downloads !== null && 
+                     lockedTemplate.remaining_downloads <= 0 ? (
+                      <div className="space-y-2">
+                        <p className="text-sm text-muted-foreground">
+                          Your monthly download limit for this template has been reached.
+                        </p>
+                        {lockedTemplate.max_downloads !== null && lockedTemplate.max_downloads !== undefined && (
+                          <p className="text-sm text-muted-foreground">
+                            You've used <strong>{lockedTemplate.max_downloads}</strong> out of <strong>{lockedTemplate.max_downloads}</strong> downloads for this month.
+                          </p>
+                        )}
+                      </div>
+                    ) : lockedTemplate.plan_name ? (
+                      <p className="text-sm text-muted-foreground">
+                        This template requires the <strong>{lockedTemplate.plan_name}</strong> plan. Update your plan to download this document.
+                      </p>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">
+                        This document is not available in your current plan. Update your plan to download.
+                      </p>
                     )}
-                    <li>Unlock all premium document templates</li>
-                    <li>Increase or remove download limits</li>
-                    <li>Get priority support</li>
-                  </ul>
+                  </div>
+                )}
+              </DialogDescription>
+            </DialogHeader>
+            
+            <div className="py-4">
+              <div className="p-4 bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-lg">
+                <div className="flex items-start gap-3">
+                  <CreditCard className="h-5 w-5 text-amber-600 dark:text-amber-400 mt-0.5" />
+                  <div className="flex-1">
+                    <h4 className="font-semibold text-amber-900 dark:text-amber-100 mb-1">
+                      Benefits of Upgrading:
+                    </h4>
+                    <ul className="text-sm text-amber-800 dark:text-amber-200 space-y-1 list-disc list-inside">
+                      {lockedTemplate?.plan_name && (
+                        <li>Access to <strong>{lockedTemplate.plan_name}</strong> plan templates</li>
+                      )}
+                      <li>Unlock all premium document templates</li>
+                      <li>Increase or remove download limits</li>
+                      <li>Get priority support</li>
+                    </ul>
+                  </div>
                 </div>
               </div>
             </div>
-          </div>
-
-          <DialogFooter className="flex flex-col sm:flex-row gap-2">
-            <Button
-              variant="outline"
-              onClick={() => setUpgradeDialogOpen(false)}
-              className="w-full sm:w-auto"
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={() => {
-                setUpgradeDialogOpen(false);
-                navigate('/subscription');
-              }}
-              className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 group"
-            >
-              <CreditCard className="h-4 w-4 mr-2" />
-              View Plans & Upgrade
-              <ArrowRight className="h-4 w-4 ml-2 group-hover:translate-x-1 transition-transform" />
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            
+            <DialogFooter className="flex flex-col sm:flex-row gap-2">
+              <Button
+                variant="outline"
+                onClick={() => setUpgradeDialogOpen(false)}
+                className="w-full sm:w-auto"
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={() => {
+                  setUpgradeDialogOpen(false);
+                  navigate('/subscription');
+                }}
+                className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 dark:bg-blue-500 dark:hover:bg-blue-600 group"
+              >
+                <CreditCard className="h-4 w-4 mr-2" />
+                View Plans & Upgrade
+                <ArrowRight className="h-4 w-4 ml-2 group-hover:translate-x-1 transition-transform" />
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
     </div>
   );
 }

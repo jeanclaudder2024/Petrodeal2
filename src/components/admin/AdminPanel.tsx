@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Shield, Users, Settings, FileText, BarChart3, Ship, Building2, MapPin, Factory, UserCheck, Cpu, Filter, CreditCard, Video, Layout, Mail, Send, Inbox, Key, HelpCircle, Bell, UserMinus, Wallet, DollarSign, Megaphone, Database, ShoppingCart, Store, Package } from 'lucide-react';
+import { Shield, Users, Settings, FileText, BarChart3, Ship, Building2, MapPin, Factory, UserCheck, Cpu, Filter, CreditCard, Video, Layout, Mail, Send, Inbox, Key, HelpCircle, Bell, UserMinus, Wallet, DollarSign, Megaphone, Database, ShoppingCart, Store, Package, Briefcase, Gift, Target, Linkedin } from 'lucide-react';
 import UserManagement from './UserManagement';
 import SystemSettings from './SystemSettings';
 import AdminNotes from './AdminNotes';
@@ -21,7 +21,8 @@ import BrokerPricingManagement from './BrokerPricingManagement';
 import UnsubscribeRequestsManagement from './UnsubscribeRequestsManagement';
 import AIAgentControlCenter from './AIAgentControlCenter';
 import DocumentManagement from './DocumentManagement';
-import DocumentTemplateManager from './DocumentTemplateManager';
+import { CMSTemplateManager } from './cms-templates';
+import { DocumentProcessingCMS } from './document-cms';
 import FilterManagement from './FilterManagement';
 import SubscriptionManagement from './SubscriptionManagement';
 import TutorialManagement from './TutorialManagement';
@@ -37,6 +38,10 @@ import MarketingPopups from './MarketingPopups';
 import BlogManagement from './BlogManagement';
 import DatabaseDocManagement from './DatabaseDocManagement';
 import MarketingAnalytics from './MarketingAnalytics';
+import CareerManagement from './CareerManagement';
+import RewardProgramsManagement from './RewardProgramsManagement';
+import TalentProgramsManagement from './talent/TalentProgramsManagement';
+import LinkedInManagement from './LinkedInManagement';
 
 const AdminPanel = () => {
   const location = useLocation();
@@ -177,6 +182,11 @@ const AdminPanel = () => {
                 <span className="text-xs font-medium">Templates</span>
               </TabsTrigger>
 
+              <TabsTrigger value="document-cms" className="flex flex-col items-center gap-1 p-3 h-auto min-h-[60px] min-w-[80px] border-2 border-indigo-200 hover:border-indigo-400">
+                <FileText className="h-5 w-5 text-indigo-600" />
+                <span className="text-xs font-medium">Doc CMS</span>
+              </TabsTrigger>
+
               <TabsTrigger value="filters" className="flex flex-col items-center gap-1 p-3 h-auto min-h-[60px] min-w-[80px]">
                 <Filter className="h-5 w-5" />
                 <span className="text-xs font-medium">Filters</span>
@@ -251,6 +261,21 @@ const AdminPanel = () => {
                 <BarChart3 className="h-5 w-5" />
                 <span className="text-xs font-medium">Analytics</span>
               </TabsTrigger>
+
+              <TabsTrigger value="careers" className="flex flex-col items-center gap-1 p-3 h-auto min-h-[60px] min-w-[80px] border-2 border-orange-200 hover:border-orange-400">
+                <Briefcase className="h-5 w-5 text-orange-600" />
+                <span className="text-xs font-medium">Careers</span>
+              </TabsTrigger>
+
+              <TabsTrigger value="talent" className="flex flex-col items-center gap-1 p-3 h-auto min-h-[60px] min-w-[80px] border-2 border-teal-200 hover:border-teal-400">
+                <Target className="h-5 w-5 text-teal-600" />
+                <span className="text-xs font-medium">Growth Talent</span>
+              </TabsTrigger>
+
+              <TabsTrigger value="linkedin" className="flex flex-col items-center gap-1 p-3 h-auto min-h-[60px] min-w-[80px] border-2 border-blue-200 hover:border-blue-400">
+                <Linkedin className="h-5 w-5 text-blue-600" />
+                <span className="text-xs font-medium">LinkedIn</span>
+              </TabsTrigger>
             </TabsList>
           </div>
         </div>
@@ -324,7 +349,11 @@ const AdminPanel = () => {
         </TabsContent>
 
         <TabsContent value="templates">
-          <DocumentTemplateManager />
+          <CMSTemplateManager />
+        </TabsContent>
+
+        <TabsContent value="document-cms">
+          <DocumentProcessingCMS />
         </TabsContent>
 
         <TabsContent value="filters">
@@ -372,12 +401,19 @@ const AdminPanel = () => {
         </TabsContent>
 
         <TabsContent value="marketing">
-          <Tabs defaultValue="analytics" className="w-full">
+          <Tabs defaultValue="reward-programs" className="w-full">
             <TabsList className="mb-4">
+              <TabsTrigger value="reward-programs" className="flex items-center gap-2">
+                <Gift className="h-4 w-4" />
+                Reward Programs
+              </TabsTrigger>
               <TabsTrigger value="analytics">Analytics & Tracking</TabsTrigger>
               <TabsTrigger value="popups">Popups</TabsTrigger>
               <TabsTrigger value="blog">Blog</TabsTrigger>
             </TabsList>
+            <TabsContent value="reward-programs">
+              <RewardProgramsManagement />
+            </TabsContent>
             <TabsContent value="analytics">
               <MarketingAnalytics />
             </TabsContent>
@@ -400,6 +436,18 @@ const AdminPanel = () => {
 
         <TabsContent value="landing-page">
           <LandingPageManager />
+        </TabsContent>
+
+        <TabsContent value="careers">
+          <CareerManagement />
+        </TabsContent>
+
+        <TabsContent value="talent">
+          <TalentProgramsManagement />
+        </TabsContent>
+
+        <TabsContent value="linkedin">
+          <LinkedInManagement />
         </TabsContent>
       </Tabs>
     </div>

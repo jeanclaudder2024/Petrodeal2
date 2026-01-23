@@ -17,7 +17,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { 
   Save, Upload, Image, Type, Layout, Eye, EyeOff, Trash2, Plus, RefreshCw, Settings, 
   FileText, Menu, Globe, Search, Edit, ExternalLink, MapPin, Sparkles, Mail, Users,
-  Linkedin, Twitter, Facebook, Instagram, Download, ArrowUpDown
+  Linkedin, Twitter, Facebook, Instagram, Download, ArrowUpDown, Bot, MessageSquareText, HelpCircle
 } from "lucide-react";
 
 interface CMSPage {
@@ -40,6 +40,10 @@ interface CMSPage {
   sort_order: number;
   created_at: string;
   updated_at: string;
+  // GEO fields
+  geo_ai_summary?: string | null;
+  geo_qa_block?: any;
+  geo_authority_statement?: string | null;
 }
 
 interface FooterColumn {
@@ -119,6 +123,9 @@ const LandingPageManager = () => {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [aiGenerating, setAiGenerating] = useState(false);
+  const [geoGenerating, setGeoGenerating] = useState(false);
+  const [bulkGenerating, setBulkGenerating] = useState(false);
+  const [bulkProgress, setBulkProgress] = useState({ current: 0, total: 0 });
   const [syncing, setSyncing] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [categoryFilter, setCategoryFilter] = useState<string>('all');
@@ -236,6 +243,10 @@ const LandingPageManager = () => {
           seo_keywords: selectedPage.seo_keywords,
           is_in_sitemap: selectedPage.is_in_sitemap,
           is_published: selectedPage.is_published,
+          // GEO fields
+          geo_ai_summary: selectedPage.geo_ai_summary,
+          geo_qa_block: selectedPage.geo_qa_block,
+          geo_authority_statement: selectedPage.geo_authority_statement,
           updated_at: new Date().toISOString()
         })
         .eq('id', selectedPage.id);
@@ -390,6 +401,143 @@ const LandingPageManager = () => {
     }
   };
 
+  const generateGEOForPage = async () => {
+    if (!selectedPage) return;
+    setGeoGenerating(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('generate-blog-content', {
+        body: {
+          type: 'geo_page',
+          pageData: {
+            page_name: selectedPage.page_name,
+            page_category: selectedPage.page_category,
+            meta_title: selectedPage.meta_title,
+            meta_description: selectedPage.meta_description
+          }
+        }
+      });
+
+      if (error) throw error;
+
+      try {
+        const responseText = data.content || '';
+        const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          const geoData = JSON.parse(jsonMatch[0]);
+          setSelectedPage({
+            ...selectedPage,
+            geo_ai_summary: geoData.ai_summary || '',
+            geo_qa_block: geoData.qa_block || [],
+            geo_authority_statement: geoData.authority_statement || ''
+          });
+          toast({ title: "GEO Generated", description: "AI generated GEO content for AI engines. Review and save." });
+        }
+      } catch (parseError) {
+        toast({ title: "Parse Error", description: "Could not parse AI response", variant: "destructive" });
+      }
+    } catch (error: any) {
+      toast({ title: "AI Error", description: error.message, variant: "destructive" });
+    } finally {
+      setGeoGenerating(false);
+    }
+  };
+
+  const bulkGenerateSEOAndGEO = async () => {
+    if (pages.length === 0) {
+      toast({ title: "No Pages", description: "No pages to generate content for", variant: "destructive" });
+      return;
+    }
+
+    setBulkGenerating(true);
+    setBulkProgress({ current: 0, total: pages.length });
+
+    try {
+      let successCount = 0;
+      let errorCount = 0;
+
+      for (let i = 0; i < pages.length; i++) {
+        const page = pages[i];
+        setBulkProgress({ current: i + 1, total: pages.length });
+
+        try {
+          const { data, error } = await supabase.functions.invoke('generate-blog-content', {
+            body: {
+              type: 'bulk_seo_geo',
+              pageData: {
+                page_name: page.page_name,
+                page_category: page.page_category,
+                meta_title: page.meta_title
+              }
+            }
+          });
+
+          if (error) throw error;
+
+          const responseText = data.content || '';
+          const jsonMatch = responseText.match(/\{[\s\S]*\}/);
+          if (jsonMatch) {
+            const bulkData = JSON.parse(jsonMatch[0]);
+            
+            await supabase
+              .from('cms_page_content')
+              .update({
+                meta_title: bulkData.meta_title || page.meta_title,
+                meta_description: bulkData.meta_description || page.meta_description,
+                seo_keywords: bulkData.seo_keywords || page.seo_keywords,
+                geo_ai_summary: bulkData.geo_ai_summary || null,
+                geo_qa_block: bulkData.geo_qa_block || [],
+                geo_authority_statement: bulkData.geo_authority_statement || null,
+                updated_at: new Date().toISOString()
+              })
+              .eq('id', page.id);
+
+            successCount++;
+          }
+        } catch (pageError) {
+          console.error(`Error processing page ${page.page_name}:`, pageError);
+          errorCount++;
+        }
+
+        // Small delay to avoid rate limiting
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+
+      toast({ 
+        title: "Bulk Generation Complete", 
+        description: `Successfully updated ${successCount} pages. ${errorCount} errors.` 
+      });
+      loadPages();
+    } catch (error: any) {
+      toast({ title: "Bulk Error", description: error.message, variant: "destructive" });
+    } finally {
+      setBulkGenerating(false);
+      setBulkProgress({ current: 0, total: 0 });
+    }
+  };
+
+  const addGeoQAItem = () => {
+    if (!selectedPage) return;
+    const currentQA = Array.isArray(selectedPage.geo_qa_block) ? [...selectedPage.geo_qa_block] : [];
+    currentQA.push({ question: '', answer: '' });
+    setSelectedPage({ ...selectedPage, geo_qa_block: currentQA });
+  };
+
+  const updateGeoQAItem = (index: number, field: 'question' | 'answer', value: string) => {
+    if (!selectedPage) return;
+    const currentQA = Array.isArray(selectedPage.geo_qa_block) ? [...selectedPage.geo_qa_block] : [];
+    if (currentQA[index]) {
+      currentQA[index][field] = value;
+      setSelectedPage({ ...selectedPage, geo_qa_block: currentQA });
+    }
+  };
+
+  const removeGeoQAItem = (index: number) => {
+    if (!selectedPage) return;
+    const currentQA = Array.isArray(selectedPage.geo_qa_block) ? [...selectedPage.geo_qa_block] : [];
+    currentQA.splice(index, 1);
+    setSelectedPage({ ...selectedPage, geo_qa_block: currentQA });
+  };
+
   const syncAllPagesContent = async () => {
     setSyncing(true);
     try {
@@ -525,6 +673,23 @@ const LandingPageManager = () => {
           <p className="text-muted-foreground">Manage pages, footer, menus, and landing sections</p>
         </div>
         <div className="flex gap-2">
+          <Button 
+            onClick={bulkGenerateSEOAndGEO} 
+            disabled={bulkGenerating}
+            className="bg-gradient-to-r from-primary to-blue-600"
+          >
+            {bulkGenerating ? (
+              <>
+                <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                {bulkProgress.current}/{bulkProgress.total}
+              </>
+            ) : (
+              <>
+                <Bot className="h-4 w-4 mr-2" />
+                AI Auto Fill SEO & GEO All Pages
+              </>
+            )}
+          </Button>
           <Button variant="outline" onClick={syncAllPagesContent} disabled={syncing}>
             {syncing ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : <ArrowUpDown className="h-4 w-4 mr-2" />}
             Sync All Pages
@@ -644,6 +809,9 @@ const LandingPageManager = () => {
                     <Tabs value={pageEditorTab} onValueChange={setPageEditorTab} className="space-y-6">
                       <TabsList>
                         <TabsTrigger value="seo">SEO</TabsTrigger>
+                        <TabsTrigger value="geo" className="flex items-center gap-1">
+                          <Bot className="h-3 w-3" /> GEO
+                        </TabsTrigger>
                         <TabsTrigger value="hero">Hero</TabsTrigger>
                         <TabsTrigger value="content">Content</TabsTrigger>
                         <TabsTrigger value="settings">Settings</TabsTrigger>
@@ -691,6 +859,99 @@ const LandingPageManager = () => {
                               seo_keywords: e.target.value.split(',').map(k => k.trim()).filter(Boolean)
                             })}
                             placeholder="oil trading, maritime, vessels"
+                            disabled={!selectedPage.is_editable}
+                          />
+                        </div>
+                      </TabsContent>
+
+                      {/* GEO / AI-Readable Content Tab */}
+                      <TabsContent value="geo" className="space-y-4">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <Bot className="h-5 w-5 text-primary" />
+                            <span className="font-medium">GEO / AI-Readable Content</span>
+                          </div>
+                          <Button 
+                            variant="outline" 
+                            size="sm" 
+                            onClick={generateGEOForPage}
+                            disabled={geoGenerating || !selectedPage.is_editable}
+                          >
+                            {geoGenerating ? <RefreshCw className="h-4 w-4 mr-2 animate-spin" /> : <Sparkles className="h-4 w-4 mr-2" />}
+                            AI Auto Generate GEO
+                          </Button>
+                        </div>
+                        
+                        <p className="text-sm text-muted-foreground">
+                          Generate content optimized for AI engines (ChatGPT, Gemini, Perplexity, DeepSeek) to understand and cite your page.
+                        </p>
+
+                        <Separator />
+
+                        <div>
+                          <Label className="flex items-center gap-2">
+                            <MessageSquareText className="h-4 w-4" />
+                            AI Summary for Generative Engines
+                          </Label>
+                          <Textarea 
+                            value={selectedPage.geo_ai_summary || ''}
+                            onChange={(e) => setSelectedPage({ ...selectedPage, geo_ai_summary: e.target.value })}
+                            placeholder="2-3 clear sentences explaining what this page offers, written in definition-style language for AI engines..."
+                            rows={3}
+                            disabled={!selectedPage.is_editable}
+                          />
+                          <p className="text-xs text-muted-foreground mt-1">Written for AI systems to understand and cite.</p>
+                        </div>
+
+                        <div>
+                          <div className="flex items-center justify-between mb-2">
+                            <Label className="flex items-center gap-2">
+                              <HelpCircle className="h-4 w-4" />
+                              AI Q&A Block
+                            </Label>
+                            <Button variant="outline" size="sm" onClick={addGeoQAItem} disabled={!selectedPage.is_editable}>
+                              <Plus className="h-4 w-4 mr-1" /> Add Q&A
+                            </Button>
+                          </div>
+                          <p className="text-xs text-muted-foreground mb-2">Questions and answers designed for AI extraction.</p>
+                          
+                          {Array.isArray(selectedPage.geo_qa_block) && selectedPage.geo_qa_block.length > 0 ? (
+                            selectedPage.geo_qa_block.map((qa: any, index: number) => (
+                              <div key={index} className="border rounded-lg p-3 mb-2 bg-muted/30">
+                                <div className="flex justify-between items-start mb-2">
+                                  <span className="text-xs font-medium text-muted-foreground">Q&A #{index + 1}</span>
+                                  <Button variant="ghost" size="sm" onClick={() => removeGeoQAItem(index)} disabled={!selectedPage.is_editable}>
+                                    <Trash2 className="h-3 w-3 text-destructive" />
+                                  </Button>
+                                </div>
+                                <Input 
+                                  value={qa.question || ''}
+                                  onChange={(e) => updateGeoQAItem(index, 'question', e.target.value)}
+                                  placeholder="Question..."
+                                  className="mb-2"
+                                  disabled={!selectedPage.is_editable}
+                                />
+                                <Textarea 
+                                  value={qa.answer || ''}
+                                  onChange={(e) => updateGeoQAItem(index, 'answer', e.target.value)}
+                                  placeholder="Answer..."
+                                  rows={2}
+                                  disabled={!selectedPage.is_editable}
+                                />
+                              </div>
+                            ))
+                          ) : (
+                            <p className="text-sm text-muted-foreground py-4 text-center border rounded-lg">No Q&A items yet. Click "Add Q&A" or use AI Auto Generate.</p>
+                          )}
+                        </div>
+
+                        <div>
+                          <Label>Context & Authority Statement</Label>
+                          <Textarea 
+                            value={selectedPage.geo_authority_statement || ''}
+                            onChange={(e) => setSelectedPage({ ...selectedPage, geo_authority_statement: e.target.value })}
+                            placeholder="This page is provided by PetroDealHub to [purpose] for oil trading professionals, industry researchers, and AI systems..."
+                            rows={2}
                             disabled={!selectedPage.is_editable}
                           />
                         </div>

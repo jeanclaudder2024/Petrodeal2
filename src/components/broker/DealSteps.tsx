@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -6,6 +6,8 @@ import { Progress } from '@/components/ui/progress';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Separator } from '@/components/ui/separator';
 import { 
   CheckCircle, 
   Clock, 
@@ -15,10 +17,17 @@ import {
   Download,
   RefreshCw,
   Eye,
+  Lock,
+  User,
+  Building2,
+  Shield,
+  Calendar,
+  Send,
   RotateCcw
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { format } from 'date-fns';
 
 interface DealStep {
   id: string;
@@ -29,6 +38,7 @@ interface DealStep {
   notes: string | null;
   completed_at: string | null;
   file_url?: string;
+  created_at?: string;
 }
 
 interface DealStepTemplate {
@@ -96,6 +106,28 @@ const DEFAULT_DEAL_STEPS_TEMPLATE: DealStepTemplate[] = [
   }
 ];
 
+// Action owners for each step
+const STEP_ACTION_OWNERS: Record<number, { owner: string; reviewRequired: boolean }> = {
+  1: { owner: 'Buyer', reviewRequired: false },
+  2: { owner: 'Seller/Buyer', reviewRequired: true },
+  3: { owner: 'Seller', reviewRequired: true },
+  4: { owner: 'Buyer', reviewRequired: true },
+  5: { owner: 'Seller', reviewRequired: true },
+  6: { owner: 'Seller', reviewRequired: false },
+  7: { owner: 'Buyer', reviewRequired: true },
+  8: { owner: 'Seller', reviewRequired: false }
+};
+
+// Document requirements for steps that need files
+const STEP_DOCUMENTS: Record<number, string[]> = {
+  1: ['ICPO Document'],
+  2: ['Sales & Purchase Agreement (SPA)'],
+  3: ['Refinery Commitment', 'Certificate of Origin', 'Quality Report'],
+  4: ['Bank Instrument (DLC/SBLC)'],
+  5: ['Full POP Package', 'Performance Bond'],
+  7: ['SGS/CIQ Inspection Report', 'Payment Confirmation']
+};
+
 const DealSteps: React.FC<DealStepsProps> = ({ dealId, onClose }) => {
   const { toast } = useToast();
   const [steps, setSteps] = useState<DealStep[]>([]);
@@ -110,9 +142,32 @@ const DealSteps: React.FC<DealStepsProps> = ({ dealId, onClose }) => {
     fetchDealSteps();
   }, [dealId]);
 
+  // Real-time subscription for step updates (auto-refresh when admin approves)
+  useEffect(() => {
+    const channel = supabase
+      .channel(`deal_steps_${dealId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'deal_steps',
+          filter: `deal_id=eq.${dealId}`
+        },
+        (payload) => {
+          console.log('Step updated:', payload);
+          fetchDealSteps();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [dealId]);
+
   const fetchDealSteps = async () => {
     try {
-      // Load configurable step templates from database (admin can edit these)
       const { data: templateRows, error: templateError } = await supabase
         .from('deal_step_templates')
         .select('*')
@@ -122,11 +177,9 @@ const DealSteps: React.FC<DealStepsProps> = ({ dealId, onClose }) => {
       if (!templateError && templateRows && templateRows.length > 0) {
         setTemplates(templateRows as DealStepTemplate[]);
       } else {
-        // Fallback to default hardcoded template if DB is empty
         setTemplates(DEFAULT_DEAL_STEPS_TEMPLATE);
       }
 
-      // First check if steps exist for this deal
       const { data: existingSteps, error: fetchError } = await supabase
         .from('deal_steps')
         .select('*')
@@ -136,7 +189,6 @@ const DealSteps: React.FC<DealStepsProps> = ({ dealId, onClose }) => {
       if (fetchError) throw fetchError;
 
       if (!existingSteps || existingSteps.length === 0) {
-        // Create steps based on current templates
         const baseTemplates = (templateRows && templateRows.length > 0)
           ? (templateRows as DealStepTemplate[])
           : DEFAULT_DEAL_STEPS_TEMPLATE;
@@ -146,7 +198,7 @@ const DealSteps: React.FC<DealStepsProps> = ({ dealId, onClose }) => {
           step_number: template.step_number,
           step_name: template.step_name,
           step_description: template.step_description || '',
-          status: 'not_started' // All steps start as not_started, brokers activate them by saving
+          status: 'not_started'
         }));
 
         const { data: createdSteps, error: createError } = await supabase
@@ -159,7 +211,6 @@ const DealSteps: React.FC<DealStepsProps> = ({ dealId, onClose }) => {
       } else {
         setSteps(existingSteps as DealStep[]);
       }
-
     } catch (error) {
       console.error('Error fetching deal steps:', error);
       toast({
@@ -172,7 +223,6 @@ const DealSteps: React.FC<DealStepsProps> = ({ dealId, onClose }) => {
     }
   };
 
-  // Sync existing deal steps with current templates (update names/descriptions only)
   const handleSyncTemplates = async () => {
     if (!confirm('This will update step names and descriptions from the current templates. Your progress, files, and notes will be preserved. Continue?')) {
       return;
@@ -180,10 +230,8 @@ const DealSteps: React.FC<DealStepsProps> = ({ dealId, onClose }) => {
 
     setSyncingTemplates(true);
     try {
-      // Get current templates
       const currentTemplates = templates.length > 0 ? templates : DEFAULT_DEAL_STEPS_TEMPLATE;
 
-      // Update each step with matching template data
       for (const step of steps) {
         const template = currentTemplates.find(t => t.step_number === step.step_number);
         if (template) {
@@ -214,20 +262,18 @@ const DealSteps: React.FC<DealStepsProps> = ({ dealId, onClose }) => {
       setSyncingTemplates(false);
     }
   };
+
   const handleFileUpload = async (stepId: string, file: File) => {
     setUploadingStep(stepId);
     try {
-      // Validate file size (max 10MB)
-      if (file.size > 10 * 1024 * 1024) {
-        throw new Error('File size must be less than 10MB');
+      if (file.size > 25 * 1024 * 1024) {
+        throw new Error('File size must be less than 25MB');
       }
-      // Only allow PDF files
       const allowedTypes = ['.pdf'];
       const fileExt = `.${file.name.split('.').pop()?.toLowerCase()}`;
       if (!allowedTypes.includes(fileExt)) {
         throw new Error('Please upload only PDF files');
       }
-      // Upload file to Supabase storage
       const fileName = `${dealId}/${stepId}_${Date.now()}${fileExt}`;
       const { error: uploadError } = await supabase.storage
         .from('broker-documents')
@@ -236,16 +282,12 @@ const DealSteps: React.FC<DealStepsProps> = ({ dealId, onClose }) => {
         console.error('Storage upload error:', uploadError);
         throw new Error('Failed to upload file. Please check your permissions and try again.');
       }
-      // Get public URL
       const { data: { publicUrl } } = supabase.storage
         .from('broker-documents')
         .getPublicUrl(fileName);
-      // Update step with file URL
       const { error: updateError } = await supabase
         .from('deal_steps')
-        .update({ 
-          file_url: publicUrl
-        })
+        .update({ file_url: publicUrl })
         .eq('id', stepId);
       if (updateError) {
         console.error('Database update error:', updateError);
@@ -270,16 +312,13 @@ const DealSteps: React.FC<DealStepsProps> = ({ dealId, onClose }) => {
 
   const handleDownloadDocument = async (fileUrl: string, stepName: string) => {
     try {
-      // Extract the file path from the URL (after the bucket name)
       const urlParts = fileUrl.split('/broker-documents/');
       const filePath = urlParts[1];
       if (!filePath) throw new Error('Invalid file URL');
-      // Get a signed URL from Supabase
       const { data, error } = await supabase.storage
         .from('broker-documents')
-        .createSignedUrl(filePath, 60 * 60); // 1 hour
+        .createSignedUrl(filePath, 60 * 60);
       if (error || !data?.signedUrl) throw error || new Error('Could not generate signed URL');
-      // Create a temporary anchor element to trigger download
       const link = document.createElement('a');
       link.href = data.signedUrl;
       const urlParts2 = filePath.split('/');
@@ -305,19 +344,13 @@ const DealSteps: React.FC<DealStepsProps> = ({ dealId, onClose }) => {
 
   const handleViewDocument = async (fileUrl: string) => {
     try {
-      // Extract the file path from the URL (after the bucket name)
       const urlParts = fileUrl.split('/broker-documents/');
       const filePath = urlParts[1];
       if (!filePath) throw new Error('Invalid file URL');
-
-      // Get a signed URL from Supabase
       const { data, error } = await supabase.storage
         .from('broker-documents')
-        .createSignedUrl(filePath, 60 * 60); // 1 hour
-
+        .createSignedUrl(filePath, 60 * 60);
       if (error || !data?.signedUrl) throw error || new Error('Could not generate signed URL');
-
-      // Open the signed URL in a new tab
       window.open(data.signedUrl, '_blank');
     } catch (error) {
       console.error('Error viewing document:', error);
@@ -333,14 +366,13 @@ const DealSteps: React.FC<DealStepsProps> = ({ dealId, onClose }) => {
     setSavingStep(stepId);
     try {
       const step = steps.find(s => s.id === stepId);
-      if (!step) {
-        throw new Error('Step not found');
-      }
-      // Validate required fields based on current templates
+      if (!step) throw new Error('Step not found');
+
       const template = templates.find(t => t.step_number === step.step_number) ||
         DEFAULT_DEAL_STEPS_TEMPLATE.find(t => t.step_number === step.step_number);
       const requiresFile = template?.requires_file || false;
       const hasNotes = notes[stepId]?.trim();
+
       if (requiresFile && !step.file_url && !hasNotes) {
         toast({
           title: "Validation Error",
@@ -351,33 +383,33 @@ const DealSteps: React.FC<DealStepsProps> = ({ dealId, onClose }) => {
       }
       if (!requiresFile && !hasNotes) {
         toast({
-          title: "Validation Error", 
+          title: "Validation Error",
           description: "Please add notes describing what you've done for this step.",
           variant: "destructive"
         });
         return;
       }
-      // All steps, including step 1, require admin approval (status 'pending')
+
       const newStatus = 'pending';
-      const completedAt = null;
-      // Update step with notes and appropriate status
       const { error: updateError } = await supabase
         .from('deal_steps')
-        .update({ 
+        .update({
           notes: notes[stepId]?.trim() || null,
           status: newStatus,
-          completed_at: completedAt
+          completed_at: null
         })
         .eq('id', stepId);
+
       if (updateError) {
         console.error('Database error:', updateError);
         throw new Error('Failed to save step to database. Please check your permissions.');
       }
+
       toast({
         title: "Success",
-        description: "Step saved and submitted for admin approval!"
+        description: "Step saved and submitted for IPTO review!"
       });
-      // Clear the notes for this step
+
       setNotes(prev => ({ ...prev, [stepId]: '' }));
       await fetchDealSteps();
     } catch (error) {
@@ -392,283 +424,311 @@ const DealSteps: React.FC<DealStepsProps> = ({ dealId, onClose }) => {
     }
   };
 
-  const getStepIcon = (status: string) => {
+  const getStatusConfig = (status: string) => {
     switch (status) {
       case 'completed':
-        return <CheckCircle className="h-5 w-5 text-green-500" />;
+        return { 
+          icon: CheckCircle, 
+          color: 'bg-emerald-500/10 text-emerald-600 border-emerald-200 dark:border-emerald-800',
+          label: 'IPTO Approved',
+          bgClass: 'bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800'
+        };
       case 'pending':
-        return <Clock className="h-5 w-5 text-yellow-500" />;
+        return { 
+          icon: Clock, 
+          color: 'bg-amber-500/10 text-amber-600 border-amber-200 dark:border-amber-800',
+          label: 'Under IPTO Review',
+          bgClass: 'bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800'
+        };
       case 'rejected':
-        return <AlertCircle className="h-5 w-5 text-red-500" />;
+        return { 
+          icon: AlertCircle, 
+          color: 'bg-red-500/10 text-red-600 border-red-200 dark:border-red-800',
+          label: 'Rejected',
+          bgClass: 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'
+        };
       default:
-        return <Clock className="h-5 w-5 text-gray-400" />;
+        return { 
+          icon: Clock, 
+          color: 'bg-slate-500/10 text-slate-600 border-slate-200 dark:border-slate-700',
+          label: 'Released',
+          bgClass: 'bg-slate-50 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700'
+        };
     }
   };
 
-  const getStepBadgeVariant = (status: string) => {
-    switch (status) {
-      case 'completed':
-        return 'default';
-      case 'pending':
-        return 'secondary';
-      case 'rejected':
-        return 'destructive';
-      default:
-        return 'outline';
-    }
+  const getOwnerIcon = (owner: string) => {
+    if (owner.includes('Seller')) return Building2;
+    if (owner.includes('Buyer')) return User;
+    return User;
   };
 
   const completedSteps = steps.filter(step => step.status === 'completed').length;
   const progressPercentage = steps.length > 0 ? (completedSteps / steps.length) * 100 : 0;
-  
-  // Get the current active step (first incomplete step)
+
   const getCurrentStep = () => {
-    // Find the first step that's not completed
     const currentStep = steps.find(step => step.status !== 'completed');
     return currentStep ? currentStep.step_number : steps.length + 1;
   };
-  
+
   const currentStepNumber = getCurrentStep();
-  
-  // Check if a step should be visible/accessible
-  const isStepAccessible = (stepNumber: number) => {
-    // Always show completed steps
-    if (steps.find(s => s.step_number === stepNumber)?.status === 'completed') {
-      return true;
-    }
-    // Show current step (first incomplete step)
-    return stepNumber === currentStepNumber;
-  };
-  
-  // Check if a step should be interactive (can upload files, etc.)
+
   const isStepInteractive = (stepNumber: number) => {
     const step = steps.find(s => s.step_number === stepNumber);
-    // Allow interaction for current step OR rejected steps (so they can be resubmitted)
     return stepNumber === currentStepNumber || step?.status === 'rejected';
   };
 
   if (loading) {
     return (
       <Card>
-        <CardContent className="flex items-center justify-center py-8">
-          <RefreshCw className="h-6 w-6 animate-spin" />
-          <span className="ml-2">Loading deal steps...</span>
+        <CardContent className="flex items-center justify-center py-12">
+          <RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" />
+          <span className="ml-3 text-muted-foreground">Loading deal steps...</span>
         </CardContent>
       </Card>
     );
   }
 
   return (
-    <Card className="w-full max-w-4xl mx-auto">
-      <CardHeader>
+    <Card className="w-full max-w-4xl mx-auto border-2 border-slate-200 dark:border-slate-700">
+      <CardHeader className="border-b border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-2xl">Deal Progress</CardTitle>
+          <div>
+            <CardTitle className="text-xl">Deal Progress</CardTitle>
+            <p className="text-sm text-muted-foreground mt-1">
+              Complete each step sequentially for IPTO oversight
+            </p>
+          </div>
           <Button variant="outline" onClick={onClose}>
             Close
           </Button>
         </div>
-        <div className="space-y-2">
+        <div className="space-y-2 mt-4">
           <div className="flex items-center justify-between text-sm">
-            <span>Progress: {completedSteps}/{steps.length} steps completed</span>
-            <span>{Math.round(progressPercentage)}%</span>
+            <span className="font-medium">{completedSteps} of {steps.length} steps completed</span>
+            <span className="text-muted-foreground">{Math.round(progressPercentage)}%</span>
           </div>
           <Progress value={progressPercentage} className="h-2" />
         </div>
       </CardHeader>
-      
-      <CardContent className="space-y-6">
-        {/* Show current step information */}
-        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-6">
-          <h4 className="font-semibold text-blue-800 mb-2">
-            Current Step: {currentStepNumber <= steps.length ? currentStepNumber : 'All Complete'}
-          </h4>
-          <p className="text-blue-700 text-sm">
+
+      <CardContent className="p-6 space-y-6">
+        {/* Current Step Info */}
+        <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+          <div className="flex items-center gap-2 mb-2">
+            <Shield className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+            <h4 className="font-semibold text-blue-900 dark:text-blue-100">
+              {currentStepNumber <= steps.length ? `Step ${currentStepNumber} in Progress` : 'All Steps Complete'}
+            </h4>
+          </div>
+          <p className="text-sm text-blue-800 dark:text-blue-200">
             {currentStepNumber <= steps.length 
-              ? `Complete step ${currentStepNumber} to proceed to the next step.`
-              : 'All steps have been completed! 🎉'
+              ? 'Complete this step and submit for IPTO review to unlock the next step.'
+              : 'Congratulations! All deal steps have been completed successfully.'
             }
           </p>
         </div>
 
-        {/* Completed Steps */}
-        {steps.filter(step => step.status === 'completed').map((step) => {
-          const template = templates.find(t => t.step_number === step.step_number) ||
-            DEFAULT_DEAL_STEPS_TEMPLATE.find(t => t.step_number === step.step_number);
-          const requiresFile = template?.requires_file || false;
-          
-          return (
-            <div key={step.id} className="border rounded-lg p-6 bg-green-50 border-green-200">
-              <div className="flex items-start justify-between mb-4">
-                <div className="flex items-center gap-3">
-                  {getStepIcon(step.status)}
-                  <div>
-                    <h3 className="font-semibold text-lg">
-                      Step {step.step_number}: {step.step_name}
-                    </h3>
-                    <Badge variant="default" className="mt-1">
-                      ✓ Completed
-                    </Badge>
-                  </div>
-                </div>
-              </div>
-
-              <p className="text-muted-foreground mb-4">{step.step_description}</p>
-
-              {step.file_url && (
-                <div className="flex items-center gap-2 p-2 bg-muted rounded mb-2">
-                  <FileText className="h-4 w-4" />
-                  <span className="text-sm">Document uploaded</span>
-                  <div className="flex gap-1">
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      onClick={() => handleViewDocument(step.file_url)}
-                    >
-                      <Eye className="h-4 w-4 mr-1" />
-                      View
-                    </Button>
-                    <Button 
-                      variant="outline" 
-                      size="sm"
-                      onClick={() => handleDownloadDocument(step.file_url, step.step_name)}
-                    >
-                      <Download className="h-4 w-4 mr-1" />
-                      Download
-                    </Button>
-                  </div>
-                </div>
-              )}
-
-              {step.completed_at && (
-                <p className="text-sm text-muted-foreground">
-                  Completed on: {new Date(step.completed_at).toLocaleDateString()}
-                </p>
-              )}
-            </div>
-          );
-        })}
-
-        {/* Current Active Step and Rejected Steps */}
-        {steps.filter(step => step.step_number === currentStepNumber || step.status === 'rejected')
-          .map(step => {
+        {/* All Steps */}
+        <div className="space-y-4">
+          {steps.map((step) => {
             const template = templates.find(t => t.step_number === step.step_number) ||
               DEFAULT_DEAL_STEPS_TEMPLATE.find(t => t.step_number === step.step_number);
             const requiresFile = template?.requires_file || false;
-            const canEdit = step.status !== 'pending';
-            
+            const statusConfig = getStatusConfig(step.status);
+            const StatusIcon = statusConfig.icon;
+            const actionOwner = STEP_ACTION_OWNERS[step.step_number] || { owner: 'Broker', reviewRequired: false };
+            const OwnerIcon = getOwnerIcon(actionOwner.owner);
+            const isLocked = step.step_number > currentStepNumber && step.status !== 'completed';
+            const isActive = isStepInteractive(step.step_number);
+            const documents = STEP_DOCUMENTS[step.step_number] || [];
+            const isSensitiveStep = [2, 4, 5].includes(step.step_number);
+
             return (
-              <div key={step.id} className="border-2 border-blue-500 rounded-lg p-6 bg-blue-50">
-                <div className="flex items-start justify-between mb-4">
-                  <div className="flex items-center gap-3">
-                    {getStepIcon(step.status)}
-                    <div>
-                      <h3 className="font-semibold text-lg text-blue-800">
-                        Step {step.step_number}: {step.step_name}
-                      </h3>
-                       <Badge variant={getStepBadgeVariant(step.status)} className="mt-1">
-                         {step.status === 'pending' ? 
-                           (step.step_number === 1 ? 'Processing...' : 'Waiting for Approval') : 
-                          step.status === 'rejected' ? 'Rejected - Action Required' : 
-                          step.status === 'not_started' ? 'Ready to Complete' : 'Current Step'}
-                       </Badge>
+              <div 
+                key={step.id} 
+                className={`border-2 rounded-xl overflow-hidden transition-all ${
+                  isLocked 
+                    ? 'border-slate-200 dark:border-slate-700 opacity-60' 
+                    : isActive 
+                      ? 'border-primary shadow-md' 
+                      : statusConfig.bgClass
+                }`}
+              >
+                {/* Step Header */}
+                <div className={`p-4 ${isLocked ? 'bg-slate-100 dark:bg-slate-800' : step.status === 'completed' ? 'bg-emerald-50 dark:bg-emerald-900/20' : 'bg-white dark:bg-slate-900'}`}>
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex items-start gap-3">
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 ${
+                        isLocked ? 'bg-slate-200 dark:bg-slate-700' : 
+                        step.status === 'completed' ? 'bg-emerald-500' : 
+                        step.status === 'pending' ? 'bg-amber-500' :
+                        step.status === 'rejected' ? 'bg-red-500' : 'bg-primary'
+                      }`}>
+                        {isLocked ? (
+                          <Lock className="h-5 w-5 text-slate-500 dark:text-slate-400" />
+                        ) : (
+                          <StatusIcon className="h-5 w-5 text-white" />
+                        )}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="text-xs text-muted-foreground font-medium">Step {step.step_number}</span>
+                          <h3 className="font-semibold">{step.step_name}</h3>
+                        </div>
+                        <div className="flex items-center gap-2 mt-1 flex-wrap">
+                          <Badge className={`${statusConfig.color} border text-xs`}>
+                            {isLocked ? 'Locked' : statusConfig.label}
+                          </Badge>
+                          <Badge variant="outline" className="text-xs flex items-center gap-1">
+                            <OwnerIcon className="h-3 w-3" />
+                            {actionOwner.owner}
+                          </Badge>
+                          {actionOwner.reviewRequired && !isLocked && (
+                            <Badge variant="secondary" className="text-xs flex items-center gap-1">
+                              <Shield className="h-3 w-3" />
+                              IPTO Review
+                            </Badge>
+                          )}
+                        </div>
+                      </div>
                     </div>
+                    {step.completed_at && (
+                      <div className="text-right text-xs text-muted-foreground shrink-0">
+                        <div className="flex items-center gap-1">
+                          <Calendar className="h-3 w-3" />
+                          {format(new Date(step.completed_at), 'MMM d, yyyy')}
+                        </div>
+                      </div>
+                    )}
                   </div>
+                  <p className="text-sm text-muted-foreground mt-3 ml-13">{step.step_description}</p>
                 </div>
 
-                <p className="text-muted-foreground mb-4">{step.step_description}</p>
-
-                {/* Admin notes/feedback */}
-                {step.notes && step.status === 'rejected' && (
-                  <div className="bg-red-50 border border-red-200 p-3 rounded mb-4">
-                    <p className="text-sm text-red-800"><strong>Admin Feedback:</strong> {step.notes}</p>
+                {/* Locked Message */}
+                {isLocked && (
+                  <div className="px-4 py-3 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-200 dark:border-slate-700">
+                    <p className="text-sm text-muted-foreground flex items-center gap-2">
+                      <Lock className="h-4 w-4" />
+                      Previous step not completed – complete step {step.step_number - 1} to unlock
+                    </p>
                   </div>
                 )}
 
-                 {step.status === 'pending' && step.step_number !== 1 && (
-                   <div className="bg-yellow-50 border border-yellow-200 rounded p-3 mb-4">
-                     <p className="text-sm text-yellow-800">
-                       📋 Your step has been submitted and is waiting for admin approval.
-                     </p>
-                   </div>
-                 )}
-
-                {canEdit && (
-                  <div className="space-y-4">
-                    {/* Message/Notes Section - Always available */}
-                    <div>
-                      <Label htmlFor={`notes-${step.id}`}>
-                        Message/Notes {requiresFile ? '(Optional)' : '(Required)'}
-                      </Label>
-                      <Textarea
-                        id={`notes-${step.id}`}
-                        placeholder={requiresFile ? "Add any notes for this step..." : "Describe what you've done for this step..."}
-                        value={notes[step.id] || ''}
-                        onChange={(e) => setNotes(prev => ({ ...prev, [step.id]: e.target.value }))}
-                        className="mt-1"
-                      />
-                    </div>
-
-                    {/* File Upload Section - Only if required */}
-                    {requiresFile && (
-                      <div>
-                        <Label htmlFor={`file-${step.id}`}>
-                          Upload Document {step.status === 'rejected' ? '(Re-upload Required)' : '(Required)'}
-                        </Label>
-                        
-                        {step.file_url && (
-                          <div className="flex items-center gap-2 p-2 bg-muted rounded mt-1 mb-2">
-                            <FileText className="h-4 w-4" />
-                            <span className="text-sm">Current document</span>
-                            <div className="flex gap-1">
-                              <Button 
-                                variant="outline" 
-                                size="sm"
-                                onClick={() => handleViewDocument(step.file_url)}
-                              >
-                                <Eye className="h-4 w-4 mr-1" />
-                                View
-                              </Button>
-                              <Button 
-                                variant="outline" 
-                                size="sm"
-                                onClick={() => handleDownloadDocument(step.file_url, step.step_name)}
-                              >
-                                <Download className="h-4 w-4 mr-1" />
-                                Download
-                              </Button>
-                            </div>
-                          </div>
-                        )}
-                        
-                        <div className="flex items-center gap-2 mt-1">
-                          <Input
-                            id={`file-${step.id}`}
-                            type="file"
-                            accept=".pdf"
-                            onChange={(e) => {
-                              const file = e.target.files?.[0];
-                              if (file) {
-                                handleFileUpload(step.id, file);
-                              }
-                            }}
-                            disabled={uploadingStep === step.id}
-                          />
-                          {uploadingStep === step.id && (
-                            <RefreshCw className="h-4 w-4 animate-spin" />
-                          )}
-                        </div>
-                        <p className="text-xs text-muted-foreground mt-1">
-                          Accepted formats: PDF (Max 10MB)
+                {/* Active Step Content */}
+                {isActive && step.status !== 'pending' && (
+                  <div className="p-4 border-t border-slate-200 dark:border-slate-700 space-y-4">
+                    {/* Rejection Feedback */}
+                    {step.status === 'rejected' && step.notes && (
+                      <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-3">
+                        <p className="text-sm text-red-800 dark:text-red-200">
+                          <strong>Rejection Reason:</strong> {step.notes}
+                        </p>
+                        <p className="text-xs text-red-600 dark:text-red-300 mt-1">
+                          Please address the issue and re-submit.
                         </p>
                       </div>
                     )}
 
-                    {/* Save Button */}
-                    <div className="flex items-center gap-2 pt-4 border-t">
+                    {/* Document Upload Table */}
+                    {requiresFile && documents.length > 0 && (
+                      <div>
+                        <Label className="text-sm font-medium mb-2 block">Required Documents</Label>
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead className="w-[250px]">Document</TableHead>
+                              <TableHead>Status</TableHead>
+                              <TableHead className="text-right">Action</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {documents.map((doc, idx) => (
+                              <TableRow key={idx}>
+                                <TableCell className="font-medium text-sm">{doc}</TableCell>
+                                <TableCell>
+                                  {step.file_url && idx === 0 ? (
+                                    <Badge variant="outline" className="text-emerald-600 border-emerald-300">
+                                      Uploaded
+                                    </Badge>
+                                  ) : (
+                                    <Badge variant="outline" className="text-amber-600 border-amber-300">
+                                      Pending
+                                    </Badge>
+                                  )}
+                                </TableCell>
+                                <TableCell className="text-right">
+                                  {step.file_url && idx === 0 ? (
+                                    <div className="flex items-center gap-1 justify-end">
+                                      <Button 
+                                        variant="ghost" 
+                                        size="sm"
+                                        onClick={() => handleViewDocument(step.file_url!)}
+                                      >
+                                        <Eye className="h-4 w-4" />
+                                      </Button>
+                                      <Button 
+                                        variant="ghost" 
+                                        size="sm"
+                                        onClick={() => handleDownloadDocument(step.file_url!, step.step_name)}
+                                      >
+                                        <Download className="h-4 w-4" />
+                                      </Button>
+                                    </div>
+                                  ) : idx === 0 ? (
+                                    <div className="flex items-center gap-2 justify-end">
+                                      <Input
+                                        type="file"
+                                        accept=".pdf"
+                                        className="max-w-[180px] h-8 text-xs"
+                                        onChange={(e) => {
+                                          const file = e.target.files?.[0];
+                                          if (file) handleFileUpload(step.id, file);
+                                        }}
+                                        disabled={uploadingStep === step.id}
+                                      />
+                                      {uploadingStep === step.id && (
+                                        <RefreshCw className="h-4 w-4 animate-spin" />
+                                      )}
+                                    </div>
+                                  ) : (
+                                    <span className="text-xs text-muted-foreground">Included in upload</span>
+                                  )}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+                        <p className="text-xs text-muted-foreground mt-2">
+                          Upload a single PDF containing all required documents (max 25MB)
+                        </p>
+                      </div>
+                    )}
+
+                    {/* Notes Section */}
+                    <div>
+                      <Label htmlFor={`notes-${step.id}`} className="text-sm font-medium">
+                        Notes {requiresFile ? '(Optional)' : '(Required)'}
+                      </Label>
+                      <Textarea
+                        id={`notes-${step.id}`}
+                        placeholder={requiresFile 
+                          ? "Add any additional notes for IPTO review..." 
+                          : "Describe what you've done for this step..."
+                        }
+                        value={notes[step.id] || ''}
+                        onChange={(e) => setNotes(prev => ({ ...prev, [step.id]: e.target.value }))}
+                        className="mt-1.5"
+                        rows={3}
+                      />
+                    </div>
+
+                    {/* Submit Button */}
+                    <div className="flex items-center justify-between pt-2">
                       <Button
                         onClick={() => handleSaveStep(step.id)}
                         disabled={
-                          savingStep === step.id || 
+                          savingStep === step.id ||
                           (!requiresFile && (!notes[step.id] || notes[step.id].trim() === '')) ||
                           (requiresFile && step.status === 'rejected' && !step.file_url)
                         }
@@ -677,53 +737,77 @@ const DealSteps: React.FC<DealStepsProps> = ({ dealId, onClose }) => {
                         {savingStep === step.id ? (
                           <RefreshCw className="h-4 w-4 animate-spin" />
                         ) : (
-                          <Upload className="h-4 w-4" />
+                          <Send className="h-4 w-4" />
                         )}
-                        Save & {step.step_number === 1 ? 'Complete Step' : 'Submit for Approval'}
+                        Submit for IPTO Review
                       </Button>
-                      
-                      <div className="text-xs text-muted-foreground">
-                        {requiresFile && !step.file_url && step.status !== 'rejected' && (
-                          <span>📎 Document required before saving</span>
-                        )}
-                        {!requiresFile && (!notes[step.id] || notes[step.id].trim() === '') && (
-                          <span>✏️ Message required before saving</span>
-                        )}
-                      </div>
+                      <span className="text-xs text-muted-foreground">
+                        {requiresFile && !step.file_url && "Document required"}
+                        {!requiresFile && (!notes[step.id] || !notes[step.id].trim()) && "Notes required"}
+                      </span>
                     </div>
+                  </div>
+                )}
+
+                {/* Pending Review Status */}
+                {step.status === 'pending' && (
+                  <div className="px-4 py-3 bg-amber-50 dark:bg-amber-900/20 border-t border-amber-200 dark:border-amber-800">
+                    <p className="text-sm text-amber-800 dark:text-amber-200 flex items-center gap-2">
+                      <Clock className="h-4 w-4" />
+                      Submitted and awaiting IPTO review
+                    </p>
+                  </div>
+                )}
+
+                {/* Completed Step - IPTO Approved Message */}
+                {step.status === 'completed' && (
+                  <div className="px-4 py-3 bg-emerald-50 dark:bg-emerald-900/20 border-t border-emerald-200 dark:border-emerald-800">
+                    <div className="flex items-center justify-between">
+                      <p className="text-sm text-emerald-800 dark:text-emerald-200 flex items-center gap-2 font-medium">
+                        <CheckCircle className="h-4 w-4" />
+                        IPTO Reviewed and Approved
+                        {step.completed_at && (
+                          <span className="text-xs text-emerald-600 dark:text-emerald-400 font-normal ml-2">
+                            on {format(new Date(step.completed_at), 'MMM d, yyyy')}
+                          </span>
+                        )}
+                      </p>
+                      {step.file_url && (
+                        <div className="flex items-center gap-1">
+                          <Button 
+                            variant="ghost" 
+                            size="sm"
+                            onClick={() => handleViewDocument(step.file_url!)}
+                          >
+                            <Eye className="h-4 w-4 mr-1" />
+                            View
+                          </Button>
+                          <Button 
+                            variant="ghost" 
+                            size="sm"
+                            onClick={() => handleDownloadDocument(step.file_url!, step.step_name)}
+                          >
+                            <Download className="h-4 w-4 mr-1" />
+                            Download
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {/* Legal Disclaimer for Sensitive Steps */}
+                {isSensitiveStep && !isLocked && step.status !== 'completed' && (
+                  <div className="px-4 py-2 bg-slate-100 dark:bg-slate-800 border-t border-slate-200 dark:border-slate-700">
+                    <p className="text-[10px] text-muted-foreground">
+                      International Petroleum Trade Oversight (IPTO) acts as an independent workflow reviewer only. 
+                      IPTO does not guarantee payment, delivery, or performance.
+                    </p>
                   </div>
                 )}
               </div>
             );
           })}
-
-        {/* Future Steps Preview */}
-        <div className="space-y-4">
-          <h4 className="font-semibold text-gray-600 border-b pb-2">Upcoming Steps</h4>
-          {steps.filter(step => step.step_number > currentStepNumber && step.status !== 'rejected').slice(0, 3).map((step, index) => (
-            <div key={step.id} className="border rounded-lg p-4 bg-gray-50 opacity-75">
-              <div className="flex items-center gap-3 mb-2">
-                <Clock className="h-4 w-4 text-gray-400" />
-                <div>
-                  <h5 className="font-medium text-gray-700">
-                    Step {step.step_number}: {step.step_name}
-                  </h5>
-                  <Badge variant="outline" className="text-xs">
-                    🔒 Locked
-                  </Badge>
-                </div>
-              </div>
-              <p className="text-sm text-gray-600">{step.step_description}</p>
-            </div>
-          ))}
-          
-          {steps.filter(step => step.step_number > currentStepNumber && step.status !== 'rejected').length > 3 && (
-            <div className="text-center">
-              <p className="text-sm text-gray-500">
-                +{steps.filter(step => step.step_number > currentStepNumber && step.status !== 'rejected').length - 3} more steps
-              </p>
-            </div>
-          )}
         </div>
       </CardContent>
     </Card>

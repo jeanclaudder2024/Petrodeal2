@@ -28,11 +28,13 @@ import {
   Send,
   User,
   Settings,
-  DollarSign
+  DollarSign,
+  Building2
 } from 'lucide-react';
 import DealStepTemplates from './DealStepTemplates';
 import BrokerPricingManagement from './BrokerPricingManagement';
 import IMFPAManagement from './IMFPAManagement';
+import DealCompaniesManagement from './DealCompaniesManagement';
 import { db, supabase } from '@/lib/supabase-helper';
 import { useToast } from '@/hooks/use-toast';
 
@@ -467,6 +469,9 @@ const BrokerManagement = () => {
           </TabsTrigger>
           <TabsTrigger value="pricing" className="flex items-center gap-1 text-xs md:text-sm whitespace-nowrap">
             <DollarSign className="h-3 w-3" /> Pricing
+          </TabsTrigger>
+          <TabsTrigger value="deal-companies" className="flex items-center gap-1 text-xs md:text-sm whitespace-nowrap">
+            <Building2 className="h-3 w-3" /> Deal Companies
           </TabsTrigger>
         </TabsList>
 
@@ -1023,6 +1028,16 @@ const BrokerManagement = () => {
 
         <TabsContent value="templates">
           <DealStepTemplates />
+        </TabsContent>
+
+        {/* Broker Pricing Tab */}
+        <TabsContent value="pricing">
+          <BrokerPricingManagement />
+        </TabsContent>
+
+        {/* Deal Companies Tab */}
+        <TabsContent value="deal-companies">
+          <DealCompaniesManagement />
         </TabsContent>
       </Tabs>
 
@@ -1589,10 +1604,6 @@ const BrokerManagement = () => {
         </DialogContent>
       </Dialog>
 
-      {/* Broker Pricing Tab */}
-      <TabsContent value="pricing">
-        <BrokerPricingManagement />
-      </TabsContent>
     </div>
   );
 };

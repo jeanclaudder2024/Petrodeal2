@@ -377,7 +377,7 @@ const SubscriptionManagement = () => {
   const handleToggleBrokerSubscription = async (subscriber: Subscriber) => {
     try {
       const newState = !subscriber.has_broker_subscription;
-      const { error } = await db
+      const { error } = await supabase
         .from('subscribers')
         .update({
           has_broker_subscription: newState,

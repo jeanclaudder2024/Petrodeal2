@@ -23,8 +23,12 @@ import {
   Calendar as CalendarIcon,
   Search,
   FileText,
-  Globe
+  Globe,
+  Bot,
+  MessageSquareText,
+  HelpCircle
 } from 'lucide-react';
+import { Separator } from '@/components/ui/separator';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
@@ -64,7 +68,7 @@ const BlogManagement = () => {
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
   const [selectedPost, setSelectedPost] = useState<BlogPost | null>(null);
   const [step, setStep] = useState(1);
-  const [generating, setGenerating] = useState<'content' | 'image' | 'seo' | null>(null);
+  const [generating, setGenerating] = useState<'content' | 'image' | 'seo' | 'geo' | null>(null);
   const { toast } = useToast();
 
   const [formData, setFormData] = useState({
@@ -80,7 +84,11 @@ const BlogManagement = () => {
     publish_date: null as Date | null,
     meta_title: '',
     meta_description: '',
-    meta_keywords: ''
+    meta_keywords: '',
+    // GEO fields
+    geo_ai_summary: '',
+    geo_qa_block: '[]',
+    geo_authority_statement: ''
   });
 
   useEffect(() => {
@@ -281,7 +289,11 @@ const BlogManagement = () => {
           : formData.status === 'published' ? new Date().toISOString() : null,
         meta_title: formData.meta_title || null,
         meta_description: formData.meta_description || null,
-        meta_keywords: formData.meta_keywords ? formData.meta_keywords.split(',').map(k => k.trim()) : null
+        meta_keywords: formData.meta_keywords ? formData.meta_keywords.split(',').map(k => k.trim()) : null,
+        // GEO fields
+        geo_ai_summary: formData.geo_ai_summary || null,
+        geo_qa_block: formData.geo_qa_block ? JSON.parse(formData.geo_qa_block) : [],
+        geo_authority_statement: formData.geo_authority_statement || null
       };
 
       if (selectedPost) {
@@ -324,6 +336,7 @@ const BlogManagement = () => {
 
   const handleEditPost = (post: BlogPost) => {
     setSelectedPost(post);
+    const postWithGeo = post as any;
     setFormData({
       title: post.title,
       subject: '',
@@ -337,7 +350,10 @@ const BlogManagement = () => {
       publish_date: post.publish_date ? new Date(post.publish_date) : null,
       meta_title: post.meta_title || '',
       meta_description: post.meta_description || '',
-      meta_keywords: post.meta_keywords?.join(', ') || ''
+      meta_keywords: post.meta_keywords?.join(', ') || '',
+      geo_ai_summary: postWithGeo.geo_ai_summary || '',
+      geo_qa_block: JSON.stringify(postWithGeo.geo_qa_block || []),
+      geo_authority_statement: postWithGeo.geo_authority_statement || ''
     });
     setStep(1);
     setIsCreateDialogOpen(true);
@@ -357,10 +373,88 @@ const BlogManagement = () => {
       publish_date: null,
       meta_title: '',
       meta_description: '',
-      meta_keywords: ''
+      meta_keywords: '',
+      geo_ai_summary: '',
+      geo_qa_block: '[]',
+      geo_authority_statement: ''
     });
     setSelectedPost(null);
     setStep(1);
+  };
+
+  const generateGEO = async () => {
+    if (!formData.title) {
+      toast({ title: "Error", description: "Please enter title first", variant: "destructive" });
+      return;
+    }
+
+    setGenerating('geo');
+    try {
+      const { data, error } = await supabase.functions.invoke('generate-blog-content', {
+        body: { 
+          title: formData.title, 
+          subject: formData.subject || formData.title, 
+          content: formData.content,
+          type: 'geo' 
+        }
+      });
+
+      if (error) throw error;
+
+      if (data?.content) {
+        try {
+          const jsonMatch = data.content.match(/\{[\s\S]*\}/);
+          if (jsonMatch) {
+            const geoData = JSON.parse(jsonMatch[0]);
+            setFormData(prev => ({
+              ...prev,
+              geo_ai_summary: geoData.ai_summary || '',
+              geo_qa_block: JSON.stringify(geoData.qa_block || []),
+              geo_authority_statement: geoData.authority_statement || ''
+            }));
+            toast({ title: "Success", description: "GEO content generated for AI engines" });
+          }
+        } catch (parseError) {
+          console.error('GEO parse error:', parseError);
+          toast({ title: "Error", description: "Failed to parse GEO data", variant: "destructive" });
+        }
+      }
+    } catch (error) {
+      console.error('GEO generation error:', error);
+      toast({ title: "Error", description: "Failed to generate GEO content", variant: "destructive" });
+    } finally {
+      setGenerating(null);
+    }
+  };
+
+  const addQAItem = () => {
+    try {
+      const currentQA = JSON.parse(formData.geo_qa_block || '[]');
+      currentQA.push({ question: '', answer: '' });
+      setFormData(prev => ({ ...prev, geo_qa_block: JSON.stringify(currentQA) }));
+    } catch {
+      setFormData(prev => ({ ...prev, geo_qa_block: '[{"question":"","answer":""}]' }));
+    }
+  };
+
+  const updateQAItem = (index: number, field: 'question' | 'answer', value: string) => {
+    try {
+      const currentQA = JSON.parse(formData.geo_qa_block || '[]');
+      currentQA[index][field] = value;
+      setFormData(prev => ({ ...prev, geo_qa_block: JSON.stringify(currentQA) }));
+    } catch (e) {
+      console.error('Error updating QA:', e);
+    }
+  };
+
+  const removeQAItem = (index: number) => {
+    try {
+      const currentQA = JSON.parse(formData.geo_qa_block || '[]');
+      currentQA.splice(index, 1);
+      setFormData(prev => ({ ...prev, geo_qa_block: JSON.stringify(currentQA) }));
+    } catch (e) {
+      console.error('Error removing QA:', e);
+    }
   };
 
   const getStatusBadge = (status: string) => {
@@ -644,8 +738,101 @@ const BlogManagement = () => {
               </div>
             )}
 
-            {/* Step 4: Schedule & Publish */}
+            {/* Step 4: GEO / AI-Readable Content */}
             {step === 4 && (
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Bot className="h-5 w-5 text-primary" />
+                    <span className="font-medium">GEO / AI-Readable Content</span>
+                  </div>
+                  <Button onClick={generateGEO} disabled={generating === 'geo'} variant="outline">
+                    {generating === 'geo' ? (
+                      <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+                    ) : (
+                      <Sparkles className="h-4 w-4 mr-2" />
+                    )}
+                    AI Auto Generate GEO
+                  </Button>
+                </div>
+                
+                <p className="text-sm text-muted-foreground">
+                  Generate content optimized for AI engines (ChatGPT, Gemini, Perplexity, DeepSeek) to understand and cite your article.
+                </p>
+
+                <Separator />
+
+                <div>
+                  <Label className="flex items-center gap-2">
+                    <MessageSquareText className="h-4 w-4" />
+                    AI Summary for Generative Engines
+                  </Label>
+                  <Textarea 
+                    value={formData.geo_ai_summary}
+                    onChange={e => setFormData(prev => ({ ...prev, geo_ai_summary: e.target.value }))}
+                    placeholder="2-3 clear sentences explaining what this article covers, written in definition-style language for AI engines..."
+                    rows={3}
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">Written for AI systems to understand and cite.</p>
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <Label className="flex items-center gap-2">
+                      <HelpCircle className="h-4 w-4" />
+                      AI Q&A Block
+                    </Label>
+                    <Button variant="outline" size="sm" onClick={addQAItem}>
+                      <Plus className="h-4 w-4 mr-1" /> Add Q&A
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground mb-2">Questions and answers designed for AI extraction.</p>
+                  
+                  {(() => {
+                    try {
+                      const qaItems = JSON.parse(formData.geo_qa_block || '[]');
+                      return qaItems.map((qa: any, index: number) => (
+                        <div key={index} className="border rounded-lg p-3 mb-2 bg-muted/30">
+                          <div className="flex justify-between items-start mb-2">
+                            <span className="text-xs font-medium text-muted-foreground">Q&A #{index + 1}</span>
+                            <Button variant="ghost" size="sm" onClick={() => removeQAItem(index)}>
+                              <Trash2 className="h-3 w-3 text-destructive" />
+                            </Button>
+                          </div>
+                          <Input 
+                            value={qa.question}
+                            onChange={e => updateQAItem(index, 'question', e.target.value)}
+                            placeholder="Question..."
+                            className="mb-2"
+                          />
+                          <Textarea 
+                            value={qa.answer}
+                            onChange={e => updateQAItem(index, 'answer', e.target.value)}
+                            placeholder="Answer..."
+                            rows={2}
+                          />
+                        </div>
+                      ));
+                    } catch {
+                      return <p className="text-sm text-muted-foreground">No Q&A items yet.</p>;
+                    }
+                  })()}
+                </div>
+
+                <div>
+                  <Label>Context & Authority Statement</Label>
+                  <Textarea 
+                    value={formData.geo_authority_statement}
+                    onChange={e => setFormData(prev => ({ ...prev, geo_authority_statement: e.target.value }))}
+                    placeholder="This article is written to explain [topic] for researchers, oil trading professionals, and AI systems seeking accurate industry information about PetroDealHub..."
+                    rows={2}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Step 5: Schedule & Publish */}
+            {step === 5 && (
               <div className="space-y-4">
                 <div>
                   <Label>Status</Label>
@@ -713,6 +900,7 @@ const BlogManagement = () => {
                     <p><strong>URL:</strong> /blog/{formData.slug || 'not-set'}</p>
                     <p><strong>Status:</strong> {formData.status}</p>
                     <p><strong>SEO Title:</strong> {formData.meta_title || 'Not set'}</p>
+                    <p><strong>GEO Summary:</strong> {formData.geo_ai_summary ? 'Set' : 'Not set'}</p>
                   </CardContent>
                 </Card>
               </div>
@@ -726,7 +914,7 @@ const BlogManagement = () => {
               >
                 {step > 1 ? 'Previous' : 'Cancel'}
               </Button>
-              {step < 4 ? (
+              {step < 5 ? (
                 <Button onClick={() => setStep(step + 1)}>Next</Button>
               ) : (
                 <Button onClick={handleSavePost} className="bg-green-600 hover:bg-green-700">

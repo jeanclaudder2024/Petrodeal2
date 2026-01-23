@@ -138,7 +138,7 @@ const IMFPAInfoNotice = () => {
             <ul className="text-sm text-muted-foreground space-y-1">
               <li className="flex items-center gap-2">
                 <CheckCircle2 className="h-3 w-3 text-green-500" />
-                Use "AI Generate" to auto-fill common fields based on your deal type
+                Certain fields will be available after IPTO review and validation
               </li>
               <li className="flex items-center gap-2">
                 <CheckCircle2 className="h-3 w-3 text-green-500" />

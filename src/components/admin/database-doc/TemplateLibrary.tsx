@@ -7,13 +7,16 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from '@/components/ui/alert-dialog';
-import { Library, Eye, Copy, Trash2, Search, Plus } from 'lucide-react';
+import { Library, Eye, Copy, Trash2, Search, Plus, FlaskConical, Loader2, Download, Ship } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { format } from 'date-fns';
 import DOMPurify from 'dompurify';
 import { Skeleton } from '@/components/ui/skeleton';
-
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Label } from '@/components/ui/label';
+import { Progress } from '@/components/ui/progress';
+import { downloadAsDocx } from '@/utils/documentExport';
 interface DocumentTemplate {
   id: string;
   name: string;
@@ -26,16 +29,46 @@ interface DocumentTemplate {
   created_at: string;
 }
 
+interface Vessel {
+  id: number;
+  name: string;
+  imo: string | null;
+}
+
 const TemplateLibrary: React.FC = () => {
   const [templates, setTemplates] = useState<DocumentTemplate[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedTemplate, setSelectedTemplate] = useState<DocumentTemplate | null>(null);
   const [isViewOpen, setIsViewOpen] = useState(false);
+  
+  // Test template states
+  const [isTestDialogOpen, setIsTestDialogOpen] = useState(false);
+  const [testingTemplate, setTestingTemplate] = useState<DocumentTemplate | null>(null);
+  const [vessels, setVessels] = useState<Vessel[]>([]);
+  const [selectedVesselId, setSelectedVesselId] = useState<string>('');
+  const [isTesting, setIsTesting] = useState(false);
+  const [testProgress, setTestProgress] = useState(0);
+  const [testStatus, setTestStatus] = useState<string>('');
 
   useEffect(() => {
     fetchTemplates();
+    fetchVessels();
   }, []);
+
+  const fetchVessels = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('vessels')
+        .select('id, name, imo')
+        .order('name', { ascending: true });
+
+      if (error) throw error;
+      setVessels((data as Vessel[]) || []);
+    } catch (error) {
+      console.error('Error fetching vessels:', error);
+    }
+  };
 
   const fetchTemplates = async () => {
     setLoading(true);
@@ -100,6 +133,78 @@ const TemplateLibrary: React.FC = () => {
   const handleCopyContent = (content: string) => {
     navigator.clipboard.writeText(content);
     toast.success('Content copied to clipboard');
+  };
+
+  const handleOpenTest = (template: DocumentTemplate) => {
+    setTestingTemplate(template);
+    setSelectedVesselId('');
+    setTestProgress(0);
+    setTestStatus('');
+    setIsTestDialogOpen(true);
+  };
+
+  const handleTestTemplate = async () => {
+    if (!testingTemplate || !selectedVesselId) {
+      toast.error('Please select a vessel');
+      return;
+    }
+
+    setIsTesting(true);
+    setTestProgress(10);
+    setTestStatus('Fetching vessel data from database...');
+
+    try {
+      setTestProgress(30);
+      setTestStatus('Replacing placeholders with database values...');
+
+      const { data, error } = await supabase.functions.invoke('test-template-with-vessel', {
+        body: {
+          templateId: testingTemplate.id,
+          vesselId: parseInt(selectedVesselId),
+        },
+      });
+
+      if (error) throw error;
+
+      if (!data?.success) {
+        throw new Error(data?.error || 'Failed to process template');
+      }
+
+      setTestProgress(70);
+      setTestStatus('Filling missing placeholders with AI...');
+      
+      // Small delay for UX
+      await new Promise(resolve => setTimeout(resolve, 500));
+
+      setTestProgress(90);
+      setTestStatus('Generating DOCX file...');
+
+      // Use the downloadAsDocx utility
+      const fileName = `${testingTemplate.name}_${data.vesselName || 'test'}_${format(new Date(), 'yyyy-MM-dd')}`;
+      const success = await downloadAsDocx(data.processedContent, fileName);
+
+      if (success) {
+        setTestProgress(100);
+        setTestStatus('Download complete!');
+        toast.success(`Template tested successfully with vessel: ${data.vesselName}`);
+        
+        // Close dialog after a short delay
+        setTimeout(() => {
+          setIsTestDialogOpen(false);
+          setIsTesting(false);
+          setTestProgress(0);
+          setTestStatus('');
+        }, 1000);
+      } else {
+        throw new Error('Failed to generate DOCX file');
+      }
+    } catch (error) {
+      console.error('Error testing template:', error);
+      toast.error(error instanceof Error ? error.message : 'Failed to test template');
+      setIsTesting(false);
+      setTestProgress(0);
+      setTestStatus('');
+    }
   };
 
   const filteredTemplates = templates.filter(t =>
@@ -227,6 +332,9 @@ const TemplateLibrary: React.FC = () => {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">
+                        <Button variant="ghost" size="icon" onClick={() => handleOpenTest(template)} title="Test with real data">
+                          <FlaskConical className="h-4 w-4" />
+                        </Button>
                         <Button variant="ghost" size="icon" onClick={() => handleView(template)}>
                           <Eye className="h-4 w-4" />
                         </Button>
@@ -292,6 +400,90 @@ const TemplateLibrary: React.FC = () => {
               <Copy className="h-4 w-4 mr-2" />
               Copy Content
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Test Template Dialog */}
+      <Dialog open={isTestDialogOpen} onOpenChange={(open) => {
+        if (!isTesting) {
+          setIsTestDialogOpen(open);
+        }
+      }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FlaskConical className="h-5 w-5" />
+              Test Template with Real Data
+            </DialogTitle>
+            <DialogDescription>
+              {testingTemplate?.name}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-4">
+            {!isTesting ? (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="vessel-select">Select Vessel</Label>
+                  <Select value={selectedVesselId} onValueChange={setSelectedVesselId}>
+                    <SelectTrigger id="vessel-select">
+                      <SelectValue placeholder="Choose a vessel..." />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {vessels.map((vessel) => (
+                        <SelectItem key={vessel.id} value={vessel.id.toString()}>
+                          <div className="flex items-center gap-2">
+                            <Ship className="h-4 w-4 text-muted-foreground" />
+                            <span>{vessel.name}</span>
+                            {vessel.imo && (
+                              <span className="text-xs text-muted-foreground">
+                                (IMO: {vessel.imo})
+                              </span>
+                            )}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="bg-muted/50 rounded-lg p-3 text-sm text-muted-foreground">
+                  <p className="font-medium mb-1">How it works:</p>
+                  <ol className="list-decimal list-inside space-y-1 text-xs">
+                    <li>Fetches vessel data from database</li>
+                    <li>Replaces placeholders with real values</li>
+                    <li>Uses AI to fill any missing placeholders</li>
+                    <li>Generates and downloads DOCX file</li>
+                  </ol>
+                </div>
+              </>
+            ) : (
+              <div className="space-y-4">
+                <div className="flex items-center gap-3">
+                  <Loader2 className="h-5 w-5 animate-spin text-primary" />
+                  <span className="text-sm font-medium">{testStatus}</span>
+                </div>
+                <Progress value={testProgress} className="h-2" />
+                <p className="text-xs text-muted-foreground text-center">
+                  {testProgress}% complete
+                </p>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            {!isTesting && (
+              <>
+                <Button variant="outline" onClick={() => setIsTestDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button onClick={handleTestTemplate} disabled={!selectedVesselId}>
+                  <Download className="h-4 w-4 mr-2" />
+                  Test & Download
+                </Button>
+              </>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

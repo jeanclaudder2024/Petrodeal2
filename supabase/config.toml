@@ -168,3 +168,27 @@ verify_jwt = true
 
 [functions.autofill-product-data]
 verify_jwt = true
+
+[functions.test-template-with-vessel]
+verify_jwt = true
+
+[functions.linkedin-oauth]
+verify_jwt = false
+
+[functions.linkedin-media-upload]
+verify_jwt = true
+
+[functions.linkedin-post-publisher]
+verify_jwt = true
+
+[functions.linkedin-scheduled-runner]
+verify_jwt = false
+
+[functions.linkedin-scheduled-runner.cron]
+schedule = "* * * * *"
+
+[functions.linkedin-comments-sync]
+verify_jwt = true
+
+[functions.linkedin-analytics-sync]
+verify_jwt = true

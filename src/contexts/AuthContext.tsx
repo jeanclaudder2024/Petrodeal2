@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useEffect, useState } from 'react';
+import React, { createContext, useContext, useEffect, useState, useRef } from 'react';
 import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -29,11 +29,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
+  
+  // Track if initial load is complete to prevent unmounting on tab switch
+  const initialLoadComplete = useRef(false);
 
   useEffect(() => {
     // Add timeout for auth initialization
     const timeoutId = setTimeout(() => {
-      setLoading(false);
+      if (!initialLoadComplete.current) {
+        setLoading(false);
+        initialLoadComplete.current = true;
+      }
     }, 5000);
 
     // Set up auth state listener FIRST
@@ -42,7 +48,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         clearTimeout(timeoutId);
         setSession(session);
         setUser(session?.user ?? null);
-        setLoading(false);
+        
+        // Only set loading=false during initial load
+        // After initial load, updates happen silently to prevent page unmount
+        if (!initialLoadComplete.current) {
+          setLoading(false);
+          initialLoadComplete.current = true;
+        }
       }
     );
 
@@ -52,12 +64,19 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         clearTimeout(timeoutId);
         setSession(session);
         setUser(session?.user ?? null);
-        setLoading(false);
+        
+        if (!initialLoadComplete.current) {
+          setLoading(false);
+          initialLoadComplete.current = true;
+        }
       })
       .catch((error) => {
         // Error handled silently for security
         clearTimeout(timeoutId);
-        setLoading(false);
+        if (!initialLoadComplete.current) {
+          setLoading(false);
+          initialLoadComplete.current = true;
+        }
       });
 
     return () => {
