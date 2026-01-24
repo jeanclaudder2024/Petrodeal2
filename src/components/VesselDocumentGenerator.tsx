@@ -153,10 +153,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
           const cacheBuster = `?t=${Date.now()}`;
           const response = await fetch(`${API_BASE_URL}/user-downloadable-templates${cacheBuster}`, {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Cache-Control': 'no-cache',
-            },
+            headers: { 'Content-Type': 'application/json' },
             credentials: 'include',
             body: JSON.stringify({ user_id: String(userId).trim() }),
           });

@@ -11,7 +11,7 @@ OPTIONS_BLOCK = """
         if ($request_method = 'OPTIONS') {
             add_header Access-Control-Allow-Origin $http_origin always;
             add_header Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS" always;
-            add_header Access-Control-Allow-Headers "Content-Type, Authorization" always;
+            add_header Access-Control-Allow-Headers "Content-Type, Authorization, Cache-Control" always;
             add_header Access-Control-Allow-Credentials "true" always;
             add_header Access-Control-Max-Age 600 always;
             add_header Content-Length 0;
