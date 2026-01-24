@@ -57,16 +57,16 @@ function normalizeTemplateName(name: string): string {
 const PDF_MAGIC = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d]); // %PDF-
 const DOCX_MAGIC = new Uint8Array([0x50, 0x4b]); // PK (ZIP)
 
-async function verifyBlobFormat(blob: Blob, filename: string): Promise<boolean> {
-  const low = filename.toLowerCase();
+/** Returns 'pdf' | 'docx' | false. We only accept PDF for download. */
+async function verifyBlobFormat(blob: Blob): Promise<'pdf' | 'docx' | false> {
   const head = new Uint8Array(await blob.slice(0, 5).arrayBuffer());
-  if (low.endsWith('.pdf')) {
-    return head.length >= 5 && head[0] === PDF_MAGIC[0] && head[1] === PDF_MAGIC[1] && head[2] === PDF_MAGIC[2] && head[3] === PDF_MAGIC[3] && head[4] === PDF_MAGIC[4];
+  if (head.length >= 5 && head[0] === PDF_MAGIC[0] && head[1] === PDF_MAGIC[1] && head[2] === PDF_MAGIC[2] && head[3] === PDF_MAGIC[3] && head[4] === PDF_MAGIC[4]) {
+    return 'pdf';
   }
-  if (low.endsWith('.docx')) {
-    return head.length >= 2 && head[0] === DOCX_MAGIC[0] && head[1] === DOCX_MAGIC[1];
+  if (head.length >= 2 && head[0] === DOCX_MAGIC[0] && head[1] === DOCX_MAGIC[1]) {
+    return 'docx';
   }
-  return true;
+  return false;
 }
 
 export default function VesselDocumentGenerator({ vesselImo, vesselName }: VesselDocumentGeneratorProps) {
@@ -950,11 +950,18 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
           toast.error('Download failed: server returned an error page instead of a document.');
           return;
         }
+        if (contentType.includes('application/zip') || contentType.includes('application/vnd.openxmlformats-officedocument.wordprocessingml.document')) {
+          setProcessingStatus(prev => ({
+            ...prev,
+            [templateKey]: { status: 'failed', message: 'Word instead of PDF' }
+          }));
+          toast.error('Download failed: server returned a Word document instead of PDF. PDF conversion may have failed. Please try again or contact support.');
+          return;
+        }
         const allowed =
           !contentType ||
           contentType.includes('application/pdf') ||
           contentType.includes('application/octet-stream') ||
-          contentType.includes('application/vnd.openxmlformats-officedocument.wordprocessingml.document') ||
           contentType.includes('application/x-download') ||
           contentType.includes('application/force-download');
         if (!allowed) {
@@ -963,18 +970,20 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
             [templateKey]: { status: 'failed', message: 'Invalid response' }
           }));
           const hint = contentType ? ` (received: ${contentType.slice(0, 80)})` : '';
-          toast.error(`Download failed: unexpected file type${hint}. Expected PDF or Word document.`);
+          toast.error(`Download failed: unexpected file type${hint}. Expected PDF.`);
           return;
         }
 
         const contentDisposition = response.headers.get('Content-Disposition');
         const templateName = template.file_name || template.name || 'template';
-        const apiTemplateName = templateName.replace('.docx', '');
+        const apiTemplateName = templateName.replace(/\.docx$/i, '');
         let filename = `${apiTemplateName}_${vesselImoTrimmed}.pdf`;
         if (contentDisposition) {
           const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
           if (filenameMatch) {
-            filename = filenameMatch[1].replace(/['"]/g, '').trim();
+            const raw = filenameMatch[1].replace(/['"]/g, '').trim();
+            if (raw.toLowerCase().endsWith('.pdf')) filename = raw;
+            else filename = raw.replace(/\.docx$/i, '') + '.pdf';
           }
         }
 
@@ -988,13 +997,21 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
             toast.error('Download failed: file is empty or invalid. Please try again.');
             return;
           }
-          const valid = await verifyBlobFormat(blob, filename);
-          if (!valid) {
+          const format = await verifyBlobFormat(blob);
+          if (format === 'docx') {
+            setProcessingStatus(prev => ({
+              ...prev,
+              [templateKey]: { status: 'failed', message: 'Word instead of PDF' }
+            }));
+            toast.error('Download failed: server returned a Word document instead of PDF. PDF conversion may have failed. Please try again or contact support.');
+            return;
+          }
+          if (format !== 'pdf') {
             setProcessingStatus(prev => ({
               ...prev,
               [templateKey]: { status: 'failed', message: 'Invalid file' }
             }));
-            toast.error('Download failed: file is invalid or corrupt (wrong format). Please try again.');
+            toast.error('Download failed: file is invalid or corrupt (not PDF). Please try again.');
             return;
           }
           const url = window.URL.createObjectURL(blob);
