@@ -54,6 +54,21 @@ function normalizeTemplateName(name: string): string {
   return n.endsWith('.docx') ? n : `${n}.docx`;
 }
 
+const PDF_MAGIC = new Uint8Array([0x25, 0x50, 0x44, 0x46, 0x2d]); // %PDF-
+const DOCX_MAGIC = new Uint8Array([0x50, 0x4b]); // PK (ZIP)
+
+async function verifyBlobFormat(blob: Blob, filename: string): Promise<boolean> {
+  const low = filename.toLowerCase();
+  const head = new Uint8Array(await blob.slice(0, 5).arrayBuffer());
+  if (low.endsWith('.pdf')) {
+    return head.length >= 5 && head[0] === PDF_MAGIC[0] && head[1] === PDF_MAGIC[1] && head[2] === PDF_MAGIC[2] && head[3] === PDF_MAGIC[3] && head[4] === PDF_MAGIC[4];
+  }
+  if (low.endsWith('.docx')) {
+    return head.length >= 2 && head[0] === DOCX_MAGIC[0] && head[1] === DOCX_MAGIC[1];
+  }
+  return true;
+}
+
 export default function VesselDocumentGenerator({ vesselImo, vesselName }: VesselDocumentGeneratorProps) {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -923,6 +938,26 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
           toast.error(`Download failed: ${errMsg}`);
           return;
         }
+        if (contentType.includes('text/html') || contentType.includes('text/plain')) {
+          setProcessingStatus(prev => ({
+            ...prev,
+            [templateKey]: { status: 'failed', message: 'Invalid response' }
+          }));
+          toast.error('Download failed: server returned an error page instead of a document.');
+          return;
+        }
+        const allowed =
+          contentType.includes('application/pdf') ||
+          contentType.includes('application/octet-stream') ||
+          contentType.includes('application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+        if (!allowed) {
+          setProcessingStatus(prev => ({
+            ...prev,
+            [templateKey]: { status: 'failed', message: 'Invalid response' }
+          }));
+          toast.error('Download failed: unexpected file type. Expected PDF or Word document.');
+          return;
+        }
 
         const contentDisposition = response.headers.get('Content-Disposition');
         const templateName = template.file_name || template.name || 'template';
@@ -943,6 +978,15 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
               [templateKey]: { status: 'failed', message: 'Empty or invalid file' }
             }));
             toast.error('Download failed: file is empty or invalid. Please try again.');
+            return;
+          }
+          const valid = await verifyBlobFormat(blob, filename);
+          if (!valid) {
+            setProcessingStatus(prev => ({
+              ...prev,
+              [templateKey]: { status: 'failed', message: 'Invalid file' }
+            }));
+            toast.error('Download failed: file is invalid or corrupt (wrong format). Please try again.');
             return;
           }
           const url = window.URL.createObjectURL(blob);
