@@ -951,15 +951,19 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
           return;
         }
         const allowed =
+          !contentType ||
           contentType.includes('application/pdf') ||
           contentType.includes('application/octet-stream') ||
-          contentType.includes('application/vnd.openxmlformats-officedocument.wordprocessingml.document');
+          contentType.includes('application/vnd.openxmlformats-officedocument.wordprocessingml.document') ||
+          contentType.includes('application/x-download') ||
+          contentType.includes('application/force-download');
         if (!allowed) {
           setProcessingStatus(prev => ({
             ...prev,
             [templateKey]: { status: 'failed', message: 'Invalid response' }
           }));
-          toast.error('Download failed: unexpected file type. Expected PDF or Word document.');
+          const hint = contentType ? ` (received: ${contentType.slice(0, 80)})` : '';
+          toast.error(`Download failed: unexpected file type${hint}. Expected PDF or Word document.`);
           return;
         }
 
