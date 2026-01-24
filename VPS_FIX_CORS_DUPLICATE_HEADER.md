@@ -99,6 +99,32 @@ sudo bash VPS_ADD_OPTIONS_CORS_NGINX.sh
 
 Then verify preflight (step 4 below).
 
+**If the script says "No suitable location /auth/ or /api/ found":**
+
+1. Find which nginx config defines `location /auth/` for control:
+   ```bash
+   sudo grep -rn "location /auth/" /etc/nginx/
+   ```
+2. Run the script on that file explicitly:
+   ```bash
+   cd /opt/petrodealhub
+   sudo bash VPS_ADD_OPTIONS_CORS_NGINX.sh /etc/nginx/sites-available/your-control-config
+   ```
+3. Or add the OPTIONS block manually: open the control config, and **inside** `location /auth/ {` (right after the `{`), paste:
+   ```nginx
+   if ($request_method = 'OPTIONS') {
+       add_header Access-Control-Allow-Origin $http_origin always;
+       add_header Access-Control-Allow-Methods "GET, POST, PUT, DELETE, OPTIONS" always;
+       add_header Access-Control-Allow-Headers "Content-Type, Authorization" always;
+       add_header Access-Control-Allow-Credentials "true" always;
+       add_header Access-Control-Max-Age 600 always;
+       add_header Content-Length 0;
+       add_header Content-Type text/plain;
+       return 204;
+   }
+   ```
+   Then `sudo nginx -t && sudo systemctl reload nginx`.
+
 **Option B – Proxy OPTIONS to Python**
 
 1. **Remove all OPTIONS handling from Nginx** for API proxy locations. The strip script does this: it removes both CORS headers and `if ($request_method = 'OPTIONS') { return 204; }` blocks. Re-run:
