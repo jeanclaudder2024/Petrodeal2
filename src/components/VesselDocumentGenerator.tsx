@@ -162,8 +162,8 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
           if (response.ok) {
             const data = await response.json();
             
-            if (data.templates && Array.isArray(data.templates)) {
-              // Process templates from backend
+            if (data.templates && Array.isArray(data.templates) && data.templates.length > 0) {
+              // Process templates from backend (only use when we have templates)
               const processedTemplates = data.templates.map((t: any) => {
                 // Backend returns: name (display_name), description, plan_name, metadata
                 const displayName = t.name || 
@@ -907,28 +907,61 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
       clearTimeout(timeoutId);
 
       if (response.ok) {
+        const contentType = (response.headers.get('Content-Type') || '').toLowerCase();
+        if (contentType.includes('application/json')) {
+          let errMsg = 'Server returned invalid response';
+          try {
+            const errData = await response.json();
+            errMsg = errData.detail || errData.message || errMsg;
+          } catch {
+            /* use default */
+          }
+          setProcessingStatus(prev => ({
+            ...prev,
+            [templateKey]: { status: 'failed', message: 'Invalid response' }
+          }));
+          toast.error(`Download failed: ${errMsg}`);
+          return;
+        }
+
         const contentDisposition = response.headers.get('Content-Disposition');
         const templateName = template.file_name || template.name || 'template';
         const apiTemplateName = templateName.replace('.docx', '');
         let filename = `${apiTemplateName}_${vesselImoTrimmed}.pdf`;
-        
         if (contentDisposition) {
           const filenameMatch = contentDisposition.match(/filename[^;=\n]*=((['"]).*?\2|[^;\n]*)/);
           if (filenameMatch) {
             filename = filenameMatch[1].replace(/['"]/g, '').trim();
           }
         }
-        
-        const blob = await response.blob();
-        const url = window.URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
-        a.download = filename;
-        document.body.appendChild(a);
-        a.click();
-        window.URL.revokeObjectURL(url);
-        document.body.removeChild(a);
-        
+
+        try {
+          const blob = await response.blob();
+          if (!blob || blob.size < 50) {
+            setProcessingStatus(prev => ({
+              ...prev,
+              [templateKey]: { status: 'failed', message: 'Empty or invalid file' }
+            }));
+            toast.error('Download failed: file is empty or invalid. Please try again.');
+            return;
+          }
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = filename;
+          document.body.appendChild(a);
+          a.click();
+          window.URL.revokeObjectURL(url);
+          document.body.removeChild(a);
+        } catch (blobErr) {
+          setProcessingStatus(prev => ({
+            ...prev,
+            [templateKey]: { status: 'failed', message: 'Failed to load' }
+          }));
+          toast.error('Download failed: could not load file. Please try again.');
+          return;
+        }
+
         setProcessingStatus(prev => ({
           ...prev,
           [templateKey]: {
@@ -937,7 +970,6 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
             progress: 100
           }
         }));
-        
         toast.success('Document downloaded successfully');
       } else {
         // Try to get error message from response
@@ -987,16 +1019,15 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
         }
       }
     } catch (error) {
-      // Error processing document
       setProcessingStatus(prev => ({
         ...prev,
         [templateKey]: {
           status: 'failed',
-          message: 'Processing error',
+          message: 'Download failed',
           progress: 0
         }
       }));
-      toast.error('Error processing file');
+      toast.error('Download failed. Please try again.');
     }
   };
 
