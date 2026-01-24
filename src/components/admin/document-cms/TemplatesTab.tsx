@@ -463,7 +463,7 @@ export default function TemplatesTab({ isAuthenticated, onRefresh }: TemplatesTa
 
       {/* Metadata Modal */}
       <Dialog open={metadataDialogOpen} onOpenChange={setMetadataDialogOpen}>
-        <DialogContent>
+        <DialogContent aria-describedby={undefined}>
           <DialogHeader>
             <DialogTitle>Edit Template Metadata</DialogTitle>
           </DialogHeader>
@@ -539,7 +539,7 @@ export default function TemplatesTab({ isAuthenticated, onRefresh }: TemplatesTa
 
       {/* Placeholders Modal */}
       <Dialog open={placeholdersDialogOpen} onOpenChange={setPlaceholdersDialogOpen}>
-        <DialogContent className="max-w-2xl">
+        <DialogContent className="max-w-2xl" aria-describedby={undefined}>
           <DialogHeader>
             <DialogTitle>
               Placeholders · {selectedTemplate ? (selectedTemplate.metadata?.display_name || selectedTemplate.display_name || selectedTemplate.title || selectedTemplate.name) : ''}

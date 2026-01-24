@@ -411,7 +411,7 @@ export default function PlansTab({ isAuthenticated }: PlansTabProps) {
 
       {/* Edit Plan Modal */}
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto" aria-describedby={undefined}>
           <DialogHeader>
             <DialogTitle>
               Edit Plan: {selectedPlanId && plans && plans[selectedPlanId] ? (plans[selectedPlanId] as any).name : selectedPlanId}

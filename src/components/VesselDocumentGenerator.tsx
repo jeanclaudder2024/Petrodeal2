@@ -44,10 +44,9 @@ interface VesselDocumentGeneratorProps {
   vesselName: string;
 }
 
-// For VPS deployment - use production API
-const API_BASE_URL = process.env.NODE_ENV === 'production' 
-  ? 'https://petrodealhub.com/api'  // Production API
-  : 'http://localhost:8000'; // Development
+// Document API only. Use VITE_DOCUMENT_API_URL or control.petrodealhub.com/api (never VITE_API_URL).
+const API_BASE_URL = import.meta.env.VITE_DOCUMENT_API_URL
+  || (import.meta.env.DEV ? 'http://localhost:8000' : 'https://control.petrodealhub.com/api');
 
 function normalizeTemplateName(name: string): string {
   if (!name) return '';

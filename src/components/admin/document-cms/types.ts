@@ -1,10 +1,8 @@
 // Document Processing CMS Types
 
-// API Base URL - uses environment variable or falls back to production URL.
-// Production uses /api so Nginx location /api/ proxies to document API (avoids 404 on /update-plan, etc.).
+// Document API only. Use VITE_DOCUMENT_API_URL or control.petrodealhub.com/api (never VITE_API_URL).
 export const API_BASE_URL = 
   import.meta.env.VITE_DOCUMENT_API_URL || 
-  import.meta.env.VITE_API_URL || 
   (import.meta.env.DEV ? 'http://localhost:8000' : 'https://control.petrodealhub.com/api');
 
 export interface Template {
