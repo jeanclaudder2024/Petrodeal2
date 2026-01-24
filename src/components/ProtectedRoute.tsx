@@ -59,25 +59,9 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     }
   }, [user, authLoading]);
 
-  // Debug logging
-  useEffect(() => {
-    console.log('ProtectedRoute state:', {
-      user: !!user,
-      userEmail: user?.email,
-      hasAccess,
-      accessType,
-      authLoading,
-      accessLoading,
-      isLocked,
-      checkingLock,
-      requireSubscription
-    });
-  }, [user, hasAccess, accessType, authLoading, accessLoading, isLocked, checkingLock, requireSubscription]);
-
   // Redirect to auth if not authenticated - only after loading is complete
   useEffect(() => {
     if (!authLoading && !accessLoading && !checkingLock && !user) {
-      console.log('Redirecting to auth - no user');
       navigate('/auth');
     }
   }, [user, authLoading, accessLoading, checkingLock, navigate]);

@@ -24,17 +24,18 @@ const FuturisticTrialCountdown: React.FC = () => {
     try {
       setLoading(true);
       
-      // Fetch DEFAULT_TRIAL_DAYS from system_settings
+      // Fetch default_trial_days from system_settings (use maybeSingle to avoid 406 when missing)
       const { data: settingsData } = await db
         .from('system_settings')
         .select('setting_value')
-        .eq('setting_key', 'DEFAULT_TRIAL_DAYS')
-        .single();
+        .eq('setting_key', 'default_trial_days')
+        .maybeSingle();
       
-      if (settingsData?.setting_value) {
-        const parsedDays = parseInt(settingsData.setting_value, 10);
-        if (!isNaN(parsedDays)) {
-          setDefaultTrialDays(parsedDays);
+      if (settingsData?.setting_value != null) {
+        const v = settingsData.setting_value;
+        const num = typeof v === 'number' ? v : parseInt(String(v), 10);
+        if (!isNaN(num) && num > 0) {
+          setDefaultTrialDays(num);
         }
       }
 
