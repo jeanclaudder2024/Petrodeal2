@@ -142,13 +142,9 @@ export default function TemplatesTab({ isAuthenticated, onRefresh }: TemplatesTa
     try {
       await deleteTemplate(normalizedName);
       toast.success('Deleted', { description: `Template "${normalizedName}" deleted` });
-      setTimeout(() => {
-        fetchTemplates();
-      }, 1000);
-    } catch (error) {
-      toast.error('Delete Failed', {
-        description: error instanceof Error ? error.message : 'Unknown error',
-      });
+      setTimeout(() => fetchTemplates(), 1000);
+    } catch {
+      /* deleteTemplate already toasts on error */
     } finally {
       setDeleting(null);
     }

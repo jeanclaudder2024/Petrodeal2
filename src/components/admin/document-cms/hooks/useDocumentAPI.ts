@@ -134,35 +134,36 @@ export function useTemplates() {
       });
 
       if (!response.ok) {
-        // Handle authentication errors
         if (response.status === 401) {
           const error = await response.json().catch(() => ({ detail: 'Not authenticated' }));
-          const errorMessage = error.detail || 'Authentication required. Please login to the Python API.';
-          toast.error(errorMessage);
-          throw new Error(errorMessage);
+          const msg = error.detail || 'Authentication required. Please log in to the document API (control).';
+          toast.error(msg);
+          throw new Error(msg);
         }
-        
+        if (response.status === 404) {
+          const err = await response.json().catch(() => ({}));
+          const msg = err.detail || 'Template not found or delete endpoint unavailable (404). Check control subdomain and login.';
+          toast.error(msg);
+          throw new Error(msg);
+        }
         const error = await response.json().catch(() => ({ detail: 'Delete failed' }));
-        const errorMessage = error.detail || `Failed to delete template: ${response.status}`;
-        toast.error(errorMessage);
-        throw new Error(errorMessage);
+        const msg = error.detail || `Delete failed: ${response.status}`;
+        toast.error(msg);
+        throw new Error(msg);
       }
 
       const result = await response.json();
-      
-      // Show warnings if any
       if (result.warnings && Array.isArray(result.warnings)) {
-        result.warnings.forEach((warning: string) => {
-          toast.warning(warning);
-        });
+        result.warnings.forEach((w: string) => toast.warning(w));
       }
-      
       await fetchTemplates();
       return result;
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to delete template';
-      toast.error(errorMessage);
-      throw error;
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : 'Failed to delete template';
+      if (!msg.toLowerCase().includes('not authenticated') && !msg.toLowerCase().includes('template not found') && !msg.toLowerCase().includes('delete failed')) {
+        toast.error(`Delete failed: ${msg}`);
+      }
+      throw e;
     }
   }, [fetchTemplates]);
 
