@@ -21,19 +21,20 @@ def main():
     content = re.sub(r'\n\s*add_header Access-Control-Allow-Headers[^;]+;\s*\n', '\n', content)
     content = re.sub(r'\n\s*add_header Access-Control-Allow-Credentials[^;]+;\s*\n', '\n', content)
 
-    # Remove "Handle OPTIONS preflight" comment + if block (multi-line)
-    content = re.sub(
+    # Remove OPTIONS preflight blocks so preflight is proxied to Python (which adds CORS).
+    # Use multiple patterns; run repeatedly to catch all variants.
+    patterns = [
         r'\n\s*# Handle OPTIONS preflight\s*\n\s*if \(\$request_method = [\'"]OPTIONS[\'"]\) \{\s*\n(?:[^}]*\n)*?\s*return 204;\s*\n\s*\}\s*\n',
-        '\n',
-        content
-    )
-
-    # Remove standalone if ($request_method = 'OPTIONS') { return 204; } blocks
-    content = re.sub(
         r'\n\s*if \(\$request_method = [\'"]OPTIONS[\'"]\) \{\s*\n\s*return 204;\s*\n\s*\}\s*\n',
-        '\n',
-        content
-    )
+        r'\n\s*if \(\$request_method = "OPTIONS"\) \{\s*\n\s*return 204;\s*\n\s*\}\s*\n',
+        r'\n\s*if \(\$request_method = \'OPTIONS\'\) \{\s*\n\s*return 204;\s*\n\s*\}\s*\n',
+    ]
+    for _ in range(10):
+        prev = content
+        for p in patterns:
+            content = re.sub(p, '\n', content)
+        if content == prev:
+            break
 
     with open(path, 'w') as f:
         f.write(content)

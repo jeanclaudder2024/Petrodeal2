@@ -73,3 +73,56 @@ The script backs up the config, runs `scripts/strip_cors_from_nginx_control.py` 
 | Python   | **All** CORS (including preflight)    |
 
 Once Nginx no longer adds `Access-Control-*` for the document API, the duplicate value error goes away.
+
+---
+
+## "No 'Access-Control-Allow-Origin' on preflight" (OPTIONS)
+
+If you see:
+
+```
+Response to preflight request doesn't pass access control check:
+No 'Access-Control-Allow-Origin' header is present on the requested resource.
+```
+
+**Cause:** Nginx is handling `OPTIONS` (e.g. `if ($request_method = 'OPTIONS') { return 204; }`) and returning 204 **without** CORS headers. The preflight never reaches the Python API.
+
+**Fix:**
+
+**Option A – Add OPTIONS+CORS in Nginx (recommended)**  
+If the strip script already ran and preflight still returns 204 with **no** CORS, add an OPTIONS block that **includes** CORS (only for OPTIONS; GET/POST still get CORS from Python):
+
+```bash
+cd /opt/petrodealhub
+sudo bash VPS_ADD_OPTIONS_CORS_NGINX.sh
+```
+
+Then verify preflight (step 4 below).
+
+**Option B – Proxy OPTIONS to Python**
+
+1. **Remove all OPTIONS handling from Nginx** for API proxy locations. The strip script does this: it removes both CORS headers and `if ($request_method = 'OPTIONS') { return 204; }` blocks. Re-run:
+
+   ```bash
+   cd /opt/petrodealhub
+   sudo bash VPS_FIX_NGINX_REMOVE_CORS_FOR_CONTROL.sh
+   ```
+
+2. **Check the config** – Search for `OPTIONS` or `return 204` in the control config. If any `if ($request_method = 'OPTIONS')` block remains, delete it so `OPTIONS` is proxied to the backend.
+
+3. **Restart the Python API** – The document API has explicit `OPTIONS` handlers for `/auth/login`, `/auth/logout`, `/auth/me` that return CORS. Restart so they’re active:
+
+   ```bash
+   pm2 restart python-api
+   ```
+
+4. **Verify preflight**:
+
+   ```bash
+   curl -i -X OPTIONS "https://control.petrodealhub.com/auth/login" \
+     -H "Origin: https://petrodealhub.com" \
+     -H "Access-Control-Request-Method: POST" \
+     -H "Access-Control-Request-Headers: Content-Type"
+   ```
+
+   The response must include `Access-Control-Allow-Origin: https://petrodealhub.com` and `204` or `200`.
