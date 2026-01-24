@@ -887,13 +887,17 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
         return;
       }
 
-      // Build request data - CMS style (simple and works!)
+      // Build request data. Prefer template_id (UUID) when available to avoid 404 from name mismatch.
       const requestData: any = {
+        vessel_imo: vesselImoTrimmed,
         template_name: templateName,
-        vessel_imo: vesselImoTrimmed
       };
-      
-      // DO NOT send template_id or user_id - CMS doesn't send them and it works!
+      if (template.id && String(template.id).trim() && /^[0-9a-fA-F-]{36}$/.test(String(template.id).trim())) {
+        requestData.template_id = String(template.id).trim();
+      }
+      if (user?.id) {
+        requestData.user_id = String(user.id).trim();
+      }
 
       let response;
       try {
