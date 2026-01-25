@@ -53,23 +53,24 @@ export default function PlaceholderMappingTab() {
         // Ensure all values are properly formatted (strings, not objects)
         const normalizedSettings: Record<string, PlaceholderSetting> = {};
         Object.entries(templateSettings.settings || {}).forEach(([key, setting]) => {
+          const s = setting as Record<string, unknown>;
           normalizedSettings[key] = {
-            source: setting.source || 'custom',
-            value: typeof setting.value === 'string' ? setting.value : String(setting.value || ''),
-            table: typeof setting.table === 'string' ? setting.table : String(setting.table || ''),
-            field: typeof setting.field === 'string' ? setting.field : String(setting.field || ''),
-            csv_id: typeof setting.csv_id === 'string' ? setting.csv_id : String(setting.csv_id || ''),
-            csv_field: typeof setting.csv_field === 'string' ? setting.csv_field : String(setting.csv_field || ''),
-            csv_row: typeof setting.csv_row === 'number' ? setting.csv_row : (setting.csv_row ? Number(setting.csv_row) : undefined),
-            random_option: setting.random_option || 'auto',
+            source: (s.source as PlaceholderSetting['source']) || 'database',
+            value: typeof s.customValue === 'string' ? s.customValue : String(s.value ?? s.customValue ?? ''),
+            table: typeof s.databaseTable === 'string' ? s.databaseTable : String(s.table ?? s.databaseTable ?? ''),
+            field: typeof s.databaseField === 'string' ? s.databaseField : String(s.field ?? s.databaseField ?? ''),
+            csv_id: typeof s.csvId === 'string' ? s.csvId : String(s.csv_id ?? s.csvId ?? ''),
+            csv_field: typeof s.csvField === 'string' ? s.csvField : String(s.csv_field ?? s.csvField ?? ''),
+            csv_row: typeof s.csvRow === 'number' ? s.csvRow : (s.csv_row ?? s.csvRow ? Number(s.csv_row ?? s.csvRow) : undefined),
+            random_option: (s.randomOption as PlaceholderSetting['random_option']) || (s.random_option as PlaceholderSetting['random_option']) || 'auto',
           };
         });
         setPlaceholderSettings(normalizedSettings);
       } else {
-        // Initialize empty settings for each placeholder
+        // Initialize empty settings for each placeholder — default source: database
         const initialSettings: Record<string, PlaceholderSetting> = {};
         selectedTemplate.placeholders?.forEach(ph => {
-          initialSettings[ph] = { source: 'custom', value: '' };
+          initialSettings[ph] = { source: 'database', value: '' };
         });
         setPlaceholderSettings(initialSettings);
       }
@@ -113,7 +114,7 @@ export default function PlaceholderMappingTab() {
     try {
       await saveSettings({
         template_name: selectedTemplate.name,
-        template_id: selectedTemplate.id,
+        template_id: String(selectedTemplate.id ?? selectedTemplate.template_id ?? ''),
         settings: placeholderSettings,
       });
       toast.success('Placeholder settings saved');
@@ -224,7 +225,7 @@ export default function PlaceholderMappingTab() {
             <ScrollArea className="h-[450px] pr-4">
               <div className="space-y-4">
                 {selectedTemplate.placeholders.map(placeholder => {
-                  const setting = placeholderSettings[placeholder] || { source: 'custom' };
+                  const setting = placeholderSettings[placeholder] || { source: 'database' };
                   
                   return (
                     <Card key={placeholder} className="border-dashed">

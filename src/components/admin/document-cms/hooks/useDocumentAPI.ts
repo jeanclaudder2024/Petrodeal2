@@ -153,8 +153,18 @@ export function useTemplates() {
       }
 
       const result = await response.json();
-      if (result.warnings && Array.isArray(result.warnings)) {
-        result.warnings.forEach((w: string) => toast.warning(w));
+      if (result.warnings && Array.isArray(result.warnings) && result.warnings.length > 0) {
+        const allSupabase = result.warnings.every((w: string) =>
+          /supabase|database|sync/i.test(String(w))
+        );
+        if (allSupabase) {
+          toast.info(
+            'Deleted from documents. Could not remove from Supabase; it may still appear there.',
+            { duration: 5000 }
+          );
+        } else {
+          result.warnings.forEach((w: string) => toast.warning(w));
+        }
       }
       await fetchTemplates();
       return result;
@@ -245,13 +255,32 @@ export function usePlaceholderSettings() {
     }
   }, []);
 
-  const saveSettings = useCallback(async (placeholderSettings: PlaceholderSettings) => {
+  const saveSettings = useCallback(async (payload: PlaceholderSettings) => {
+    const settingsForApi: Record<string, Record<string, unknown>> = {};
+    Object.entries(payload.settings || {}).forEach(([ph, s]) => {
+      if (!ph) return;
+      settingsForApi[ph] = {
+        source: s.source || 'database',
+        customValue: typeof s.value === 'string' ? s.value : String(s.value ?? ''),
+        databaseTable: typeof s.table === 'string' ? s.table : String(s.table ?? ''),
+        databaseField: typeof s.field === 'string' ? s.field : String(s.field ?? ''),
+        csvId: typeof s.csv_id === 'string' ? s.csv_id : String(s.csv_id ?? ''),
+        csvField: typeof s.csv_field === 'string' ? s.csv_field : String(s.csv_field ?? ''),
+        csvRow: typeof s.csv_row === 'number' ? s.csv_row : (s.csv_row != null ? Number(s.csv_row) : 0),
+        randomOption: s.random_option || 'auto',
+      };
+    });
+    const req = {
+      template_name: payload.template_name,
+      template_id: payload.template_id || undefined,
+      settings: settingsForApi,
+    };
     await apiFetch('/placeholder-settings', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(placeholderSettings),
+      body: JSON.stringify(req),
     });
-    setSettings(prev => ({ ...prev, [placeholderSettings.template_name]: placeholderSettings }));
+    setSettings(prev => ({ ...prev, [payload.template_name]: { ...payload, settings: payload.settings } }));
   }, []);
 
   return { settings, loading, fetchSettings, saveSettings };

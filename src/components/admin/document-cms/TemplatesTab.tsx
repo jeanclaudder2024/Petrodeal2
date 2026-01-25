@@ -173,9 +173,8 @@ export default function TemplatesTab({ isAuthenticated, onRefresh }: TemplatesTa
         font_size: metaFontSize ? parseInt(metaFontSize) : undefined,
       };
 
-      // Use template name (normalized) for the endpoint
-      const templateName = normalizeTemplateName(selectedTemplate.name || selectedTemplate.file_name || '');
-      await updateMetadata(templateName, payload);
+      const templateId = selectedTemplate.id ?? selectedTemplate.template_id ?? normalizeTemplateName(selectedTemplate.name || selectedTemplate.file_name || '');
+      await updateMetadata(String(templateId), payload);
       toast.success('Metadata Saved', { description: 'Template details updated successfully' });
       setMetadataDialogOpen(false);
       setTimeout(() => {
