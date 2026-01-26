@@ -443,7 +443,14 @@ export function useDataSources() {
   }, [fetchDataSources, fetchCsvFiles]);
 
   const getCsvFields = useCallback(async (csvId: string) => {
-    return apiFetch<{ fields: string[] }>(`/csv-fields/${csvId}`);
+    const data = await apiFetch<{ fields: Array<string | { name: string; label?: string }> }>(
+      `/csv-fields/${csvId}`
+    );
+    const raw = data.fields || [];
+    const fields = raw
+      .map((f) => (typeof f === 'string' ? f : (f && 'name' in f ? f.name : '')))
+      .filter(Boolean);
+    return { fields };
   }, []);
 
   return {
