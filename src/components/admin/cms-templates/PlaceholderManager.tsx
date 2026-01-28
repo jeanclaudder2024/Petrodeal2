@@ -60,7 +60,11 @@ export function PlaceholderManager({
     setSelectedPlaceholder(placeholder);
     const saved = getSavedConfig(placeholder);
     if (saved) {
-      setSource(saved.source);
+      // Normalize source: convert 'random', null, or empty to 'database'
+      const normalizedSource = (saved.source === 'random' || !saved.source || saved.source === '') 
+        ? 'database' 
+        : saved.source;
+      setSource(normalizedSource as PlaceholderSource);
       setCustomValue(saved.custom_value || '');
       setDatabaseTable(saved.database_table || '');
       setDatabaseField(saved.database_field || '');
@@ -104,6 +108,11 @@ export function PlaceholderManager({
     const saved = getSavedConfig(placeholder);
     if (!saved) return null;
     
+    // Normalize source: convert 'random', null, or empty to 'database'
+    const normalizedSource = (saved.source === 'random' || !saved.source || saved.source === '') 
+      ? 'database' 
+      : saved.source;
+    
     const styles: Record<PlaceholderSource, string> = {
       custom: 'bg-blue-500/10 text-blue-600 border-blue-500/20',
       database: 'bg-green-500/10 text-green-600 border-green-500/20',
@@ -112,8 +121,8 @@ export function PlaceholderManager({
     };
 
     return (
-      <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${styles[saved.source]}`}>
-        {saved.source}
+      <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${styles[normalizedSource as PlaceholderSource]}`}>
+        {normalizedSource}
       </Badge>
     );
   };

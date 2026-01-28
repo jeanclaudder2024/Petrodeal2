@@ -119,7 +119,14 @@ export function usePlaceholders(templateId: string | null) {
         .order('placeholder');
 
       if (error) throw error;
-      setPlaceholders(data as TemplatePlaceholder[] || []);
+      
+      // Normalize source field: convert 'random', null, or empty to 'database'
+      const normalizedPlaceholders = (data || []).map((p: TemplatePlaceholder) => ({
+        ...p,
+        source: (p.source === 'random' || !p.source || p.source === '') ? 'database' : p.source
+      }));
+      
+      setPlaceholders(normalizedPlaceholders);
     } catch (err) {
       console.error('Error fetching placeholders:', err);
     } finally {
