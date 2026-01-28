@@ -4,12 +4,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { 
   FileText, Database, Shield, Loader2, LogIn, LogOut, User,
-  RefreshCw, Circle
+  RefreshCw, Circle, Settings2
 } from 'lucide-react';
 import { toast } from 'sonner';
 import TemplatesTab from './TemplatesTab';
 import DataSourcesTab from './DataSourcesTab';
 import PlansTab from './PlansTab';
+import PlaceholderMappingTab from './PlaceholderMappingTab';
 import LoginOverlay from './LoginOverlay';
 import { useDocumentAPIAuth } from './hooks/useAuth';
 import { API_BASE_URL } from './types';
@@ -142,7 +143,7 @@ export default function DocumentProcessingCMS() {
       <Card>
         <CardContent className="p-6">
           <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-            <TabsList className="grid w-full grid-cols-3">
+            <TabsList className="grid w-full grid-cols-4">
               <TabsTrigger value="plans" className="gap-2">
                 <Shield className="h-4 w-4" />
                 Plans
@@ -150,6 +151,10 @@ export default function DocumentProcessingCMS() {
               <TabsTrigger value="templates" className="gap-2">
                 <FileText className="h-4 w-4" />
                 Templates
+              </TabsTrigger>
+              <TabsTrigger value="placeholders" className="gap-2">
+                <Settings2 className="h-4 w-4" />
+                Placeholders
               </TabsTrigger>
               <TabsTrigger value="data" className="gap-2">
                 <Database className="h-4 w-4" />
@@ -166,6 +171,10 @@ export default function DocumentProcessingCMS() {
                 isAuthenticated={isAuthenticated}
                 onRefresh={checkApiStatus}
               />
+            </TabsContent>
+
+            <TabsContent value="placeholders" className="mt-6">
+              <PlaceholderMappingTab />
             </TabsContent>
 
             <TabsContent value="data" className="mt-6">

@@ -15,10 +15,10 @@ import { useTemplates, usePlaceholderSettings, useDatabaseSchema, useDataSources
 import { Template, PlaceholderSetting, DatabaseColumn } from './types';
 
 const SOURCE_OPTIONS = [
-  { value: 'database', label: 'Database', icon: Database, description: 'Map to Supabase table field' },
+  { value: 'database', label: 'Database', icon: Database, description: 'From table field (default)' },
+  { value: 'custom', label: 'Custom Value', icon: Type, description: 'Enter static text' },
   { value: 'csv', label: 'CSV File', icon: FileSpreadsheet, description: 'Map to uploaded CSV data' },
   { value: 'random', label: 'Random/AI', icon: Shuffle, description: 'Auto-generate or AI-fill' },
-  { value: 'custom', label: 'Custom Value', icon: Type, description: 'Enter static text' },
 ];
 
 const RANDOM_OPTIONS = [
@@ -50,12 +50,15 @@ export default function PlaceholderMappingTab() {
     if (selectedTemplate) {
       const templateSettings = settings[selectedTemplate.name];
       if (templateSettings) {
-        // Ensure all values are properly formatted (strings, not objects)
+        // Ensure all values are properly formatted; default source to 'database'
+        // CRITICAL: normalize 'random', null, or empty → 'database'
         const normalizedSettings: Record<string, PlaceholderSetting> = {};
         Object.entries(templateSettings.settings || {}).forEach(([key, setting]) => {
           const s = setting as Record<string, unknown>;
+          const rawSource = (s.source as string) ?? '';
+          const source = (rawSource === 'random' || !rawSource) ? 'database' : (s.source as PlaceholderSetting['source']);
           normalizedSettings[key] = {
-            source: (s.source as PlaceholderSetting['source']) || 'database',
+            source,
             value: typeof s.customValue === 'string' ? s.customValue : String(s.value ?? s.customValue ?? ''),
             table: typeof s.databaseTable === 'string' ? s.databaseTable : String(s.table ?? s.databaseTable ?? ''),
             field: typeof s.databaseField === 'string' ? s.databaseField : String(s.field ?? s.databaseField ?? ''),
@@ -109,7 +112,7 @@ export default function PlaceholderMappingTab() {
 
   const handleSave = async () => {
     if (!selectedTemplate) return;
-    
+
     setSaving(true);
     try {
       await saveSettings({
@@ -225,8 +228,8 @@ export default function PlaceholderMappingTab() {
             <ScrollArea className="h-[450px] pr-4">
               <div className="space-y-4">
                 {selectedTemplate.placeholders.map(placeholder => {
-                  const setting = placeholderSettings[placeholder] || { source: 'database' };
-                  
+                  const setting = placeholderSettings[placeholder] || { source: 'database' as PlaceholderSetting['source'], value: '' };
+
                   return (
                     <Card key={placeholder} className="border-dashed">
                       <CardContent className="p-4">

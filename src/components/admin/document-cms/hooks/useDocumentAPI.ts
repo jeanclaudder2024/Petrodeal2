@@ -242,11 +242,19 @@ export function usePlaceholderSettings() {
   const fetchSettings = useCallback(async (templateName: string) => {
     setLoading(true);
     try {
-      const data = await apiFetch<PlaceholderSettings>(
+      const data = await apiFetch<PlaceholderSettings & { settings?: Record<string, Record<string, unknown>> }>(
         `/placeholder-settings?template_name=${encodeURIComponent(templateName)}`
       );
-      setSettings(prev => ({ ...prev, [templateName]: data }));
-      return data;
+      // Normalize source: 'random', null, empty → 'database' so Doc CMS shows database by default
+      const normalized: Record<string, Record<string, unknown>> = {};
+      Object.entries(data.settings || {}).forEach(([ph, s]) => {
+        const raw = (s.source as string) ?? '';
+        const source = (raw === 'random' || !raw) ? 'database' : s.source;
+        normalized[ph] = { ...s, source };
+      });
+      const out = { ...data, settings: normalized };
+      setSettings(prev => ({ ...prev, [templateName]: out }));
+      return out;
     } catch (error) {
       console.error('Failed to fetch placeholder settings:', error);
       return null;
