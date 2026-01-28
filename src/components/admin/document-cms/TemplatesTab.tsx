@@ -104,7 +104,9 @@ export default function TemplatesTab({ isAuthenticated, onRefresh }: TemplatesTa
       }
 
       toast.success('Upload Success', {
-        description: `Template "${data.filename}" uploaded with ${data.placeholder_count} placeholders`,
+        description: data.mapping_created
+          ? `Template "${data.filename}" uploaded with ${data.placeholder_count} placeholders; mapping created for ${data.mapped_count ?? 0}.`
+          : `Template "${data.filename}" uploaded with ${data.placeholder_count} placeholders`,
       });
 
       // Reset form
