@@ -44,7 +44,7 @@ export function PlaceholderManager({
   onDelete
 }: PlaceholderManagerProps) {
   const [selectedPlaceholder, setSelectedPlaceholder] = useState<string | null>(null);
-  const [source, setSource] = useState<PlaceholderSource>('random');
+  const [source, setSource] = useState<PlaceholderSource>('database');
   const [customValue, setCustomValue] = useState('');
   const [databaseTable, setDatabaseTable] = useState('');
   const [databaseField, setDatabaseField] = useState('');
@@ -65,7 +65,7 @@ export function PlaceholderManager({
       setDatabaseTable(saved.database_table || '');
       setDatabaseField(saved.database_field || '');
     } else {
-      setSource('random');
+      setSource('database');
       setCustomValue('');
       setDatabaseTable('');
       setDatabaseField('');
