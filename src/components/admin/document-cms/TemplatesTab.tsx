@@ -103,9 +103,15 @@ export default function TemplatesTab({ isAuthenticated, onRefresh }: TemplatesTa
         });
       }
 
+      const db = data.database_count ?? 0;
+      const csv = data.csv_count ?? 0;
+      const rnd = data.random_count ?? 0;
+      const aiDetail = data.ai_analysis && (db || csv || rnd)
+        ? ` AI: ${db} database, ${csv} CSV, ${rnd} random.`
+        : '';
       toast.success('Upload Success', {
         description: data.mapping_created
-          ? `Template "${data.filename}" uploaded with ${data.placeholder_count} placeholders; mapping created for ${data.mapped_count ?? 0}.`
+          ? `Template "${data.filename}" uploaded with ${data.placeholder_count} placeholders; mapping created for ${data.mapped_count ?? 0}.${aiDetail}`
           : `Template "${data.filename}" uploaded with ${data.placeholder_count} placeholders`,
       });
 
