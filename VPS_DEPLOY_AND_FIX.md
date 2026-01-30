@@ -14,44 +14,52 @@ ssh user@your-vps-ip
 
 ## 2. Pull latest code
 
-**If you use the main repo only** (e.g. `/opt/petrodealhub` or project root):
-
 ```bash
 cd /opt/petrodealhub
 git pull origin main
 ```
 
-**If `document-processor` is a submodule**, also update it:
+**If you see** `fatal: No url found for submodule path 'document-processor' in .gitmodules`  
+→ Pull added `.gitmodules`. Run again: `git pull origin main`, then:
 
 ```bash
-cd /opt/petrodealhub
-git pull origin main
 git submodule update --init --recursive
 ```
 
-**If `document-processor` is a separate clone**:
+**If submodule update still fails**, update `document-processor` directly (gets fix script + API changes):
 
 ```bash
 cd /opt/petrodealhub/document-processor
+git fetch origin
 git pull origin master
+cd ..
 ```
 
 ---
 
 ## 3. Run the fix script (free port 8000 + restart API)
 
-The script stops pm2 API apps, kills whatever uses port 8000, then starts the API again.
+The script is at **repo root**. It finds `document-processor` automatically. Run from repo root:
+
+```bash
+cd /opt/petrodealhub
+bash VPS_FIX_PORT_8000_AND_RESTART.sh
+```
+
+You can also run it from inside `document-processor` if that dir has the script:
 
 ```bash
 cd /opt/petrodealhub/document-processor
 bash VPS_FIX_PORT_8000_AND_RESTART.sh
 ```
 
-If the API runs as root (e.g. systemd):
+If the API runs as root:
 
 ```bash
 sudo bash VPS_FIX_PORT_8000_AND_RESTART.sh
 ```
+
+**Script not found?** The script lives at **repo root** (`/opt/petrodealhub/VPS_FIX_PORT_8000_AND_RESTART.sh`). Run it from the repo root, not from `document-processor`, if you just pulled main.
 
 ---
 
