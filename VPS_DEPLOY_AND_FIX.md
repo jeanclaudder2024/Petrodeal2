@@ -136,6 +136,22 @@ venv/bin/pip install -r requirements.txt
 # Then run the fix script or manual start above.
 ```
 
+### Template not in DB / can't delete (e.g. "SGS ANALYSIS REPORT")
+
+If a template is **not in the database**, causes problems, and you **cannot delete** it via the UI:
+
+Use **`POST /templates/forget`** (or `POST /api/templates/forget`) with `{"name": "SGS ANALYSIS REPORT"}`. This marks it as deleted and cleans placeholder_settings, metadata, and plans. It does not touch Supabase or local files.
+
+```bash
+# After logging in and getting a session cookie:
+curl -s -X POST "http://127.0.0.1:8000/templates/forget" \
+  -H "Content-Type: application/json" \
+  -d '{"name": "SGS ANALYSIS REPORT"}' \
+  -b "session=YOUR_SESSION_COOKIE"
+```
+
+See `document-processor/VPS_FORGET_TEMPLATE.md` for full details.
+
 ---
 
 ## 7. Project paths
