@@ -66,12 +66,16 @@ if command -v lsof &>/dev/null && lsof -ti:8000 &>/dev/null; then
 fi
 echo "   Port 8000 is free."
 
-# 4. Start API with pm2
+# 4. Start API with pm2 (must use document-processor venv, not repo root or system python)
 echo ""
 echo "4. Starting API (pm2)..."
+PYTHON="$DOC_DIR/venv/bin/python"
+if [ ! -x "$PYTHON" ]; then
+  echo "   ERROR: venv not found at $DOC_DIR/venv"
+  echo "   Create it: cd $DOC_DIR && python3 -m venv venv && venv/bin/pip install -r requirements.txt"
+  exit 1
+fi
 cd "$DOC_DIR"
-PYTHON="venv/bin/python"
-[ -x "$PYTHON" ] || PYTHON="$(command -v python3 || command -v python)"
 pm2 start "$PYTHON" --name "python-api" -- main.py
 pm2 save
 sleep 3

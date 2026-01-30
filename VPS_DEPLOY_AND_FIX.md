@@ -81,6 +81,8 @@ sudo bash VPS_FIX_PORT_8000_AND_RESTART.sh
 
 ## 5. If the script is not used (manual steps)
 
+**Always use `document-processor`** (not repo root). The API and its venv (FastAPI, etc.) live there.
+
 ```bash
 # Stop and remove pm2 API apps
 pm2 stop python-api python-a 2>/dev/null
@@ -91,7 +93,7 @@ pm2 save
 lsof -ti:8000 | xargs -r kill -9
 sleep 2
 
-# Start API
+# Start API from document-processor with its venv
 cd /opt/petrodealhub/document-processor
 pm2 start venv/bin/python --name python-api -- main.py
 pm2 save
@@ -103,7 +105,40 @@ curl -s http://127.0.0.1:8000/health
 
 ---
 
-## 6. Project paths
+## 6. Troubleshooting
+
+### `ModuleNotFoundError: No module named 'fastapi'`
+
+The API is being run from the **wrong directory** (repo root) or without the **document-processor venv**.
+
+- **Cause:** pm2 is running `main.py` from `/opt/petrodealhub/` (repo root). FastAPI and other deps are in `document-processor/venv`.
+- **Fix:**
+  1. Stop wrong apps: `pm2 stop python-a python-api 2>/dev/null; pm2 delete python-a python-api 2>/dev/null; pm2 save`
+  2. Run the fix script from repo root: `cd /opt/petrodealhub && bash VPS_FIX_PORT_8000_AND_RESTART.sh`  
+     It starts the API from `document-processor` using `document-processor/venv/bin/python`.
+
+Or manually:
+
+```bash
+cd /opt/petrodealhub/document-processor
+pm2 delete python-a python-api 2>/dev/null || true
+pm2 start venv/bin/python --name python-api -- main.py
+pm2 save
+pm2 logs python-api --lines 20
+```
+
+### venv missing or broken
+
+```bash
+cd /opt/petrodealhub/document-processor
+python3 -m venv venv
+venv/bin/pip install -r requirements.txt
+# Then run the fix script or manual start above.
+```
+
+---
+
+## 7. Project paths
 
 Replace `/opt/petrodealhub` with your actual project root if different, e.g.:
 
@@ -112,7 +147,7 @@ Replace `/opt/petrodealhub` with your actual project root if different, e.g.:
 
 ---
 
-## 7. What was fixed in this update
+## 8. What was fixed in this update
 
 | Issue | Fix |
 |-------|-----|
