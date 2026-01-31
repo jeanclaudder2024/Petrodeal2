@@ -345,7 +345,7 @@ export default function TemplatesTab({ isAuthenticated, onRefresh }: TemplatesTa
               </div>
             ) : (
               <div className="space-y-3">
-                {templates.map((template) => {
+                {templates.map((template, index) => {
                   const meta = template.metadata || {};
                   const placeholderList = template.placeholders || [];
                   const preview = placeholderList.slice(0, 12);
@@ -358,13 +358,15 @@ export default function TemplatesTab({ isAuthenticated, onRefresh }: TemplatesTa
                   const templateDisplayName = meta.display_name || template.display_name || template.title || template.name;
                   const templateId = template.id || template.template_id || template.name;
                   const templateName = normalizeTemplateName(template.name || template.file_name || '');
+                  // Ensure unique key by combining ID with index as fallback
+                  const uniqueKey = templateId ? `${templateId}-${index}` : `template-${template.name || template.file_name || 'unknown'}-${index}`;
 
                   // Construct editor URL - remove /api if present, ensure proper base URL
                   const editorBaseUrl = API_BASE_URL.replace('/api', '').replace(/\/$/, '');
                   const editorUrl = `${editorBaseUrl}/cms/editor.html?template_id=${templateId}`;
 
                   return (
-                    <Card key={template.name || template.id} className="border-l-4 border-l-primary">
+                    <Card key={uniqueKey} className="border-l-4 border-l-primary">
                       <CardContent className="pt-4">
                         <div className="flex justify-between items-start gap-4">
                           <div className="flex-1">

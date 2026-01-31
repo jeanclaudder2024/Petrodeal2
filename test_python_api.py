@@ -10,7 +10,7 @@ from pathlib import Path
 # Configuration
 API_BASE_URL = os.getenv('API_BASE_URL', 'http://localhost:8000')
 TEST_USERNAME = os.getenv('TEST_USERNAME', 'admin')
-TEST_PASSWORD = os.getenv('TEST_PASSWORD', 'admin')
+TEST_PASSWORD = os.getenv('TEST_PASSWORD', 'admin123')
 
 def test_health_check():
     """Test API health endpoint"""

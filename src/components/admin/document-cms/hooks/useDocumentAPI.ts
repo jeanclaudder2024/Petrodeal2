@@ -154,16 +154,29 @@ export function useTemplates() {
 
       const result = await response.json();
       if (result.warnings && Array.isArray(result.warnings) && result.warnings.length > 0) {
-        const allSupabase = result.warnings.every((w: string) =>
-          /supabase|database|sync/i.test(String(w))
-        );
-        if (allSupabase) {
-          toast.info(
-            'Deleted from documents. Could not remove from Supabase; it may still appear there.',
-            { duration: 5000 }
+        // Show specific error messages instead of generic message
+        result.warnings.forEach((w: string) => {
+          const warningMsg = String(w);
+          if (/supabase|database/i.test(warningMsg)) {
+            toast.warning(warningMsg, { duration: 6000 });
+          } else {
+            toast.warning(warningMsg);
+          }
+        });
+      }
+      
+      // Show success message if deletion succeeded (even with warnings)
+      if (result.success) {
+        if (result.deleted_from_supabase === false && result.warnings?.length > 0) {
+          // Partial success - deleted locally but not from Supabase
+          toast.warning(
+            'Template deleted locally. Some Supabase records may still exist. Check warnings above.',
+            { duration: 6000 }
           );
+        } else if (result.deleted_from_supabase === true) {
+          toast.success('Template deleted successfully from database and local storage');
         } else {
-          result.warnings.forEach((w: string) => toast.warning(w));
+          toast.success('Template deleted successfully');
         }
       }
       await fetchTemplates();
