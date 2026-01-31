@@ -481,8 +481,12 @@ export function useDatabaseSchema() {
   const fetchTables = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await apiFetch<{ tables: string[] }>('/database-tables');
-      const tablesList = (data.tables || []).map(name => ({ name, columns: [] }));
+      const data = await apiFetch<{ tables: Array<string | { name: string; label?: string }> }>('/database-tables');
+      const raw = data.tables || [];
+      const tablesList = raw
+        .map((t): { name: string } => typeof t === 'string' ? { name: t } : { name: (t as { name?: string }).name || '' })
+        .filter(t => t.name && t.name.toLowerCase() !== 'brokers')
+        .map(t => ({ name: t.name, columns: [] as DatabaseColumn[] }));
       setTables(tablesList);
     } catch (error) {
       console.error('Failed to fetch database tables:', error);
