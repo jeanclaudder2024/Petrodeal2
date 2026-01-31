@@ -803,36 +803,6 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
         }
       }));
 
-      // Simulate progress
-      const progressInterval = setInterval(() => {
-        setProcessingStatus(prev => {
-          const current = prev[templateKey];
-          if (current && current.status === 'processing' && current.progress && current.progress < 95) {
-            return {
-              ...prev,
-              [templateKey]: {
-                ...current,
-                progress: Math.min(current.progress + 8, 95),
-                message: 'Downloading'
-              }
-            };
-          }
-          return prev;
-        });
-      }, 400);
-
-      const timeoutId = setTimeout(() => {
-        clearInterval(progressInterval);
-        setProcessingStatus(prev => ({
-          ...prev,
-          [templateKey]: {
-            status: 'failed',
-            message: 'Request timeout'
-          }
-        }));
-        toast.error('Request timeout - please try again');
-      }, 30000);
-
       // Send request to backend - EXACTLY like CMS does (which works perfectly!)
       // CMS sends ONLY: template_name and vessel_imo (no template_id, no user_id)
       
@@ -891,6 +861,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
       const requestData: any = {
         vessel_imo: vesselImoTrimmed,
         template_name: templateName,
+        fast_pdf: true,  // Skip slow image conversion for quicker downloads
       };
       if (template.id && String(template.id).trim() && /^[0-9a-fA-F-]{36}$/.test(String(template.id).trim())) {
         requestData.template_id = String(template.id).trim();
@@ -898,6 +869,28 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
       if (user?.id) {
         requestData.user_id = String(user.id).trim();
       }
+
+      // Progress animation and timeout - start right before fetch
+      const progressInterval = setInterval(() => {
+        setProcessingStatus(prev => {
+          const current = prev[templateKey];
+          if (current?.status === 'processing' && (current.progress ?? 0) < 95) {
+            return {
+              ...prev,
+              [templateKey]: { ...current, progress: Math.min((current.progress ?? 10) + 8, 95), message: 'Downloading' }
+            };
+          }
+          return prev;
+        });
+      }, 400);
+      const timeoutId = setTimeout(() => {
+        clearInterval(progressInterval);
+        setProcessingStatus(prev => ({
+          ...prev,
+          [templateKey]: { status: 'failed', message: 'Request timeout' }
+        }));
+        toast.error('Request timeout - please try again');
+      }, 90000);
 
       let response;
       try {
@@ -910,7 +903,8 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
           body: JSON.stringify(requestData),
         });
       } catch (fetchError) {
-        // Network error
+        clearInterval(progressInterval);
+        clearTimeout(timeoutId);
         setProcessingStatus(prev => ({
           ...prev,
           [templateKey]: {
