@@ -234,7 +234,18 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
                 } as DocumentTemplate;
               });
               
-              setTemplates(processedTemplates);
+              // Deduplicate templates by ID before setting state
+              const seenIds = new Set<string>();
+              const deduplicatedTemplates = processedTemplates.filter((t: DocumentTemplate) => {
+                const id = t.id || t.file_name || t.name;
+                if (seenIds.has(id)) {
+                  console.warn(`Duplicate template filtered out: ${id}`);
+                  return false;
+                }
+                seenIds.add(id);
+                return true;
+              });
+              setTemplates(deduplicatedTemplates);
               setLoading(false);
               return;
             }
@@ -655,7 +666,18 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
           // This is expected if database is not available or user doesn't have access
         }
         
-        setTemplates(activeTemplates);
+        // Deduplicate templates by ID before setting state
+        const seenIds = new Set<string>();
+        const deduplicatedTemplates = activeTemplates.filter((t: DocumentTemplate) => {
+          const id = t.id || t.file_name || t.name;
+          if (seenIds.has(id)) {
+            console.warn(`Duplicate template filtered out: ${id}`);
+            return false;
+          }
+          seenIds.add(id);
+          return true;
+        });
+        setTemplates(deduplicatedTemplates);
       } else {
         const errorText = await response.text();
         // Failed to fetch templates
@@ -1157,7 +1179,18 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
             </CardHeader>
             <CardContent>
               <div className="space-y-4">
-                {templates.map((template) => {
+                {/* Deduplicate templates by ID to prevent React key warnings */}
+                {(() => {
+                  const seenIds = new Set<string>();
+                  return templates.filter((template) => {
+                    const id = template.id || template.file_name || template.name;
+                    if (seenIds.has(id)) {
+                      return false; // Skip duplicate
+                    }
+                    seenIds.add(id);
+                    return true;
+                  });
+                })().map((template) => {
               const templateKey = template.id || template.file_name || template.name;
               const status = processingStatus[templateKey];
               const isProcessing = status?.status === 'processing';
