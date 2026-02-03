@@ -879,9 +879,11 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
         return;
       }
 
-      // Resolve buyer_id/seller_id (UUID) from vessel -> companies -> buyer_company_uuid/seller_company_uuid for document fill
+      // Resolve buyer/seller for document fill: UUID (buyer_companies/seller_companies) or ID (companies)
       let buyerIdUuid: string | null = null;
       let sellerIdUuid: string | null = null;
+      let buyerCompanyId: number | null = null;
+      let sellerCompanyId: number | null = null;
       try {
         const { data: vesselRow } = await supabase
           .from('vessels')
@@ -890,6 +892,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
           .limit(1)
           .single();
         if (vesselRow?.buyer_company_id != null) {
+          buyerCompanyId = vesselRow.buyer_company_id;
           const { data: buyerCompanyRow } = await supabase
             .from('companies')
             .select('buyer_company_uuid')
@@ -901,6 +904,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
           }
         }
         if (vesselRow?.seller_company_id != null) {
+          sellerCompanyId = vesselRow.seller_company_id;
           const { data: sellerCompanyRow } = await supabase
             .from('companies')
             .select('seller_company_uuid')
@@ -912,7 +916,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
           }
         }
       } catch {
-        // Non-fatal: proceed without buyer_id/seller_id; backend will use random fallback
+        // Non-fatal: proceed without buyer/seller IDs; backend will use vessel IDs or random fallback
       }
 
       // Build request data. Prefer template_id (UUID) when available to avoid 404 from name mismatch.
@@ -929,9 +933,13 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
       }
       if (buyerIdUuid) {
         requestData.buyer_id = buyerIdUuid;
+      } else if (buyerCompanyId != null) {
+        requestData.buyer_company_id = buyerCompanyId;
       }
       if (sellerIdUuid) {
         requestData.seller_id = sellerIdUuid;
+      } else if (sellerCompanyId != null) {
+        requestData.seller_company_id = sellerCompanyId;
       }
 
       // Progress animation and timeout - start right before fetch
