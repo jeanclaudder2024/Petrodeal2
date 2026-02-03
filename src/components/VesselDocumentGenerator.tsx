@@ -879,6 +879,42 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
         return;
       }
 
+      // Resolve buyer_id/seller_id (UUID) from vessel -> companies -> buyer_company_uuid/seller_company_uuid for document fill
+      let buyerIdUuid: string | null = null;
+      let sellerIdUuid: string | null = null;
+      try {
+        const { data: vesselRow } = await supabase
+          .from('vessels')
+          .select('buyer_company_id, seller_company_id')
+          .eq('imo', vesselImoTrimmed)
+          .limit(1)
+          .single();
+        if (vesselRow?.buyer_company_id != null) {
+          const { data: buyerCompanyRow } = await supabase
+            .from('companies')
+            .select('buyer_company_uuid')
+            .eq('id', vesselRow.buyer_company_id)
+            .limit(1)
+            .single();
+          if (buyerCompanyRow?.buyer_company_uuid) {
+            buyerIdUuid = String(buyerCompanyRow.buyer_company_uuid);
+          }
+        }
+        if (vesselRow?.seller_company_id != null) {
+          const { data: sellerCompanyRow } = await supabase
+            .from('companies')
+            .select('seller_company_uuid')
+            .eq('id', vesselRow.seller_company_id)
+            .limit(1)
+            .single();
+          if (sellerCompanyRow?.seller_company_uuid) {
+            sellerIdUuid = String(sellerCompanyRow.seller_company_uuid);
+          }
+        }
+      } catch {
+        // Non-fatal: proceed without buyer_id/seller_id; backend will use random fallback
+      }
+
       // Build request data. Prefer template_id (UUID) when available to avoid 404 from name mismatch.
       const requestData: any = {
         vessel_imo: vesselImoTrimmed,
@@ -890,6 +926,12 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
       }
       if (user?.id) {
         requestData.user_id = String(user.id).trim();
+      }
+      if (buyerIdUuid) {
+        requestData.buyer_id = buyerIdUuid;
+      }
+      if (sellerIdUuid) {
+        requestData.seller_id = sellerIdUuid;
       }
 
       // Progress animation and timeout - start right before fetch

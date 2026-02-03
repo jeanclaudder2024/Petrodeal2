@@ -65,6 +65,9 @@ interface Company {
   compliance_notes?: string;
   created_at?: string;
   updated_at?: string;
+  // Link to buyer_companies/seller_companies (UUID) for document fill
+  buyer_company_uuid?: string | null;
+  seller_company_uuid?: string | null;
 }
 
 interface BankAccount {
@@ -102,11 +105,33 @@ const CompanyManagement = () => {
   const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
   const [isAutoFilling, setIsAutoFilling] = useState(false);
   const [activeTab, setActiveTab] = useState('basic');
+  const [buyerCompaniesList, setBuyerCompaniesList] = useState<{ id: string; name: string }[]>([]);
+  const [sellerCompaniesList, setSellerCompaniesList] = useState<{ id: string; name: string }[]>([]);
   const { toast } = useToast();
 
   useEffect(() => {
     fetchCompanies();
   }, []);
+
+  useEffect(() => {
+    if (isDialogOpen) {
+      fetchBuyerAndSellerCompanies();
+    }
+  }, [isDialogOpen]);
+
+  const fetchBuyerAndSellerCompanies = async () => {
+    try {
+      const [buyerRes, sellerRes] = await Promise.all([
+        supabase.from('buyer_companies').select('id, name').order('name'),
+        supabase.from('seller_companies').select('id, name').order('name')
+      ]);
+      setBuyerCompaniesList((buyerRes.data || []).map((r: { id: string; name: string }) => ({ id: r.id, name: r.name })));
+      setSellerCompaniesList((sellerRes.data || []).map((r: { id: string; name: string }) => ({ id: r.id, name: r.name })));
+    } catch {
+      setBuyerCompaniesList([]);
+      setSellerCompaniesList([]);
+    }
+  };
 
   const fetchCompanies = async () => {
     setLoading(true);
@@ -200,6 +225,8 @@ const CompanyManagement = () => {
         sanctions_status: formData.sanctions_status || 'pending',
         country_risk: formData.country_risk || 'low',
         compliance_notes: formData.compliance_notes || null,
+        buyer_company_uuid: formData.buyer_company_uuid || null,
+        seller_company_uuid: formData.seller_company_uuid || null,
       };
 
       let companyId = editingCompany?.id;
@@ -509,6 +536,47 @@ const CompanyManagement = () => {
                             </Select>
                           </div>
                         </div>
+
+                        {(formData.company_type === 'buyer' || formData.company_type === 'buyer_test') && (
+                          <div>
+                            <Label htmlFor="buyer_company_uuid">Link to Buyer Company (for document fill)</Label>
+                            <Select
+                              value={formData.buyer_company_uuid || 'none'}
+                              onValueChange={(value) => setFormData({ ...formData, buyer_company_uuid: value === 'none' ? null : value })}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select buyer company (optional)" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="none">None</SelectItem>
+                                {buyerCompaniesList.map((bc) => (
+                                  <SelectItem key={bc.id} value={bc.id}>{bc.name}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <p className="text-xs text-muted-foreground mt-1">Links this company to a buyer_companies record so document generation uses its data.</p>
+                          </div>
+                        )}
+                        {(formData.company_type === 'seller' || formData.company_type === 'seller_test') && (
+                          <div>
+                            <Label htmlFor="seller_company_uuid">Link to Seller Company (for document fill)</Label>
+                            <Select
+                              value={formData.seller_company_uuid || 'none'}
+                              onValueChange={(value) => setFormData({ ...formData, seller_company_uuid: value === 'none' ? null : value })}
+                            >
+                              <SelectTrigger>
+                                <SelectValue placeholder="Select seller company (optional)" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="none">None</SelectItem>
+                                {sellerCompaniesList.map((sc) => (
+                                  <SelectItem key={sc.id} value={sc.id}>{sc.name}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <p className="text-xs text-muted-foreground mt-1">Links this company to a seller_companies record so document generation uses its data.</p>
+                          </div>
+                        )}
 
                         <div>
                           <Label htmlFor="country">Country *</Label>
