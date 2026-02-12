@@ -55,6 +55,7 @@ interface DatabasePlan {
   features: string[];
   is_popular: boolean;
   sort_order: number;
+  is_contact_sales?: boolean;
 }
 
 const PricingPlans: React.FC<PricingPlansProps> = ({ 
@@ -288,7 +289,8 @@ const PricingPlans: React.FC<PricingPlansProps> = ({
           icon: FinalIcon,
           popular: dbPlan.is_popular || false,
           features: (dbPlan.features || []).map(feature => ({ icon: Check, text: feature })),
-          highlight: `Perfect for ${dbPlan.plan_tier} level users.`
+          highlight: `Perfect for ${dbPlan.plan_tier} level users.`,
+          isContactSales: dbPlan.is_contact_sales || false
         };
       });
     }
@@ -414,63 +416,82 @@ const PricingPlans: React.FC<PricingPlansProps> = ({
                     </p>
                   </div>
                   
-                  <div className="space-y-1">
-                    {discount ? (
-                      <>
-                        <div className="text-lg line-through text-muted-foreground">
-                          ${price.toFixed(2)}
-                        </div>
-                        <div className="text-3xl font-bold text-foreground">
-                          ${discountedPrice.toFixed(2)}
-                          <span className="text-base text-muted-foreground font-normal">
-                            /{period}
-                          </span>
-                        </div>
-                        {discount.discount_name && (
-                          <div className="text-xs text-red-600 font-medium">
-                            {discount.discount_name}
+                  {!(plan as any).isContactSales ? (
+                    <>
+                      <div className="space-y-1">
+                        {discount ? (
+                          <>
+                            <div className="text-lg line-through text-muted-foreground">
+                              ${price.toFixed(2)}
+                            </div>
+                            <div className="text-3xl font-bold text-foreground">
+                              ${discountedPrice.toFixed(2)}
+                              <span className="text-base text-muted-foreground font-normal">
+                                /{period}
+                              </span>
+                            </div>
+                            {discount.discount_name && (
+                              <div className="text-xs text-red-600 font-medium">
+                                {discount.discount_name}
+                              </div>
+                            )}
+                          </>
+                        ) : (
+                          <div className="text-3xl font-bold text-foreground">
+                            ${price.toFixed(2)}
+                            <span className="text-base text-muted-foreground font-normal">
+                              /{period}
+                            </span>
                           </div>
                         )}
-                      </>
-                    ) : (
-                      <div className="text-3xl font-bold text-foreground">
-                        ${price.toFixed(2)}
-                        <span className="text-base text-muted-foreground font-normal">
-                          /{period}
-                        </span>
                       </div>
-                    )}
-                  </div>
-
-                  <Badge variant="outline" className="bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border-green-200">
-                    <Clock className="h-3 w-3 mr-1" />
-                    5-day free trial included
-                  </Badge>
+                      <Badge variant="outline" className="bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400 border-green-200">
+                        <Clock className="h-3 w-3 mr-1" />
+                        5-day free trial included
+                      </Badge>
+                    </>
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="text-2xl font-bold text-foreground">Custom Pricing</div>
+                      <p className="text-sm text-muted-foreground">Tailored to your needs</p>
+                    </div>
+                  )}
                 </CardHeader>
 
                 <CardContent className="space-y-4">
-                  <Button
-                    className={`w-full h-12 text-base font-semibold ${plan.popular ? 'hero-button' : ''} ${
-                      plan.tier === 'enterprise' ? 'premium-button' : ''
-                    }`}
-                    onClick={() => handleSubscribe(plan.tier)}
-                    disabled={isCurrentPlan || isProcessing}
-                    variant={isCurrentPlan ? 'secondary' : 'default'}
-                  >
-                    {isProcessing ? (
-                      <>Processing...</>
-                    ) : isCurrentPlan ? (
-                      <>
-                        <Crown className="h-4 w-4 mr-2" />
-                        Current Plan
-                      </>
-                    ) : (
-                      <>
-                        <CreditCard className="h-4 w-4 mr-2" />
-                        Get Started
-                      </>
-                    )}
-                  </Button>
+                  {(plan as any).isContactSales ? (
+                    <Button
+                      className="w-full h-12 text-base font-semibold"
+                      onClick={() => window.location.href = '/contact'}
+                      variant="default"
+                    >
+                      <Phone className="h-4 w-4 mr-2" />
+                      Contact Sales
+                    </Button>
+                  ) : (
+                    <Button
+                      className={`w-full h-12 text-base font-semibold ${plan.popular ? 'hero-button' : ''} ${
+                        plan.tier === 'enterprise' ? 'premium-button' : ''
+                      }`}
+                      onClick={() => handleSubscribe(plan.tier)}
+                      disabled={isCurrentPlan || isProcessing}
+                      variant={isCurrentPlan ? 'secondary' : 'default'}
+                    >
+                      {isProcessing ? (
+                        <>Processing...</>
+                      ) : isCurrentPlan ? (
+                        <>
+                          <Crown className="h-4 w-4 mr-2" />
+                          Current Plan
+                        </>
+                      ) : (
+                        <>
+                          <CreditCard className="h-4 w-4 mr-2" />
+                          Get Started
+                        </>
+                      )}
+                    </Button>
+                  )}
 
                   <div className="space-y-2 pt-2">
                     {plan.features.map((feature, idx) => (

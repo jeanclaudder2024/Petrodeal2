@@ -1,37 +1,24 @@
 // Document Processing CMS Types
+import { DOCUMENT_API_URL } from '@/config/documentApi';
 
-// Document API only. Use VITE_DOCUMENT_API_URL or control.petrodealhub.com/api (never VITE_API_URL).
-export const API_BASE_URL = 
-  import.meta.env.VITE_DOCUMENT_API_URL || 
-  (import.meta.env.DEV ? 'http://localhost:8000' : 'https://control.petrodealhub.com/api');
+export const API_BASE_URL = DOCUMENT_API_URL;
 
 export interface Template {
-  id?: string;
-  template_id?: string;
+  id: string;
   name: string;
-  file_name?: string;
-  file_with_extension?: string;
-  title?: string;
+  file_name: string;
   description?: string;
   display_name?: string;
   font_family?: string;
   font_size?: number;
   placeholders: string[];
   placeholder_mappings?: Record<string, PlaceholderSetting>;
-  size?: number;
   file_size?: number;
-  created_at?: string;
+  created_at: string;
   updated_at?: string;
-  is_active?: boolean;
+  is_active: boolean;
   plan_ids?: string[];
   mime_type?: string;
-  metadata?: {
-    display_name?: string;
-    description?: string;
-    font_family?: string;
-    font_size?: number;
-    updated_at?: string;
-  };
 }
 
 export interface PlaceholderSetting {
@@ -52,17 +39,15 @@ export interface PlaceholderSettings {
 }
 
 export interface Plan {
-  id?: string;
+  id: string;
   plan_id?: string;
-  name?: string;
-  plan_name?: string;
-  plan_tier?: string;
-  is_active?: boolean;
-  can_download?: boolean | string[] | '*';
+  plan_name: string;
+  plan_tier: string;
+  is_active: boolean;
+  can_download?: boolean;
   max_downloads_per_month?: number;
   template_limits?: Record<string, number>;
   allowed_templates?: string[] | 'all';
-  features?: string[];
 }
 
 export interface CSVFile {
@@ -110,52 +95,4 @@ export interface APIResponse<T = unknown> {
   data?: T;
   detail?: string;
   message?: string;
-}
-
-// Helper function to normalize template name
-export function normalizeTemplateName(name: string): string {
-  if (!name) return '';
-  const normalized = name.trim();
-  return normalized.endsWith('.docx') ? normalized : `${normalized}.docx`;
-}
-
-// Helper function to normalize template data structure
-export function normalizeTemplate(template: any): Template {
-  // Handle both nested metadata and flat structure
-  const metadata = template.metadata || {};
-  const flatMetadata = {
-    display_name: template.display_name || metadata.display_name || template.title || '',
-    description: template.description || metadata.description || '',
-    font_family: template.font_family || metadata.font_family || '',
-    font_size: template.font_size || metadata.font_size,
-  };
-
-  return {
-    id: template.id || template.template_id || '',
-    template_id: template.template_id || template.id || '',
-    name: template.name || template.file_name || template.file_with_extension || '',
-    file_name: template.file_name || template.name || '',
-    file_with_extension: template.file_with_extension || template.file_name || template.name || '',
-    title: template.title || flatMetadata.display_name || template.name || '',
-    description: flatMetadata.description,
-    display_name: flatMetadata.display_name,
-    font_family: flatMetadata.font_family,
-    font_size: flatMetadata.font_size,
-    placeholders: template.placeholders || [],
-    placeholder_mappings: template.placeholder_mappings || {},
-    size: template.size || template.file_size || 0,
-    file_size: template.file_size || template.size || 0,
-    created_at: template.created_at || '',
-    updated_at: template.updated_at || metadata.updated_at || '',
-    is_active: template.is_active !== undefined ? template.is_active : true,
-    plan_ids: template.plan_ids || [],
-    mime_type: template.mime_type,
-    metadata: {
-      display_name: flatMetadata.display_name,
-      description: flatMetadata.description,
-      font_family: flatMetadata.font_family,
-      font_size: flatMetadata.font_size,
-      updated_at: template.updated_at || metadata.updated_at,
-    },
-  };
 }

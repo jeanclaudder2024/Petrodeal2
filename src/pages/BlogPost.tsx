@@ -1,15 +1,34 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { Helmet } from 'react-helmet-async';
+import DOMPurify from 'dompurify';
 import LandingNavbar from '@/components/landing/LandingNavbar';
 import Footer from '@/components/Footer';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ArrowLeft, Calendar, Eye, User, Tag } from 'lucide-react';
+import { ArrowLeft, Calendar, Eye, Tag, Share2 } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
+
+// Helper function to clean HTML content from markdown artifacts
+const cleanHTMLContent = (content: string): string => {
+  let cleaned = content;
+  // Remove markdown code fences
+  cleaned = cleaned.replace(/^```html\s*/gi, '');
+  cleaned = cleaned.replace(/^```\s*/gi, '');
+  cleaned = cleaned.replace(/```\s*$/gi, '');
+  // Remove full HTML document wrapper if present
+  cleaned = cleaned.replace(/<!DOCTYPE[^>]*>/gi, '');
+  cleaned = cleaned.replace(/<html[^>]*>/gi, '');
+  cleaned = cleaned.replace(/<\/html>/gi, '');
+  cleaned = cleaned.replace(/<head>[\s\S]*?<\/head>/gi, '');
+  cleaned = cleaned.replace(/<body[^>]*>/gi, '');
+  cleaned = cleaned.replace(/<\/body>/gi, '');
+  return cleaned.trim();
+};
 
 interface BlogPost {
   id: string;
@@ -33,6 +52,27 @@ const BlogPostPage = () => {
   const [post, setPost] = useState<BlogPost | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const { toast } = useToast();
+
+  const handleShare = async () => {
+    const shareUrl = window.location.href;
+    const shareData = {
+      title: post?.title || 'PetroDealHub Article',
+      text: post?.excerpt || 'Check out this article on PetroDealHub',
+      url: shareUrl
+    };
+    
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData);
+      } else {
+        await navigator.clipboard.writeText(shareUrl);
+        toast({ title: "Link Copied!", description: "Article link copied to clipboard" });
+      }
+    } catch (error) {
+      console.log('Share cancelled or failed:', error);
+    }
+  };
 
   useEffect(() => {
     const fetchPost = async () => {
@@ -67,6 +107,26 @@ const BlogPostPage = () => {
 
     fetchPost();
   }, [slug]);
+
+  // Clean and sanitize the post content
+  const sanitizedContent = useMemo(() => {
+    if (!post?.content) return '';
+    const cleaned = cleanHTMLContent(post.content);
+    return DOMPurify.sanitize(cleaned, {
+      ALLOWED_TAGS: ['h2', 'h3', 'h4', 'p', 'ul', 'ol', 'li', 'strong', 'em', 'a', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'div', 'span', 'blockquote', 'cite', 'br'],
+      ALLOWED_ATTR: ['href', 'class', 'target', 'rel']
+    });
+  }, [post?.content]);
+
+  // Clean title from any HTML artifacts
+  const cleanTitle = useMemo(() => {
+    if (!post?.title) return '';
+    return post.title
+      .replace(/^```html\s*/gi, '')
+      .replace(/```\s*$/gi, '')
+      .replace(/<[^>]*>/g, '')
+      .trim();
+  }, [post?.title]);
 
   if (loading) {
     return (
@@ -109,14 +169,14 @@ const BlogPostPage = () => {
   return (
     <div className="min-h-screen bg-background">
       <Helmet>
-        <title>{post.meta_title || post.title} | PetroDealHub Blog</title>
+        <title>{post.meta_title || cleanTitle} | PetroDealHub Blog</title>
         <meta name="description" content={post.meta_description || post.excerpt || ''} />
         {post.meta_keywords && (
           <meta name="keywords" content={post.meta_keywords.join(', ')} />
         )}
-        <meta property="og:title" content={post.meta_title || post.title} />
+        <meta property="og:title" content={post.meta_title || cleanTitle} />
         <meta property="og:description" content={post.meta_description || post.excerpt || ''} />
-        {post.featured_image && (
+        {post.featured_image && post.featured_image !== '/placeholder.svg' && (
           <meta property="og:image" content={post.featured_image} />
         )}
         <link rel="canonical" href={`https://petrodealhub.com/blog/${post.slug}`} />
@@ -127,15 +187,15 @@ const BlogPostPage = () => {
       <article className="pt-24 pb-16">
         <div className="container mx-auto px-4">
           {/* Back Link */}
-          <Link to="/blog" className="inline-flex items-center text-muted-foreground hover:text-foreground mb-8">
+          <Link to="/blog" className="inline-flex items-center text-muted-foreground hover:text-foreground mb-8 transition-colors">
             <ArrowLeft className="h-4 w-4 mr-2" />
             Back to Blog
           </Link>
 
           {/* Header */}
           <header className="max-w-4xl mx-auto mb-12">
-            <h1 className="text-4xl md:text-5xl font-bold mb-6 text-foreground">
-              {post.title}
+            <h1 className="text-4xl md:text-5xl font-bold mb-6 text-foreground leading-tight">
+              {cleanTitle}
             </h1>
             
             <div className="flex flex-wrap items-center gap-4 text-muted-foreground mb-6">
@@ -154,41 +214,51 @@ const BlogPostPage = () => {
             {post.tags && post.tags.length > 0 && (
               <div className="flex flex-wrap gap-2">
                 {post.tags.map((tag, index) => (
-                  <Badge key={index} variant="secondary">
+                  <Badge key={index} variant="secondary" className="text-sm">
                     <Tag className="h-3 w-3 mr-1" />
                     {tag}
                   </Badge>
                 ))}
               </div>
             )}
+
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={handleShare}
+              className="mt-4 w-fit"
+            >
+              <Share2 className="h-4 w-4 mr-2" />
+              Share Article
+            </Button>
           </header>
 
           {/* Featured Image */}
-          {post.featured_image && (
+          {post.featured_image && post.featured_image !== '/placeholder.svg' && (
             <div className="max-w-4xl mx-auto mb-12">
               <img 
                 src={post.featured_image} 
-                alt={post.title}
-                className="w-full rounded-2xl shadow-elegant"
+                alt={cleanTitle}
+                className="w-full rounded-2xl shadow-lg object-cover aspect-video"
               />
             </div>
           )}
 
-          {/* Content */}
+          {/* Content with enhanced styling */}
           <div 
-            className="max-w-4xl mx-auto prose prose-lg dark:prose-invert"
-            dangerouslySetInnerHTML={{ __html: post.content }}
+            className="max-w-4xl mx-auto prose-blog"
+            dangerouslySetInnerHTML={{ __html: sanitizedContent }}
           />
 
           {/* CTA */}
           <div className="max-w-4xl mx-auto mt-16">
-            <Card className="p-8 text-center bg-gradient-to-r from-primary/10 via-accent/10 to-accent-green/10 border-0">
-              <h3 className="text-2xl font-bold mb-4">Ready to Transform Your Oil Trading?</h3>
-              <p className="text-muted-foreground mb-6">
+            <Card className="p-8 text-center bg-gradient-to-r from-primary/10 via-accent/10 to-accent-green/10 border-0 rounded-2xl">
+              <h3 className="text-2xl font-bold mb-4 text-foreground">Ready to Transform Your Oil Trading?</h3>
+              <p className="text-muted-foreground mb-6 text-lg">
                 Join PetroDealHub today and experience the future of petroleum trading.
               </p>
               <Link to="/auth">
-                <Button size="lg" className="bg-gradient-to-r from-accent to-accent-green">
+                <Button size="lg" className="bg-gradient-to-r from-accent to-accent-green hover:opacity-90 transition-opacity">
                   Get Started Free
                 </Button>
               </Link>

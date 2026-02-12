@@ -11,9 +11,10 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { Building2, Plus, Edit, Trash2, Search, Sparkles, CreditCard, Shield, Factory, Users, MapPin, FileText, Image } from 'lucide-react';
+import { Building2, Plus, Edit, Trash2, Search, Sparkles, CreditCard, Shield, Factory, Users, MapPin, FileText, Image, Upload, Loader2 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import * as XLSX from 'xlsx';
 
 type CompanyType = 'real' | 'buyer' | 'seller' | 'buyer_test' | 'seller_test';
 
@@ -65,9 +66,6 @@ interface Company {
   compliance_notes?: string;
   created_at?: string;
   updated_at?: string;
-  // Link to buyer_companies/seller_companies (UUID) for document fill
-  buyer_company_uuid?: string | null;
-  seller_company_uuid?: string | null;
 }
 
 interface BankAccount {
@@ -105,33 +103,15 @@ const CompanyManagement = () => {
   const [bankAccounts, setBankAccounts] = useState<BankAccount[]>([]);
   const [isAutoFilling, setIsAutoFilling] = useState(false);
   const [activeTab, setActiveTab] = useState('basic');
-  const [buyerCompaniesList, setBuyerCompaniesList] = useState<{ id: string; name: string }[]>([]);
-  const [sellerCompaniesList, setSellerCompaniesList] = useState<{ id: string; name: string }[]>([]);
+  const [isXlsUploading, setIsXlsUploading] = useState(false);
+  const [xlsProgress, setXlsProgress] = useState({ current: 0, total: 0, success: 0, failed: 0 });
+  const [showXlsDialog, setShowXlsDialog] = useState(false);
+  const xlsInputRef = React.useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
   useEffect(() => {
     fetchCompanies();
   }, []);
-
-  useEffect(() => {
-    if (isDialogOpen) {
-      fetchBuyerAndSellerCompanies();
-    }
-  }, [isDialogOpen]);
-
-  const fetchBuyerAndSellerCompanies = async () => {
-    try {
-      const [buyerRes, sellerRes] = await Promise.all([
-        supabase.from('buyer_companies').select('id, name').order('name'),
-        supabase.from('seller_companies').select('id, name').order('name')
-      ]);
-      setBuyerCompaniesList((buyerRes.data || []).map((r: { id: string; name: string }) => ({ id: r.id, name: r.name })));
-      setSellerCompaniesList((sellerRes.data || []).map((r: { id: string; name: string }) => ({ id: r.id, name: r.name })));
-    } catch {
-      setBuyerCompaniesList([]);
-      setSellerCompaniesList([]);
-    }
-  };
 
   const fetchCompanies = async () => {
     setLoading(true);
@@ -225,8 +205,6 @@ const CompanyManagement = () => {
         sanctions_status: formData.sanctions_status || 'pending',
         country_risk: formData.country_risk || 'low',
         compliance_notes: formData.compliance_notes || null,
-        buyer_company_uuid: formData.buyer_company_uuid || null,
-        seller_company_uuid: formData.seller_company_uuid || null,
       };
 
       let companyId = editingCompany?.id;
@@ -354,6 +332,98 @@ const CompanyManagement = () => {
     }
   };
 
+  const handleXlsUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const data = await file.arrayBuffer();
+      const workbook = XLSX.read(data);
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json<Record<string, any>>(sheet);
+
+      if (rows.length === 0) {
+        toast({ title: "Error", description: "XLS file is empty", variant: "destructive" });
+        return;
+      }
+
+      setIsXlsUploading(true);
+      setShowXlsDialog(true);
+      setXlsProgress({ current: 0, total: rows.length, success: 0, failed: 0 });
+
+      let successCount = 0;
+      let failedCount = 0;
+
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        const companyName = row['Name'] || row['name'] || row['Company Name'] || row['company_name'] || '';
+        const logoUrl = row['Company Logo URL'] || row['logo_url'] || row['Logo URL'] || row['Logo'] || '';
+
+        if (!companyName.trim()) {
+          failedCount++;
+          setXlsProgress(prev => ({ ...prev, current: i + 1, failed: failedCount }));
+          continue;
+        }
+
+        try {
+          // Call autofill edge function
+          let aiData: any = {};
+          try {
+            const { data: aiResult, error: aiError } = await supabase.functions.invoke('autofill-company-data', {
+              body: { companyName, country: null, companyType: 'real' }
+            });
+            if (!aiError && aiResult?.success && aiResult?.data) {
+              aiData = aiResult.data;
+            }
+          } catch {
+            // Continue without AI data
+          }
+
+          const companyData = {
+            ...aiData,
+            name: companyName,
+            company_type: 'real' as const,
+            logo_url: logoUrl || aiData.logo_url || null,
+            kyc_status: 'verified',
+            sanctions_status: 'cleared',
+            country_risk: 'low',
+          };
+
+          // Remove bankAccounts from insert data
+          delete (companyData as any).bankAccounts;
+
+          const { error: insertError } = await supabase.from('companies').insert([companyData]);
+          if (insertError) throw insertError;
+
+          successCount++;
+        } catch (err) {
+          console.error(`Failed to import company "${companyName}":`, err);
+          failedCount++;
+        }
+
+        setXlsProgress(prev => ({ ...prev, current: i + 1, success: successCount, failed: failedCount }));
+
+        // Small delay to avoid rate limiting
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+
+      setIsXlsUploading(false);
+      fetchCompanies();
+      toast({
+        title: "XLS Import Complete",
+        description: `Imported ${successCount} companies. Failed: ${failedCount}.`,
+        variant: failedCount > 0 ? "destructive" : "default"
+      });
+    } catch (err) {
+      console.error('XLS parse error:', err);
+      toast({ title: "Error", description: "Failed to parse XLS file", variant: "destructive" });
+      setIsXlsUploading(false);
+    }
+
+    // Reset file input
+    if (xlsInputRef.current) xlsInputRef.current.value = '';
+  };
+
   const handleDelete = async (id: number) => {
     if (!confirm('Are you sure you want to delete this company?')) return;
     
@@ -474,6 +544,21 @@ const CompanyManagement = () => {
                 <SelectItem value="seller_test">Seller Test</SelectItem>
               </SelectContent>
             </Select>
+            <input
+              type="file"
+              ref={xlsInputRef}
+              accept=".xlsx,.xls"
+              className="hidden"
+              onChange={handleXlsUpload}
+            />
+            <Button
+              variant="outline"
+              onClick={() => xlsInputRef.current?.click()}
+              disabled={isXlsUploading}
+            >
+              {isXlsUploading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Upload className="h-4 w-4 mr-2" />}
+              Upload XLS
+            </Button>
             <Dialog open={isDialogOpen} onOpenChange={(open) => {
               setIsDialogOpen(open);
               if (!open) resetForm();
@@ -536,47 +621,6 @@ const CompanyManagement = () => {
                             </Select>
                           </div>
                         </div>
-
-                        {(formData.company_type === 'buyer' || formData.company_type === 'buyer_test') && (
-                          <div>
-                            <Label htmlFor="buyer_company_uuid">Link to Buyer Company (for document fill)</Label>
-                            <Select
-                              value={formData.buyer_company_uuid || 'none'}
-                              onValueChange={(value) => setFormData({ ...formData, buyer_company_uuid: value === 'none' ? null : value })}
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select buyer company (optional)" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="none">None</SelectItem>
-                                {buyerCompaniesList.map((bc) => (
-                                  <SelectItem key={bc.id} value={bc.id}>{bc.name}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <p className="text-xs text-muted-foreground mt-1">Links this company to a buyer_companies record so document generation uses its data.</p>
-                          </div>
-                        )}
-                        {(formData.company_type === 'seller' || formData.company_type === 'seller_test') && (
-                          <div>
-                            <Label htmlFor="seller_company_uuid">Link to Seller Company (for document fill)</Label>
-                            <Select
-                              value={formData.seller_company_uuid || 'none'}
-                              onValueChange={(value) => setFormData({ ...formData, seller_company_uuid: value === 'none' ? null : value })}
-                            >
-                              <SelectTrigger>
-                                <SelectValue placeholder="Select seller company (optional)" />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="none">None</SelectItem>
-                                {sellerCompaniesList.map((sc) => (
-                                  <SelectItem key={sc.id} value={sc.id}>{sc.name}</SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <p className="text-xs text-muted-foreground mt-1">Links this company to a seller_companies record so document generation uses its data.</p>
-                          </div>
-                        )}
 
                         <div>
                           <Label htmlFor="country">Country *</Label>
@@ -750,7 +794,7 @@ const CompanyManagement = () => {
                               id="phone"
                               value={formData.phone || ''}
                               onChange={(e) => setFormData({...formData, phone: e.target.value})}
-                              placeholder="+1 (555) 123-4567"
+                              placeholder="+1 (202) 773-6521"
                             />
                           </div>
                           <div>
@@ -1366,6 +1410,35 @@ const CompanyManagement = () => {
           )}
         </CardContent>
       </Card>
+
+      {/* XLS Upload Progress Dialog */}
+      <Dialog open={showXlsDialog} onOpenChange={setShowXlsDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Bulk XLS Import</DialogTitle>
+            <DialogDescription>
+              Importing companies from XLS file with AI auto-fill...
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="flex justify-between text-sm">
+              <span>Progress: {xlsProgress.current} / {xlsProgress.total}</span>
+              <span className="text-muted-foreground">
+                ✅ {xlsProgress.success} | ❌ {xlsProgress.failed}
+              </span>
+            </div>
+            <div className="w-full bg-muted rounded-full h-3">
+              <div 
+                className="bg-primary h-3 rounded-full transition-all duration-300"
+                style={{ width: xlsProgress.total > 0 ? `${(xlsProgress.current / xlsProgress.total) * 100}%` : '0%' }}
+              />
+            </div>
+            {!isXlsUploading && xlsProgress.current > 0 && (
+              <p className="text-sm text-center text-muted-foreground">Import complete!</p>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

@@ -20,9 +20,7 @@ import BrokerSubscriptionManagement from './BrokerSubscriptionManagement';
 import BrokerPricingManagement from './BrokerPricingManagement';
 import UnsubscribeRequestsManagement from './UnsubscribeRequestsManagement';
 import AIAgentControlCenter from './AIAgentControlCenter';
-import DocumentManagement from './DocumentManagement';
-import { CMSTemplateManager } from './cms-templates';
-import { DocumentProcessingCMS } from './document-cms';
+// Removed: DocumentManagement, CMSTemplateManager, DocumentProcessingCMS (safely deleted per Issue 4)
 import FilterManagement from './FilterManagement';
 import SubscriptionManagement from './SubscriptionManagement';
 import TutorialManagement from './TutorialManagement';
@@ -42,6 +40,7 @@ import CareerManagement from './CareerManagement';
 import RewardProgramsManagement from './RewardProgramsManagement';
 import TalentProgramsManagement from './talent/TalentProgramsManagement';
 import LinkedInManagement from './LinkedInManagement';
+import DocumentPublishing from './DocumentPublishing';
 
 const AdminPanel = () => {
   const location = useLocation();
@@ -172,19 +171,9 @@ const AdminPanel = () => {
                 <span className="text-xs font-medium">Connections</span>
               </TabsTrigger>
 
-              <TabsTrigger value="documents" className="flex flex-col items-center gap-1 p-3 h-auto min-h-[60px] min-w-[80px]">
-                <FileText className="h-5 w-5" />
-                <span className="text-xs font-medium">Documents</span>
-              </TabsTrigger>
-
-              <TabsTrigger value="templates" className="flex flex-col items-center gap-1 p-3 h-auto min-h-[60px] min-w-[80px]">
-                <FileText className="h-5 w-5" />
-                <span className="text-xs font-medium">Templates</span>
-              </TabsTrigger>
-
-              <TabsTrigger value="document-cms" className="flex flex-col items-center gap-1 p-3 h-auto min-h-[60px] min-w-[80px] border-2 border-indigo-200 hover:border-indigo-400">
-                <FileText className="h-5 w-5 text-indigo-600" />
-                <span className="text-xs font-medium">Doc CMS</span>
+              <TabsTrigger value="doc-publishing" className="flex flex-col items-center gap-1 p-3 h-auto min-h-[60px] min-w-[80px] border-2 border-violet-200 hover:border-violet-400">
+                <FileText className="h-5 w-5 text-violet-600" />
+                <span className="text-xs font-medium">Doc Publishing</span>
               </TabsTrigger>
 
               <TabsTrigger value="filters" className="flex flex-col items-center gap-1 p-3 h-auto min-h-[60px] min-w-[80px]">
@@ -344,16 +333,10 @@ const AdminPanel = () => {
         <ConnectionManagement onEditVessel={handleEditVessel} />
       </TabsContent>
 
-        <TabsContent value="documents">
-          <DocumentManagement />
-        </TabsContent>
+        {/* Removed: Documents, Templates, Doc CMS tabs (safely deleted per Issue 4) */}
 
-        <TabsContent value="templates">
-          <CMSTemplateManager />
-        </TabsContent>
-
-        <TabsContent value="document-cms">
-          <DocumentProcessingCMS />
+        <TabsContent value="doc-publishing">
+          <DocumentPublishing />
         </TabsContent>
 
         <TabsContent value="filters">

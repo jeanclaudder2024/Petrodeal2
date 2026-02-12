@@ -13,15 +13,15 @@ import {
   FileText, 
   BookOpen, 
   Users, 
-  Zap,
   Globe,
   Edit3,
   Mail,
   Lightbulb,
   Calendar,
   ArrowRight,
-  Eye
+  Share2
 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
 interface BlogPost {
   id: string;
@@ -49,6 +49,31 @@ const Blog = () => {
   const [categories, setCategories] = useState<BlogCategory[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const { toast } = useToast();
+
+  const handleShare = async (e: React.MouseEvent, post: BlogPost) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const shareUrl = `${window.location.origin}/blog/${post.slug}`;
+    const shareData = {
+      title: post.title,
+      text: post.excerpt || 'Check out this article on PetroDealHub',
+      url: shareUrl
+    };
+    
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData);
+      } else {
+        await navigator.clipboard.writeText(shareUrl);
+        toast({ title: "Link Copied!", description: "Article link copied to clipboard" });
+      }
+    } catch (error) {
+      // User cancelled or error - silently ignore
+      console.log('Share cancelled or failed:', error);
+    }
+  };
 
   useEffect(() => {
     fetchBlogData();
@@ -223,12 +248,14 @@ const Blog = () => {
                         <span className="text-accent font-medium text-sm flex items-center gap-1 group-hover:gap-2 transition-all">
                           Read More <ArrowRight className="h-4 w-4" />
                         </span>
-                        {post.views !== null && (
-                          <span className="text-xs text-muted-foreground flex items-center gap-1">
-                            <Eye className="h-3 w-3" />
-                            {post.views}
-                          </span>
-                        )}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={(e) => handleShare(e, post)}
+                          className="h-8 w-8 p-0 hover:bg-accent/10"
+                        >
+                          <Share2 className="h-4 w-4" />
+                        </Button>
                       </div>
                     </div>
                   </Card>

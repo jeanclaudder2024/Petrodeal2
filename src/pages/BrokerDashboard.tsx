@@ -20,7 +20,13 @@ import {
   Send,
   Paperclip,
   Plus,
-  HelpCircle
+  HelpCircle,
+  Activity,
+  ArrowUpRight,
+  ArrowDownRight,
+  BarChart3,
+  Ship,
+  Wifi
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -35,6 +41,7 @@ import IMFPAInfoNotice from '@/components/broker/IMFPAInfoNotice';
 import EnhancedDealCard from '@/components/broker/EnhancedDealCard';
 import DealInfoNotice from '@/components/broker/DealInfoNotice';
 import { useToast } from '@/hooks/use-toast';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 interface BrokerProfile {
   id: string;
@@ -94,11 +101,14 @@ const BrokerDashboard = () => {
   const [sending, setSending] = useState(false);
   const [editingProfile, setEditingProfile] = useState(false);
   const [hasCheckedMembership, setHasCheckedMembership] = useState(false);
+  const [lastSync, setLastSync] = useState(new Date());
   const [stats, setStats] = useState({
     totalDeals: 0,
     completedDeals: 0,
     totalValue: 0,
-    pendingDeals: 0
+    pendingDeals: 0,
+    pipelineValue: 0,
+    activeNegotiations: 0
   });
 
   useEffect(() => {
@@ -137,18 +147,22 @@ const BrokerDashboard = () => {
     };
   }, [profile]);
 
+  // Sync timer
+  useEffect(() => {
+    const interval = setInterval(() => setLastSync(new Date()), 30000);
+    return () => clearInterval(interval);
+  }, []);
+
   const fetchBrokerData = async () => {
     try {
-      // Fetch broker profile
       const { data: profileData, error: profileError } = await supabase
         .from('broker_profiles')
         .select('*')
         .eq('user_id', user!.id)
-        .maybeSingle(); // Use maybeSingle instead of single
+        .maybeSingle();
 
       if (profileError) throw profileError;
       
-      // If no broker profile found, user is not a broker
       if (!profileData) {
         setLoading(false);
         return;
@@ -156,7 +170,6 @@ const BrokerDashboard = () => {
       
       setProfile(profileData);
 
-      // Fetch broker deals
       const { data: dealsData, error: dealsError } = await supabase
         .from('broker_deals')
         .select('*')
@@ -165,27 +178,31 @@ const BrokerDashboard = () => {
 
       if (dealsError) throw dealsError;
 
-      // Sort deals by creation date (oldest first) for numbering, then reverse for display (newest first)
       const sortedDeals = [...(dealsData || [])].sort((a, b) => 
         new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-      ).reverse(); // Reverse to show newest first
+      ).reverse();
 
       setDeals(sortedDeals);
 
-      // Calculate stats
       const totalDeals = dealsData?.length || 0;
       const completedDeals = dealsData?.filter(deal => deal.status === 'completed').length || 0;
       const pendingDeals = dealsData?.filter(deal => deal.status === 'pending').length || 0;
+      const activeNegotiations = dealsData?.filter(deal => deal.status === 'approved' || deal.status === 'in_progress').length || 0;
       const totalValue = dealsData?.reduce((sum, deal) => sum + (deal.total_value || 0), 0) || 0;
+      const pipelineValue = dealsData?.filter(deal => deal.status !== 'completed' && deal.status !== 'rejected')
+        .reduce((sum, deal) => sum + (deal.total_value || 0), 0) || 0;
 
       setStats({
         totalDeals,
         completedDeals,
         totalValue,
-        pendingDeals
+        pendingDeals,
+        pipelineValue,
+        activeNegotiations
       });
 
-      // Load chat messages after profile is set
+      setLastSync(new Date());
+
       if (profileData) {
         await loadChatMessages(profileData.id);
       }
@@ -211,13 +228,11 @@ const BrokerDashboard = () => {
       if (error) throw error;
       setMessages((data || []) as ChatMessage[]);
 
-      // Mark messages as read
       await supabase
         .from('broker_chat_messages')
         .update({ is_read: true })
         .eq('broker_id', brokerId)
         .eq('sender_type', 'admin');
-
     } catch (error) {
       // Error loading chat messages
     }
@@ -251,7 +266,6 @@ const BrokerDashboard = () => {
         description: "Your message has been sent to the support team."
       });
     } catch (error) {
-      // Error sending message
       toast({
         title: "Error",
         description: "Failed to send message. Please try again.",
@@ -269,45 +283,64 @@ const BrokerDashboard = () => {
     });
   };
 
+  const getStatusBadgeClass = (status: string) => {
+    switch (status) {
+      case 'completed': return 'bg-emerald-600 text-white';
+      case 'approved': case 'in_progress': return 'bg-blue-600 text-white';
+      case 'pending': return 'bg-amber-500 text-black';
+      case 'rejected': case 'failed': return 'bg-red-600 text-white';
+      default: return 'bg-muted text-muted-foreground';
+    }
+  };
+
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'completed':
-        return <CheckCircle className="h-4 w-4 text-green-500" />;
+        return <CheckCircle className="h-4 w-4 text-emerald-500" />;
       case 'pending':
-        return <Clock className="h-4 w-4 text-yellow-500" />;
+        return <Clock className="h-4 w-4 text-amber-500" />;
       case 'approved':
         return <CheckCircle className="h-4 w-4 text-blue-500" />;
       case 'rejected':
         return <AlertCircle className="h-4 w-4 text-red-500" />;
       default:
-        return <Clock className="h-4 w-4 text-gray-500" />;
+        return <Clock className="h-4 w-4 text-muted-foreground" />;
     }
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'completed':
-        return 'bg-green-500';
-      case 'approved':
-        return 'bg-blue-500';
-      case 'pending':
-        return 'bg-yellow-500';
-      case 'rejected':
-        return 'bg-red-500';
-      default:
-        return 'bg-gray-500';
+  // Generate trading activity chart data from deals
+  const getChartData = () => {
+    const weeks: Record<string, number> = {};
+    const now = new Date();
+    for (let i = 7; i >= 0; i--) {
+      const d = new Date(now);
+      d.setDate(d.getDate() - i * 7);
+      const key = `W${8 - i}`;
+      weeks[key] = 0;
     }
+    deals.forEach(deal => {
+      const dealDate = new Date(deal.created_at);
+      const diffDays = Math.floor((now.getTime() - dealDate.getTime()) / (1000 * 60 * 60 * 24));
+      const weekIndex = Math.min(Math.floor(diffDays / 7), 7);
+      const key = `W${8 - weekIndex}`;
+      if (weeks[key] !== undefined) weeks[key]++;
+    });
+    return Object.entries(weeks).map(([name, deals]) => ({ name, deals }));
+  };
+
+  const timeSinceSync = () => {
+    const seconds = Math.floor((Date.now() - lastSync.getTime()) / 1000);
+    return seconds < 60 ? `${seconds} sec ago` : `${Math.floor(seconds / 60)} min ago`;
   };
 
   if (loading) {
     return <LoadingFallback />;
   }
 
-  // If user has no broker profile, show message
   if (!profile) {
     return (
       <div className="container mx-auto p-6">
-        <Card>
+        <Card className="border-border">
           <CardHeader>
             <CardTitle>Broker Dashboard Access</CardTitle>
           </CardHeader>
@@ -326,111 +359,164 @@ const BrokerDashboard = () => {
     );
   }
 
-
+  if (editingProfile && profile) {
+    return (
+      <div className="container mx-auto px-4 py-8">
+        <EditProfileForm 
+          profile={profile}
+          onSave={() => {
+            setEditingProfile(false);
+            fetchBrokerData();
+          }}
+          onCancel={() => setEditingProfile(false)}
+        />
+      </div>
+    );
+  }
 
   return (
-    <div className="container mx-auto px-4 py-8">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-8">
+    <div className="container mx-auto px-4 py-6 space-y-6">
+      {/* System Status Bar */}
+      <div className="flex items-center justify-between px-4 py-2 rounded-md border border-border bg-muted/30 text-xs text-muted-foreground">
         <div className="flex items-center gap-4">
-          <Avatar className="h-16 w-16">
-            <AvatarFallback className="bg-primary text-primary-foreground text-xl">
-              {profile.full_name.charAt(0)}
-            </AvatarFallback>
-          </Avatar>
-          <div>
-            <h1 className="text-3xl font-bold text-foreground">
-              Welcome back, {profile.full_name}
-            </h1>
-            <div className="flex items-center gap-2 mt-1">
-              <Badge variant={profile.verified_at ? 'default' : 'outline'} className="flex items-center gap-1">
-                <Shield className="h-3 w-3" />
-                {profile.verified_at ? 'Verified Broker' : 'Pending Verification'}
-              </Badge>
-              {profile.company_name && (
-                <Badge variant="outline">{profile.company_name}</Badge>
-              )}
-            </div>
+          <span className="flex items-center gap-1.5">
+            <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+            Server Status: Operational
+          </span>
+          <span>Last Sync: {timeSinceSync()}</span>
+        </div>
+        <span className="font-mono">BROKER TERMINAL v2.0</span>
+      </div>
+
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight text-foreground">
+            Broker Trading Terminal
+          </h1>
+          <div className="flex items-center gap-3 mt-1">
+            <Badge variant={profile.verified_at ? 'default' : 'outline'} className="flex items-center gap-1 rounded-sm">
+              <Shield className="h-3 w-3" />
+              {profile.verified_at ? 'Verified Energy Broker' : 'Pending Verification'}
+            </Badge>
+            <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
+              <Wifi className="h-3 w-3 text-emerald-500" />
+              Network Active
+            </span>
           </div>
         </div>
-        <Button variant="outline">
-          <Settings className="h-4 w-4 mr-2" />
-          Edit Profile
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button 
+            onClick={() => navigate('/broker-dashboard/select-company')}
+            className="rounded-sm font-semibold"
+          >
+            <Plus className="h-4 w-4 mr-1" />
+            Create Deal
+          </Button>
+          <Button variant="outline" className="rounded-sm" onClick={() => navigate('/vessels')}>
+            <Ship className="h-4 w-4 mr-1" />
+            Browse Vessels
+          </Button>
+          <Button variant="outline" className="rounded-sm" onClick={() => setEditingProfile(true)}>
+            <Settings className="h-4 w-4 mr-1" />
+            Edit Profile
+          </Button>
+        </div>
       </div>
 
-      {/* Stats Overview */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
-        <Card className="trading-card">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Deals</CardTitle>
-            <Briefcase className="h-4 w-4 text-primary" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.totalDeals}</div>
-          </CardContent>
-        </Card>
-        
-        <Card className="trading-card">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Completed</CardTitle>
-            <CheckCircle className="h-4 w-4 text-green-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.completedDeals}</div>
-          </CardContent>
-        </Card>
-        
-        <Card className="trading-card">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Value</CardTitle>
-            <DollarSign className="h-4 w-4 text-blue-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">
-              ${stats.totalValue.toLocaleString()}
-            </div>
-          </CardContent>
-        </Card>
-        
-        <Card className="trading-card">
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Pending</CardTitle>
-            <Clock className="h-4 w-4 text-yellow-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{stats.pendingDeals}</div>
-          </CardContent>
-        </Card>
+      {/* Stats Cards - Market Terminal Style */}
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+        {[
+          { label: 'ACTIVE DEALS', value: stats.totalDeals, icon: Briefcase, trend: '+' + stats.pendingDeals + ' pending', trendUp: true },
+          { label: 'COMPLETED', value: stats.completedDeals, icon: CheckCircle, trend: Math.round(stats.totalDeals ? (stats.completedDeals / stats.totalDeals) * 100 : 0) + '% rate', trendUp: true },
+          { label: 'TOTAL VALUE', value: '$' + (stats.totalValue / 1000000).toFixed(1) + 'M', icon: DollarSign, trend: 'Lifetime', trendUp: true },
+          { label: 'PIPELINE', value: '$' + (stats.pipelineValue / 1000000).toFixed(1) + 'M', icon: TrendingUp, trend: 'Open deals', trendUp: true },
+          { label: 'NEGOTIATIONS', value: stats.activeNegotiations, icon: Activity, trend: 'In progress', trendUp: stats.activeNegotiations > 0 },
+          { label: 'PENDING', value: stats.pendingDeals, icon: Clock, trend: 'Awaiting', trendUp: false },
+        ].map((stat, i) => (
+          <Card key={i} className="rounded-sm border-border bg-card hover:border-primary/30 transition-colors">
+            <CardContent className="p-4">
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-[10px] font-semibold tracking-widest text-muted-foreground uppercase">{stat.label}</span>
+                <stat.icon className="h-4 w-4 text-muted-foreground" />
+              </div>
+              <div className="text-2xl font-bold tracking-tight text-foreground">{stat.value}</div>
+              <div className="flex items-center gap-1 mt-1 text-xs text-muted-foreground">
+                {stat.trendUp ? <ArrowUpRight className="h-3 w-3 text-emerald-500" /> : <ArrowDownRight className="h-3 w-3 text-amber-500" />}
+                {stat.trend}
+              </div>
+            </CardContent>
+          </Card>
+        ))}
       </div>
+
+      {/* Trading Activity Chart */}
+      <Card className="rounded-sm border-border">
+        <CardHeader className="pb-2">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-sm font-semibold flex items-center gap-2">
+              <BarChart3 className="h-4 w-4 text-primary" />
+              Trading Activity Overview
+            </CardTitle>
+            <span className="text-xs text-muted-foreground">Last 8 weeks</span>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="h-48">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart data={getChartData()}>
+                <CartesianGrid strokeDasharray="3 3" stroke="hsl(var(--border))" />
+                <XAxis dataKey="name" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
+                <YAxis allowDecimals={false} tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
+                <Tooltip 
+                  contentStyle={{ 
+                    backgroundColor: 'hsl(var(--card))', 
+                    border: '1px solid hsl(var(--border))',
+                    borderRadius: '4px',
+                    fontSize: '12px'
+                  }} 
+                />
+                <Line 
+                  type="monotone" 
+                  dataKey="deals" 
+                  stroke="hsl(var(--primary))" 
+                  strokeWidth={2} 
+                  dot={{ r: 3, fill: 'hsl(var(--primary))' }} 
+                  activeDot={{ r: 5 }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Main Content */}
-      <Tabs defaultValue="deals" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 md:grid-cols-6 h-auto gap-1">
-          <TabsTrigger value="deals" className="text-xs sm:text-sm">My Deals</TabsTrigger>
-          <TabsTrigger value="imfpa" className="text-xs sm:text-sm">IMFPA</TabsTrigger>
-          <TabsTrigger value="contacts" className="text-xs sm:text-sm">Companies</TabsTrigger>
-          <TabsTrigger value="profile" className="text-xs sm:text-sm">Profile</TabsTrigger>
-          <TabsTrigger value="messages" className="text-xs sm:text-sm">Messages</TabsTrigger>
-          <TabsTrigger value="analytics" className="text-xs sm:text-sm">Analytics</TabsTrigger>
+      <Tabs defaultValue="deals" className="space-y-4">
+        <TabsList className="grid w-full grid-cols-2 sm:grid-cols-3 md:grid-cols-6 h-auto gap-1 rounded-sm">
+          <TabsTrigger value="deals" className="text-xs sm:text-sm rounded-sm">My Deals</TabsTrigger>
+          <TabsTrigger value="imfpa" className="text-xs sm:text-sm rounded-sm">IMFPA</TabsTrigger>
+          <TabsTrigger value="contacts" className="text-xs sm:text-sm rounded-sm">Companies</TabsTrigger>
+          <TabsTrigger value="profile" className="text-xs sm:text-sm rounded-sm">Profile</TabsTrigger>
+          <TabsTrigger value="messages" className="text-xs sm:text-sm rounded-sm">Messages</TabsTrigger>
+          <TabsTrigger value="analytics" className="text-xs sm:text-sm rounded-sm">Analytics</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="deals" className="space-y-6">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xl font-semibold">My Deals</h2>
+        <TabsContent value="deals" className="space-y-4">
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-lg font-semibold">Deal Pipeline</h2>
             <div className="flex items-center gap-2">
               <Button 
                 variant="outline"
                 size="sm"
                 onClick={() => setSelectedDeal('explainer')}
-                className="flex items-center gap-2"
+                className="flex items-center gap-2 rounded-sm"
               >
                 <HelpCircle className="h-4 w-4" />
                 <span className="hidden sm:inline">How Deals Work</span>
               </Button>
               <Button 
                 onClick={() => navigate('/broker-dashboard/select-company')}
-                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700"
+                className="flex items-center gap-2 rounded-sm"
               >
                 <Plus className="h-4 w-4" />
                 Create Deal
@@ -438,56 +524,115 @@ const BrokerDashboard = () => {
             </div>
           </div>
 
-          {/* Deal Process Explainer Modal */}
-          {selectedDeal === 'explainer' && (
-            <DealInfoNotice />
-          )}
+          {selectedDeal === 'explainer' && <DealInfoNotice />}
           
-          <Card className="trading-card">
-            <CardHeader>
-              <CardTitle>Recent Deals</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {deals.length === 0 ? (
-                <div className="text-center py-8">
-                  <Briefcase className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                  <p className="text-muted-foreground mb-4">
-                    No deals yet. Start by browsing vessels and creating your first deal.
-                  </p>
+          {deals.length === 0 ? (
+            <Card className="rounded-sm border-border">
+              <CardContent className="text-center py-16">
+                <Activity className="h-12 w-12 text-muted-foreground mx-auto mb-4 opacity-40" />
+                <h3 className="text-lg font-semibold mb-2 text-foreground">Your trading pipeline is currently empty.</h3>
+                <p className="text-sm text-muted-foreground mb-6 max-w-md mx-auto">
+                  Initiate your first energy transaction to activate your broker terminal.
+                </p>
+                <div className="flex items-center justify-center gap-3">
+                  <Button 
+                    onClick={() => navigate('/broker-dashboard/select-company')}
+                    className="rounded-sm"
+                  >
+                    <Plus className="h-4 w-4 mr-1" />
+                    Create First Deal
+                  </Button>
                   <Button 
                     variant="outline"
                     onClick={() => setSelectedDeal('explainer')}
-                    className="flex items-center gap-2"
+                    className="rounded-sm"
                   >
-                    <HelpCircle className="h-4 w-4" />
+                    <HelpCircle className="h-4 w-4 mr-1" />
                     Learn How Deals Work
                   </Button>
                 </div>
-              ) : (
-                <div className="space-y-4">
-                  {deals.map((deal, index) => {
-                    const dealNumber = deals.length - index;
-                    return (
-                      <EnhancedDealCard
-                        key={deal.id}
-                        deal={deal}
-                        dealNumber={dealNumber}
-                        onViewSteps={(dealId) => setSelectedDeal(dealId)}
-                      />
-                    );
-                  })}
+              </CardContent>
+            </Card>
+          ) : (
+            <>
+              {/* Deals Table */}
+              <Card className="rounded-sm border-border">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b border-border bg-muted/30">
+                        <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-muted-foreground">Deal #</th>
+                        <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-muted-foreground">Commodity</th>
+                        <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-muted-foreground">Route</th>
+                        <th className="text-right px-4 py-3 font-semibold text-xs uppercase tracking-wider text-muted-foreground">Volume</th>
+                        <th className="text-left px-4 py-3 font-semibold text-xs uppercase tracking-wider text-muted-foreground">Status</th>
+                        <th className="text-right px-4 py-3 font-semibold text-xs uppercase tracking-wider text-muted-foreground">Value</th>
+                        <th className="text-right px-4 py-3 font-semibold text-xs uppercase tracking-wider text-muted-foreground">Updated</th>
+                        <th className="text-center px-4 py-3 font-semibold text-xs uppercase tracking-wider text-muted-foreground">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {deals.map((deal, index) => {
+                        const dealNumber = deals.length - index;
+                        return (
+                          <tr key={deal.id} className="border-b border-border/50 hover:bg-muted/20 transition-colors">
+                            <td className="px-4 py-3 font-mono text-xs">#{dealNumber}</td>
+                            <td className="px-4 py-3 font-medium">{deal.cargo_type || deal.deal_type}</td>
+                            <td className="px-4 py-3 text-xs text-muted-foreground">
+                              {deal.source_port || '—'} → {deal.destination_port || '—'}
+                            </td>
+                            <td className="px-4 py-3 text-right font-mono text-xs">
+                              {deal.quantity ? deal.quantity.toLocaleString() + ' MT' : '—'}
+                            </td>
+                            <td className="px-4 py-3">
+                              <span className={`inline-flex items-center px-2 py-0.5 rounded-sm text-[10px] font-bold uppercase tracking-wider ${getStatusBadgeClass(deal.status)}`}>
+                                {deal.status}
+                              </span>
+                            </td>
+                            <td className="px-4 py-3 text-right font-mono font-semibold">
+                              {deal.total_value ? '$' + deal.total_value.toLocaleString() : '—'}
+                            </td>
+                            <td className="px-4 py-3 text-right text-xs text-muted-foreground">
+                              {new Date(deal.created_at).toLocaleDateString()}
+                            </td>
+                            <td className="px-4 py-3 text-center">
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                className="rounded-sm text-xs"
+                                onClick={() => setSelectedDeal(deal.id)}
+                              >
+                                View
+                              </Button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
                 </div>
+              </Card>
+
+              {/* Deal detail cards below the table */}
+              {selectedDeal && selectedDeal !== 'explainer' && deals.find(d => d.id === selectedDeal) && (
+                <Card className="rounded-sm border-border">
+                  <CardHeader>
+                    <CardTitle className="text-sm">Deal Steps</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <DealSteps dealId={selectedDeal} onClose={() => setSelectedDeal(null)} />
+                  </CardContent>
+                </Card>
               )}
-            </CardContent>
-          </Card>
+            </>
+          )}
         </TabsContent>
 
         <TabsContent value="imfpa" className="space-y-6">
-          {/* IMFPA Informational Notice */}
           <IMFPAInfoNotice />
           
           {deals.length === 0 ? (
-            <Card>
+            <Card className="rounded-sm">
               <CardContent className="text-center py-12">
                 <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
                 <p className="text-muted-foreground">No deals to create IMFPA for. Create a deal first.</p>
@@ -497,7 +642,7 @@ const BrokerDashboard = () => {
             <div className="space-y-4">
               <p className="text-sm text-muted-foreground">Select a deal to view/create its IMFPA agreement:</p>
               {deals.map((deal, index) => (
-                <Card key={deal.id} className="cursor-pointer hover:shadow-md" onClick={() => setSelectedDeal(deal.id)}>
+                <Card key={deal.id} className="cursor-pointer hover:shadow-md rounded-sm" onClick={() => setSelectedDeal(deal.id)}>
                   <CardContent className="p-4 flex items-center justify-between">
                     <span>Deal #{deals.length - index} - {deal.cargo_type || deal.deal_type}</span>
                     <Badge variant="outline">{deal.status}</Badge>
@@ -532,7 +677,7 @@ const BrokerDashboard = () => {
           ) : (
             <>
               {/* Membership ID Card */}
-              <Card className="trading-card overflow-hidden">
+              <Card className="rounded-sm overflow-hidden border-border">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2">
                     <Shield className="h-5 w-5" />
@@ -540,14 +685,11 @@ const BrokerDashboard = () => {
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-6">
-                  {/* ID Card */}
                   <div className="relative group">
-                    <div className="w-full max-w-md mx-auto bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 rounded-2xl p-6 shadow-2xl border border-slate-700 transform transition-all duration-500 hover:scale-105 hover:shadow-3xl animate-fade-in">
-                      {/* Card Background Pattern */}
-                      <div className="absolute inset-0 bg-gradient-to-br from-blue-900/20 to-purple-900/20 rounded-2xl"></div>
-                      <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl from-white/5 to-transparent rounded-2xl"></div>
+                    <div className="w-full max-w-md mx-auto bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 rounded-lg p-6 shadow-2xl border border-slate-700">
+                      <div className="absolute inset-0 bg-gradient-to-br from-blue-900/20 to-purple-900/20 rounded-lg"></div>
+                      <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl from-white/5 to-transparent rounded-lg"></div>
                       
-                      {/* Card Header */}
                       <div className="relative z-10">
                         <div className="flex items-center justify-between mb-6">
                           <div className="flex items-center gap-2">
@@ -563,17 +705,16 @@ const BrokerDashboard = () => {
                             variant={profile.verified_at ? "default" : "secondary"}
                             className={`${
                               profile.verified_at 
-                                ? 'bg-green-500 text-white shadow-lg shadow-green-500/25' 
-                                : 'bg-yellow-500 text-black shadow-lg shadow-yellow-500/25'
-                            } animate-pulse`}
+                                ? 'bg-emerald-500 text-white' 
+                                : 'bg-amber-500 text-black'
+                            }`}
                           >
                             {profile.verified_at ? "VERIFIED" : "PENDING"}
                           </Badge>
                         </div>
 
-                        {/* Member Photo */}
                         <div className="flex items-start gap-4 mb-4">
-                          <div className="w-16 h-20 rounded-lg border-2 border-slate-500 overflow-hidden shadow-inner">
+                          <div className="w-16 h-20 rounded-lg border-2 border-slate-500 overflow-hidden">
                             {profile.profile_image_url ? (
                               <img 
                                 src={profile.profile_image_url} 
@@ -587,7 +728,6 @@ const BrokerDashboard = () => {
                             )}
                           </div>
                           
-                          {/* Member Info */}
                           <div className="flex-1 space-y-1">
                             <div className="text-white font-semibold text-lg leading-tight">
                               {profile.full_name.toUpperCase()}
@@ -601,7 +741,6 @@ const BrokerDashboard = () => {
                           </div>
                         </div>
 
-                        {/* ID Number */}
                         <div className="bg-slate-800/50 rounded-lg p-3 mb-4 border border-slate-600">
                           <div className="flex items-center justify-between">
                             <div>
@@ -622,7 +761,6 @@ const BrokerDashboard = () => {
                           </div>
                         </div>
 
-                        {/* Bottom Info */}
                         <div className="flex items-center justify-between text-xs">
                           <div className="text-slate-400">
                             EXP: {new Date(Date.now() + 365*24*60*60*1000).toLocaleDateString('en-US', { 
@@ -635,67 +773,28 @@ const BrokerDashboard = () => {
                             {profile.license_number ? `LIC: ${profile.license_number}` : 'NO LICENSE'}
                           </div>
                         </div>
-
-                        {/* Holographic Effect */}
-                        <div className="absolute top-4 right-4 w-12 h-8 bg-gradient-to-r from-cyan-400/20 to-pink-400/20 rounded transform rotate-12 animate-pulse"></div>
-                      </div>
-                    </div>
-
-                    {/* Card Back (Hidden, shown on hover for premium effect) */}
-                    <div className="absolute inset-0 w-full max-w-md mx-auto bg-gradient-to-br from-slate-800 via-slate-700 to-slate-800 rounded-2xl p-6 shadow-2xl border border-slate-600 opacity-0 group-hover:opacity-100 transform rotate-y-180 group-hover:rotate-y-0 transition-all duration-700 pointer-events-none">
-                      <div className="relative z-10 h-full flex flex-col justify-between">
-                        <div className="text-center">
-                          <div className="text-white font-bold text-sm mb-2">TERMS & CONDITIONS</div>
-                          <div className="text-slate-400 text-xs leading-relaxed">
-                            This card certifies the holder as an authorized oil trading broker. Valid for commercial transactions within approved networks. Not transferable.
-                          </div>
-                        </div>
-                        
-                        <div className="space-y-2">
-                          <div className="flex justify-between text-xs text-slate-400">
-                            <span>Experience:</span>
-                            <span>{profile.years_experience || 0} Years</span>
-                          </div>
-                          {profile.specializations && profile.specializations.length > 0 && (
-                            <div className="text-xs text-slate-400">
-                              <div>Specializations:</div>
-                              <div className="text-white">
-                                {profile.specializations.slice(0, 2).join(', ')}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-
-                        <div className="text-center">
-                          <div className="w-full h-8 bg-slate-900 rounded flex items-center justify-center">
-                            <div className="text-slate-500 text-xs font-mono">
-                              *** AUTHORIZED BROKER ***
-                            </div>
-                          </div>
-                        </div>
                       </div>
                     </div>
                   </div>
 
-                  {/* Additional Info Below Card */}
                   <div className="mt-6 grid grid-cols-2 gap-4 text-sm">
-                    <div className="bg-slate-50 dark:bg-slate-800 p-3 rounded-lg">
+                    <div className="bg-muted/50 p-3 rounded-md">
                       <div className="text-muted-foreground text-xs">Status</div>
                       <div className="font-medium flex items-center gap-1">
                         {profile.verified_at ? (
                           <>
-                            <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                            <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
                             Active & Verified
                           </>
                         ) : (
                           <>
-                            <div className="w-2 h-2 bg-yellow-500 rounded-full animate-pulse"></div>
+                            <div className="w-2 h-2 bg-amber-500 rounded-full animate-pulse"></div>
                             Awaiting Verification
                           </>
                         )}
                       </div>
                     </div>
-                    <div className="bg-slate-50 dark:bg-slate-800 p-3 rounded-lg">
+                    <div className="bg-muted/50 p-3 rounded-md">
                       <div className="text-muted-foreground text-xs">Last Updated</div>
                       <div className="font-medium">
                         {new Date(profile.updated_at).toLocaleDateString()}
@@ -706,15 +805,13 @@ const BrokerDashboard = () => {
                   <div className="mt-4 text-center">
                     <p className="text-xs text-muted-foreground">
                       Present this ID for all official broker transactions and verifications.
-                      <br />
-                      Keep your membership information up to date for continued access.
                     </p>
                   </div>
                 </CardContent>
               </Card>
 
               {/* Profile Information */}
-              <Card className="trading-card">
+              <Card className="rounded-sm border-border">
                 <CardHeader className="flex flex-row items-center justify-between">
                   <CardTitle className="flex items-center gap-2">
                     <User className="h-5 w-5" />
@@ -723,6 +820,7 @@ const BrokerDashboard = () => {
                   <Button 
                     variant="outline" 
                     size="sm"
+                    className="rounded-sm"
                     onClick={() => setEditingProfile(true)}
                   >
                     <Settings className="h-4 w-4 mr-2" />
@@ -731,7 +829,6 @@ const BrokerDashboard = () => {
                 </CardHeader>
                 <CardContent>
                   <div className="space-y-6">
-                    {/* Profile Photo & Basic Info */}
                     <div className="flex flex-col md:flex-row gap-6">
                       <div className="flex-shrink-0">
                         <div className="w-32 h-32 rounded-lg border-2 border-border overflow-hidden">
@@ -768,7 +865,6 @@ const BrokerDashboard = () => {
                       </div>
                     </div>
 
-                    {/* Bio */}
                     {profile.bio && (
                       <div>
                         <h4 className="font-semibold mb-2">Biography</h4>
@@ -776,7 +872,6 @@ const BrokerDashboard = () => {
                       </div>
                     )}
 
-                    {/* Personal Information */}
                     <div>
                       <h4 className="font-semibold mb-3 flex items-center gap-2">
                         <User className="h-4 w-4" />
@@ -806,7 +901,6 @@ const BrokerDashboard = () => {
                       </div>
                     </div>
 
-                    {/* Company Information */}
                     <div>
                       <h4 className="font-semibold mb-3 flex items-center gap-2">
                         <Briefcase className="h-4 w-4" />
@@ -823,106 +917,21 @@ const BrokerDashboard = () => {
                         </div>
                         <div>
                           <span className="text-muted-foreground">Years Experience:</span>
-                          <p className="font-medium">
-                            {profile.years_experience ? `${profile.years_experience} years` : 'Not specified'}
-                          </p>
+                          <p className="font-medium">{profile.years_experience || 'Not specified'}</p>
                         </div>
                       </div>
                     </div>
 
-                    {/* Professional Details */}
-                    <div>
-                      <h4 className="font-semibold mb-3 flex items-center gap-2">
-                        <FileText className="h-4 w-4" />
-                        Professional Details
-                      </h4>
-                      <div className="space-y-4">
-                        {/* Specializations */}
-                        {profile.specializations && profile.specializations.length > 0 && (
-                          <div>
-                            <span className="text-muted-foreground text-sm">Specializations:</span>
-                            <div className="flex flex-wrap gap-2 mt-1">
-                              {profile.specializations.map((spec, index) => (
-                                <Badge key={index} variant="secondary">
-                                  {spec}
-                                </Badge>
-                              ))}
-                            </div>
-                          </div>
-                        )}
+                    {profile.specializations && profile.specializations.length > 0 && (
+                      <div>
+                        <h4 className="font-semibold mb-3">Specializations</h4>
+                        <div className="flex flex-wrap gap-2">
+                          {profile.specializations.map((spec, index) => (
+                            <Badge key={index} variant="outline" className="rounded-sm">{spec}</Badge>
+                          ))}
+                        </div>
                       </div>
-                    </div>
-
-                    {/* Account Information */}
-                    <div>
-                      <h4 className="font-semibold mb-3 flex items-center gap-2">
-                        <Settings className="h-4 w-4" />
-                        Account Information
-                      </h4>
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
-                        <div>
-                          <span className="text-muted-foreground">Broker ID:</span>
-                          <p className="font-mono text-xs">{profile.id}</p>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground">Member Since:</span>
-                          <p className="font-medium">
-                            {new Date(profile.created_at).toLocaleDateString()}
-                          </p>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground">Last Updated:</span>
-                          <p className="font-medium">
-                            {new Date(profile.updated_at).toLocaleDateString()}
-                          </p>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground">Verification Status:</span>
-                          <div className="flex items-center gap-2">
-                            <div className={`w-2 h-2 rounded-full ${profile.verified_at ? 'bg-green-500' : 'bg-yellow-500'}`}></div>
-                            <p className="font-medium">
-                              {profile.verified_at ? 'Verified' : 'Pending Verification'}
-                            </p>
-                          </div>
-                        </div>
-                        {profile.verified_at && (
-                          <div>
-                            <span className="text-muted-foreground">Verified On:</span>
-                            <p className="font-medium">
-                              {new Date(profile.verified_at).toLocaleDateString()}
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-
-                    {/* Verification Status */}
-                    <div>
-                      <h4 className="font-semibold mb-3 flex items-center gap-2">
-                        <Shield className="h-4 w-4" />
-                        Verification Status
-                      </h4>
-                      <div className="space-y-2">
-                        <div className="flex items-center gap-2">
-                          {profile.verified_at ? (
-                            <>
-                              <CheckCircle className="h-4 w-4 text-green-500" />
-                              <span className="text-sm">Verified on {new Date(profile.verified_at).toLocaleDateString()}</span>
-                            </>
-                          ) : (
-                            <>
-                              <AlertCircle className="h-4 w-4 text-yellow-500" />
-                              <span className="text-sm">Verification pending</span>
-                            </>
-                          )}
-                        </div>
-                        {profile.verification_notes && (
-                          <p className="text-sm text-muted-foreground">
-                            <strong>Notes:</strong> {profile.verification_notes}
-                          </p>
-                        )}
-                      </div>
-                    </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -930,95 +939,67 @@ const BrokerDashboard = () => {
           )}
         </TabsContent>
 
-        <TabsContent value="messages" className="space-y-6">
-          <Card className="trading-card h-[600px] flex flex-col">
+        <TabsContent value="messages" className="space-y-4">
+          <Card className="rounded-sm border-border">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <MessageCircle className="h-5 w-5" />
                 Support Chat
               </CardTitle>
-              <p className="text-sm text-muted-foreground">
-                Chat directly with our support team for help with your deals and platform questions.
-              </p>
             </CardHeader>
-            <CardContent className="flex-1 flex flex-col p-0">
-              {/* Chat Messages */}
-              <div className="flex-1 overflow-y-auto p-4 space-y-4">
+            <CardContent>
+              <div className="border border-border rounded-md h-80 overflow-y-auto p-4 space-y-3 mb-4 bg-muted/20">
                 {messages.length === 0 ? (
-                  <div className="text-center py-8">
-                    <MessageCircle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                    <p className="text-muted-foreground mb-2">
-                      No messages yet. Start the conversation!
-                    </p>
-                    <p className="text-xs text-muted-foreground">
-                      Our support team typically responds within 2 hours during business hours.
-                    </p>
+                  <div className="text-center text-muted-foreground py-8">
+                    <MessageCircle className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                    <p className="text-sm">No messages yet. Start a conversation with our support team.</p>
                   </div>
                 ) : (
-                  messages.map((message) => {
-                    const isOwnMessage = message.sender_id === user!.id;
-                    return (
+                  messages.map((msg) => (
+                    <div
+                      key={msg.id}
+                      className={`flex ${msg.sender_type === 'broker' ? 'justify-end' : 'justify-start'}`}
+                    >
                       <div
-                        key={message.id}
-                        className={`flex ${isOwnMessage ? 'justify-end' : 'justify-start'}`}
+                        className={`max-w-[70%] p-3 rounded-md text-sm ${
+                          msg.sender_type === 'broker'
+                            ? 'bg-primary text-primary-foreground'
+                            : 'bg-muted text-foreground'
+                        }`}
                       >
-                        <div className={`max-w-[70%] ${isOwnMessage ? 'order-2' : 'order-1'}`}>
-                          <div
-                            className={`rounded-2xl px-4 py-2 ${
-                              isOwnMessage
-                                ? 'bg-primary text-primary-foreground'
-                                : 'bg-muted'
-                            }`}
-                          >
-                            <p className="text-sm">{message.message}</p>
-                          </div>
-                          <p className={`text-xs text-muted-foreground mt-1 ${
-                            isOwnMessage ? 'text-right' : 'text-left'
-                          }`}>
-                            {isOwnMessage ? 'You' : 'Support Team'} • {formatMessageTime(message.created_at)}
-                          </p>
-                        </div>
+                        <p>{msg.message}</p>
+                        <span className="text-[10px] opacity-70 mt-1 block">
+                          {formatMessageTime(msg.created_at)}
+                        </span>
                       </div>
-                    );
-                  })
+                    </div>
+                  ))
                 )}
                 <div ref={messagesEndRef} />
               </div>
 
-              {/* Message Input */}
-              <div className="p-4 border-t">
-                <div className="flex items-center gap-2">
-                  <div className="flex-1 relative">
-                    <Input
-                      value={newMessage}
-                      onChange={(e) => setNewMessage(e.target.value)}
-                      placeholder="Type your message to support..."
-                      onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
-                      className="pr-12"
-                    />
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="absolute right-1 top-1/2 -translate-y-1/2 h-8 w-8 p-0"
-                    >
-                      <Paperclip className="h-4 w-4" />
-                    </Button>
-                  </div>
-                  <Button 
-                    onClick={sendMessage}
-                    disabled={!newMessage.trim() || sending}
-                    size="sm"
-                  >
-                    <Send className="h-4 w-4" />
-                  </Button>
-                </div>
+              <div className="flex gap-2">
+                <Input
+                  placeholder="Type your message..."
+                  value={newMessage}
+                  onChange={(e) => setNewMessage(e.target.value)}
+                  onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
+                  className="rounded-sm"
+                />
+                <Button
+                  onClick={sendMessage}
+                  disabled={sending || !newMessage.trim()}
+                  className="rounded-sm"
+                >
+                  <Send className="h-4 w-4" />
+                </Button>
               </div>
             </CardContent>
           </Card>
         </TabsContent>
 
-        <TabsContent value="analytics" className="space-y-6">
-          <Card className="trading-card">
+        <TabsContent value="analytics" className="space-y-4">
+          <Card className="rounded-sm border-border">
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <TrendingUp className="h-5 w-5" />
@@ -1026,28 +1007,59 @@ const BrokerDashboard = () => {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="text-center py-8">
-                <TrendingUp className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                <p className="text-muted-foreground">
-                  Analytics will be available once you have more deal activity.
-                </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="space-y-4">
+                  <h4 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground">Deal Metrics</h4>
+                  <div className="space-y-3">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm">Success Rate</span>
+                      <span className="font-mono font-bold">
+                        {stats.totalDeals ? Math.round((stats.completedDeals / stats.totalDeals) * 100) : 0}%
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm">Avg. Deal Value</span>
+                      <span className="font-mono font-bold">
+                        ${stats.totalDeals ? Math.round(stats.totalValue / stats.totalDeals).toLocaleString() : 0}
+                      </span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm">Total Volume</span>
+                      <span className="font-mono font-bold">${stats.totalValue.toLocaleString()}</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="space-y-4">
+                  <h4 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground">Status Distribution</h4>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="w-3 h-3 rounded-sm bg-emerald-500" />
+                        <span className="text-sm">Completed</span>
+                      </div>
+                      <span className="font-mono font-bold">{stats.completedDeals}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="w-3 h-3 rounded-sm bg-amber-500" />
+                        <span className="text-sm">Pending</span>
+                      </div>
+                      <span className="font-mono font-bold">{stats.pendingDeals}</span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <span className="w-3 h-3 rounded-sm bg-blue-500" />
+                        <span className="text-sm">Active</span>
+                      </div>
+                      <span className="font-mono font-bold">{stats.activeNegotiations}</span>
+                    </div>
+                  </div>
+                </div>
               </div>
             </CardContent>
           </Card>
         </TabsContent>
       </Tabs>
-
-      {/* Deal Steps Modal */}
-      {selectedDeal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
-          <div className="bg-background rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-            <DealSteps 
-              dealId={selectedDeal} 
-              onClose={() => setSelectedDeal(null)} 
-            />
-          </div>
-        </div>
-      )}
     </div>
   );
 };

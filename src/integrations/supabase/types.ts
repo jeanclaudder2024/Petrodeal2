@@ -2024,6 +2024,7 @@ export type Database = {
         Row: {
           address: string | null
           annual_revenue: number | null
+          buyer_company_uuid: string | null
           ceo_name: string | null
           city: string | null
           company_objective: string | null
@@ -2064,6 +2065,7 @@ export type Database = {
           representative_name: string | null
           representative_title: string | null
           sanctions_status: string | null
+          seller_company_uuid: string | null
           signatory_signature_url: string | null
           trade_name: string | null
           trading_regions: string[] | null
@@ -2073,6 +2075,7 @@ export type Database = {
         Insert: {
           address?: string | null
           annual_revenue?: number | null
+          buyer_company_uuid?: string | null
           ceo_name?: string | null
           city?: string | null
           company_objective?: string | null
@@ -2113,6 +2116,7 @@ export type Database = {
           representative_name?: string | null
           representative_title?: string | null
           sanctions_status?: string | null
+          seller_company_uuid?: string | null
           signatory_signature_url?: string | null
           trade_name?: string | null
           trading_regions?: string[] | null
@@ -2122,6 +2126,7 @@ export type Database = {
         Update: {
           address?: string | null
           annual_revenue?: number | null
+          buyer_company_uuid?: string | null
           ceo_name?: string | null
           city?: string | null
           company_objective?: string | null
@@ -2162,13 +2167,29 @@ export type Database = {
           representative_name?: string | null
           representative_title?: string | null
           sanctions_status?: string | null
+          seller_company_uuid?: string | null
           signatory_signature_url?: string | null
           trade_name?: string | null
           trading_regions?: string[] | null
           updated_at?: string | null
           website?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "companies_buyer_company_uuid_fkey"
+            columns: ["buyer_company_uuid"]
+            isOneToOne: false
+            referencedRelation: "buyer_companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "companies_seller_company_uuid_fkey"
+            columns: ["seller_company_uuid"]
+            isOneToOne: false
+            referencedRelation: "seller_companies"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       company_bank_accounts: {
         Row: {
@@ -2467,16 +2488,60 @@ export type Database = {
         }
         Relationships: []
       }
+      document_template_fields: {
+        Row: {
+          ai_prompt: string | null
+          created_at: string
+          database_column: string | null
+          database_table: string | null
+          display_order: number | null
+          id: string
+          is_required: boolean | null
+          placeholder_name: string
+          source: string
+          template_file_name: string
+          updated_at: string
+        }
+        Insert: {
+          ai_prompt?: string | null
+          created_at?: string
+          database_column?: string | null
+          database_table?: string | null
+          display_order?: number | null
+          id?: string
+          is_required?: boolean | null
+          placeholder_name: string
+          source?: string
+          template_file_name: string
+          updated_at?: string
+        }
+        Update: {
+          ai_prompt?: string | null
+          created_at?: string
+          database_column?: string | null
+          database_table?: string | null
+          display_order?: number | null
+          id?: string
+          is_required?: boolean | null
+          placeholder_name?: string
+          source?: string
+          template_file_name?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       document_templates: {
         Row: {
           analysis_result: Json | null
           broker_only: boolean | null
+          category: string | null
           created_at: string | null
           created_by: string | null
           description: string | null
           field_mappings: Json | null
           file_name: string
           file_size: number | null
+          file_type: string | null
           file_url: string | null
           font_family: string | null
           font_size: number | null
@@ -2499,12 +2564,14 @@ export type Database = {
         Insert: {
           analysis_result?: Json | null
           broker_only?: boolean | null
+          category?: string | null
           created_at?: string | null
           created_by?: string | null
           description?: string | null
           field_mappings?: Json | null
           file_name: string
           file_size?: number | null
+          file_type?: string | null
           file_url?: string | null
           font_family?: string | null
           font_size?: number | null
@@ -2527,12 +2594,14 @@ export type Database = {
         Update: {
           analysis_result?: Json | null
           broker_only?: boolean | null
+          category?: string | null
           created_at?: string | null
           created_by?: string | null
           description?: string | null
           field_mappings?: Json | null
           file_name?: string
           file_size?: number | null
+          file_type?: string | null
           file_url?: string | null
           font_family?: string | null
           font_size?: number | null
@@ -5838,6 +5907,7 @@ export type Database = {
           features: string[] | null
           id: string
           is_active: boolean | null
+          is_contact_sales: boolean | null
           is_popular: boolean | null
           max_downloads_per_month: number | null
           monthly_price: number
@@ -5864,6 +5934,7 @@ export type Database = {
           features?: string[] | null
           id?: string
           is_active?: boolean | null
+          is_contact_sales?: boolean | null
           is_popular?: boolean | null
           max_downloads_per_month?: number | null
           monthly_price: number
@@ -5890,6 +5961,7 @@ export type Database = {
           features?: string[] | null
           id?: string
           is_active?: boolean | null
+          is_contact_sales?: boolean | null
           is_popular?: boolean | null
           max_downloads_per_month?: number | null
           monthly_price?: number
@@ -6888,8 +6960,9 @@ export type Database = {
           database_table: string | null
           id: string
           placeholder: string
-          random_option: string
+          random_option: string | null
           source: string
+          template_file_name: string | null
           template_id: string
           updated_at: string
         }
@@ -6903,8 +6976,9 @@ export type Database = {
           database_table?: string | null
           id?: string
           placeholder: string
-          random_option?: string
+          random_option?: string | null
           source?: string
+          template_file_name?: string | null
           template_id: string
           updated_at?: string
         }
@@ -6918,8 +6992,9 @@ export type Database = {
           database_table?: string | null
           id?: string
           placeholder?: string
-          random_option?: string
+          random_option?: string | null
           source?: string
+          template_file_name?: string | null
           template_id?: string
           updated_at?: string
         }
@@ -7399,6 +7474,7 @@ export type Database = {
           benchmark_reference: string | null
           built: number | null
           buyer_company_id: number | null
+          buyer_company_uuid: string | null
           buyer_name: string | null
           callsign: string | null
           cargo_capacity: number | null
@@ -7408,6 +7484,7 @@ export type Database = {
           cargo_type: string | null
           commodity_category: string | null
           commodity_name: string | null
+          commodity_product_id: string | null
           commodity_source_company_id: number | null
           company_id: number | null
           contract_type: string | null
@@ -7475,6 +7552,7 @@ export type Database = {
           routedistance: string | null
           sanctions_status: string | null
           seller_company_id: number | null
+          seller_company_uuid: string | null
           seller_name: string | null
           service_speed: number | null
           shipping_type: string | null
@@ -7498,6 +7576,7 @@ export type Database = {
           benchmark_reference?: string | null
           built?: number | null
           buyer_company_id?: number | null
+          buyer_company_uuid?: string | null
           buyer_name?: string | null
           callsign?: string | null
           cargo_capacity?: number | null
@@ -7507,6 +7586,7 @@ export type Database = {
           cargo_type?: string | null
           commodity_category?: string | null
           commodity_name?: string | null
+          commodity_product_id?: string | null
           commodity_source_company_id?: number | null
           company_id?: number | null
           contract_type?: string | null
@@ -7574,6 +7654,7 @@ export type Database = {
           routedistance?: string | null
           sanctions_status?: string | null
           seller_company_id?: number | null
+          seller_company_uuid?: string | null
           seller_name?: string | null
           service_speed?: number | null
           shipping_type?: string | null
@@ -7597,6 +7678,7 @@ export type Database = {
           benchmark_reference?: string | null
           built?: number | null
           buyer_company_id?: number | null
+          buyer_company_uuid?: string | null
           buyer_name?: string | null
           callsign?: string | null
           cargo_capacity?: number | null
@@ -7606,6 +7688,7 @@ export type Database = {
           cargo_type?: string | null
           commodity_category?: string | null
           commodity_name?: string | null
+          commodity_product_id?: string | null
           commodity_source_company_id?: number | null
           company_id?: number | null
           contract_type?: string | null
@@ -7673,6 +7756,7 @@ export type Database = {
           routedistance?: string | null
           sanctions_status?: string | null
           seller_company_id?: number | null
+          seller_company_uuid?: string | null
           seller_name?: string | null
           service_speed?: number | null
           shipping_type?: string | null
@@ -7719,6 +7803,20 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "vessels_buyer_company_uuid_fkey"
+            columns: ["buyer_company_uuid"]
+            isOneToOne: false
+            referencedRelation: "buyer_companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vessels_commodity_product_id_fkey"
+            columns: ["commodity_product_id"]
+            isOneToOne: false
+            referencedRelation: "oil_products"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "vessels_commodity_source_company_id_fkey"
             columns: ["commodity_source_company_id"]
             isOneToOne: false
@@ -7758,6 +7856,13 @@ export type Database = {
             columns: ["seller_company_id"]
             isOneToOne: false
             referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vessels_seller_company_uuid_fkey"
+            columns: ["seller_company_uuid"]
+            isOneToOne: false
+            referencedRelation: "seller_companies"
             referencedColumns: ["id"]
           },
         ]

@@ -15,10 +15,10 @@ import { useTemplates, usePlaceholderSettings, useDatabaseSchema, useDataSources
 import { Template, PlaceholderSetting, DatabaseColumn } from './types';
 
 const SOURCE_OPTIONS = [
-  { value: 'database', label: 'Database', icon: Database, description: 'From table field (default)' },
-  { value: 'custom', label: 'Custom Value', icon: Type, description: 'Enter static text' },
+  { value: 'database', label: 'Database', icon: Database, description: 'Map to Supabase table field' },
   { value: 'csv', label: 'CSV File', icon: FileSpreadsheet, description: 'Map to uploaded CSV data' },
   { value: 'random', label: 'Random/AI', icon: Shuffle, description: 'Auto-generate or AI-fill' },
+  { value: 'custom', label: 'Custom Value', icon: Type, description: 'Enter static text' },
 ];
 
 const RANDOM_OPTIONS = [
@@ -50,30 +50,12 @@ export default function PlaceholderMappingTab() {
     if (selectedTemplate) {
       const templateSettings = settings[selectedTemplate.name];
       if (templateSettings) {
-        // Ensure all values are properly formatted; default source to 'database'
-        // CRITICAL: normalize 'random', null, or empty → 'database'
-        const normalizedSettings: Record<string, PlaceholderSetting> = {};
-        Object.entries(templateSettings.settings || {}).forEach(([key, setting]) => {
-          const s = setting as Record<string, unknown>;
-          const rawSource = (s.source as string) ?? '';
-          const source = (rawSource === 'random' || !rawSource) ? 'database' : (s.source as PlaceholderSetting['source']);
-          normalizedSettings[key] = {
-            source,
-            value: typeof s.customValue === 'string' ? s.customValue : String(s.value ?? s.customValue ?? ''),
-            table: typeof s.databaseTable === 'string' ? s.databaseTable : String(s.table ?? s.databaseTable ?? ''),
-            field: typeof s.databaseField === 'string' ? s.databaseField : String(s.field ?? s.databaseField ?? ''),
-            csv_id: typeof s.csvId === 'string' ? s.csvId : String(s.csv_id ?? s.csvId ?? ''),
-            csv_field: typeof s.csvField === 'string' ? s.csvField : String(s.csv_field ?? s.csvField ?? ''),
-            csv_row: typeof s.csvRow === 'number' ? s.csvRow : (s.csv_row ?? s.csvRow ? Number(s.csv_row ?? s.csvRow) : undefined),
-            random_option: (s.randomOption as PlaceholderSetting['random_option']) || (s.random_option as PlaceholderSetting['random_option']) || 'auto',
-          };
-        });
-        setPlaceholderSettings(normalizedSettings);
+        setPlaceholderSettings(templateSettings.settings || {});
       } else {
-        // Initialize empty settings for each placeholder — default source: database
+        // Initialize empty settings for each placeholder
         const initialSettings: Record<string, PlaceholderSetting> = {};
         selectedTemplate.placeholders?.forEach(ph => {
-          initialSettings[ph] = { source: 'database', value: '' };
+          initialSettings[ph] = { source: 'custom', value: '' };
         });
         setPlaceholderSettings(initialSettings);
       }
@@ -112,12 +94,12 @@ export default function PlaceholderMappingTab() {
 
   const handleSave = async () => {
     if (!selectedTemplate) return;
-
+    
     setSaving(true);
     try {
       await saveSettings({
         template_name: selectedTemplate.name,
-        template_id: String(selectedTemplate.id ?? selectedTemplate.template_id ?? ''),
+        template_id: selectedTemplate.id,
         settings: placeholderSettings,
       });
       toast.success('Placeholder settings saved');
@@ -228,8 +210,8 @@ export default function PlaceholderMappingTab() {
             <ScrollArea className="h-[450px] pr-4">
               <div className="space-y-4">
                 {selectedTemplate.placeholders.map(placeholder => {
-                  const setting = placeholderSettings[placeholder] || { source: 'database' as PlaceholderSetting['source'], value: '' };
-
+                  const setting = placeholderSettings[placeholder] || { source: 'custom' };
+                  
                   return (
                     <Card key={placeholder} className="border-dashed">
                       <CardContent className="p-4">
@@ -263,7 +245,7 @@ export default function PlaceholderMappingTab() {
                                 <div>
                                   <Label className="text-xs">Table</Label>
                                   <Select
-                                    value={String(setting.table || '')}
+                                    value={setting.table || ''}
                                     onValueChange={(v) => {
                                       updatePlaceholder(placeholder, { table: v, field: '' });
                                       handleLoadColumns(v);
@@ -273,10 +255,8 @@ export default function PlaceholderMappingTab() {
                                       <SelectValue placeholder="Select table" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                      {tables.map((t, idx) => (
-                                        <SelectItem key={t.name || `table-${idx}`} value={t.name || ''}>
-                                          {t.name || 'Unknown'}
-                                        </SelectItem>
+                                      {tables.map(t => (
+                                        <SelectItem key={t.name} value={t.name}>{t.name}</SelectItem>
                                       ))}
                                     </SelectContent>
                                   </Select>
@@ -284,7 +264,7 @@ export default function PlaceholderMappingTab() {
                                 <div>
                                   <Label className="text-xs">Field</Label>
                                   <Select
-                                    value={String(setting.field || '')}
+                                    value={setting.field || ''}
                                     onValueChange={(v) => updatePlaceholder(placeholder, { field: v })}
                                     disabled={!setting.table}
                                   >
@@ -292,9 +272,9 @@ export default function PlaceholderMappingTab() {
                                       <SelectValue placeholder="Select field" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                      {(tableColumns[setting.table || ''] || []).map((col, idx) => (
-                                        <SelectItem key={col.name || `col-${idx}`} value={col.name || ''}>
-                                          {col.name || 'Unknown'} <span className="text-muted-foreground">({col.type || 'unknown'})</span>
+                                      {(tableColumns[setting.table || ''] || []).map(col => (
+                                        <SelectItem key={col.name} value={col.name}>
+                                          {col.name} <span className="text-muted-foreground">({col.type})</span>
                                         </SelectItem>
                                       ))}
                                     </SelectContent>
@@ -308,7 +288,7 @@ export default function PlaceholderMappingTab() {
                                 <div>
                                   <Label className="text-xs">CSV File</Label>
                                   <Select
-                                    value={String(setting.csv_id || '')}
+                                    value={setting.csv_id || ''}
                                     onValueChange={(v) => {
                                       updatePlaceholder(placeholder, { csv_id: v, csv_field: '' });
                                       handleLoadCsvFields(v);
@@ -318,10 +298,8 @@ export default function PlaceholderMappingTab() {
                                       <SelectValue placeholder="Select file" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                      {csvFiles.map((csv, idx) => (
-                                        <SelectItem key={csv.id || `csv-${idx}`} value={csv.id || ''}>
-                                          {csv.name || csv.display_name || csv.id || 'Unknown'}
-                                        </SelectItem>
+                                      {csvFiles.map(csv => (
+                                        <SelectItem key={csv.id} value={csv.id}>{csv.name}</SelectItem>
                                       ))}
                                     </SelectContent>
                                   </Select>
@@ -329,7 +307,7 @@ export default function PlaceholderMappingTab() {
                                 <div>
                                   <Label className="text-xs">Field</Label>
                                   <Select
-                                    value={String(setting.csv_field || '')}
+                                    value={setting.csv_field || ''}
                                     onValueChange={(v) => updatePlaceholder(placeholder, { csv_field: v })}
                                     disabled={!setting.csv_id}
                                   >
@@ -337,10 +315,8 @@ export default function PlaceholderMappingTab() {
                                       <SelectValue placeholder="Select field" />
                                     </SelectTrigger>
                                     <SelectContent>
-                                      {(csvFieldsCache[setting.csv_id || ''] || []).map((field, idx) => (
-                                        <SelectItem key={field || `field-${idx}`} value={field || ''}>
-                                          {field || 'Unknown'}
-                                        </SelectItem>
+                                      {(csvFieldsCache[setting.csv_id || ''] || []).map(field => (
+                                        <SelectItem key={field} value={field}>{field}</SelectItem>
                                       ))}
                                     </SelectContent>
                                   </Select>
@@ -362,7 +338,7 @@ export default function PlaceholderMappingTab() {
                               <div>
                                 <Label className="text-xs">Generation Method</Label>
                                 <Select
-                                  value={String(setting.random_option || 'auto')}
+                                  value={setting.random_option || 'auto'}
                                   onValueChange={(v) => updatePlaceholder(placeholder, { random_option: v as PlaceholderSetting['random_option'] })}
                                 >
                                   <SelectTrigger className="mt-1 h-8 text-xs">

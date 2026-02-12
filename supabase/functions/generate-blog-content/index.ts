@@ -12,7 +12,7 @@ serve(async (req) => {
   }
 
   try {
-    const { title, subject, type, content, pageData, jobData } = await req.json();
+    const { title, subject, type, content, pageData, jobData, category } = await req.json();
     const openAIApiKey = Deno.env.get('OPENAI_API_KEY');
     
     if (!openAIApiKey) {
@@ -22,29 +22,209 @@ serve(async (req) => {
     let prompt = '';
     let systemPrompt = '';
 
+    // Helper function to clean HTML content
+    const cleanHTMLContent = (content: string): string => {
+      let cleaned = content;
+      // Remove markdown code fences
+      cleaned = cleaned.replace(/^```html\s*/gi, '');
+      cleaned = cleaned.replace(/^```\s*/gi, '');
+      cleaned = cleaned.replace(/```\s*$/gi, '');
+      // Remove full HTML document wrapper if present
+      cleaned = cleaned.replace(/<!DOCTYPE[^>]*>/gi, '');
+      cleaned = cleaned.replace(/<html[^>]*>/gi, '');
+      cleaned = cleaned.replace(/<\/html>/gi, '');
+      cleaned = cleaned.replace(/<head>[\s\S]*?<\/head>/gi, '');
+      cleaned = cleaned.replace(/<body[^>]*>/gi, '');
+      cleaned = cleaned.replace(/<\/body>/gi, '');
+      return cleaned.trim();
+    };
+
+    // Get category-specific instructions and structure
+    const getCategorySpecificPrompt = (categoryName: string | null) => {
+      const normalizedCategory = categoryName?.toLowerCase()?.trim() || '';
+      
+      switch (normalizedCategory) {
+        case 'deal strategies':
+          return {
+            instructions: `
+CATEGORY: DEAL STRATEGIES
+- Focus on strategic oil deal structuring and negotiation logic
+- Present at least one realistic deal scenario with specific details
+- Explain step-by-step strategic decision-making process
+- Identify commercial, legal, and operational risks
+- Reference key documents: SPA (Sales Purchase Agreement), LC (Letter of Credit), SGS (inspection), POP (Proof of Product), B/L (Bill of Lading), NCNDA, IMFPA
+- Emphasize risk mitigation and deal protection strategies
+- Show how structured intelligence platforms like PetroDealHub support informed deal execution
+`,
+            structure: `
+REQUIRED STRUCTURE (use these as <h2> headings):
+1. Strategic Context - Set the stage for why this deal strategy matters
+2. Deal Scenario - Present a realistic example with quantities, pricing, and parties
+3. Strategy Breakdown - Step-by-step analysis of the approach
+4. Risk & Mitigation - Identify risks and protective measures
+5. Institutional Execution Logic - How professional traders execute this
+6. Conclusion - Key takeaways and strategic recommendations
+`
+          };
+          
+        case 'industry insights':
+          return {
+            instructions: `
+CATEGORY: INDUSTRY INSIGHTS
+- Write from an insider, industry-wide perspective
+- Discuss oil refineries, major oil companies, and supply chains
+- Reference upstream (exploration/production), midstream (transport), and downstream (refining/distribution) operations
+- Include geographic and capacity-based insights (specific regions, refinery capacities in bpd)
+- Demonstrate how industry intelligence connects refineries, companies, and markets
+- Position PetroDealHub as an intelligence bridge across the industry ecosystem
+`,
+            structure: `
+REQUIRED STRUCTURE (use these as <h2> headings):
+1. Industry Overview - Current state of the sector
+2. Key Players & Infrastructure - Major companies, refineries, and facilities
+3. Operational Dynamics - How the industry operates day-to-day
+4. Market Interconnections - How different parts of the value chain interact
+5. Intelligence & Visibility Role - Why transparency and data matter
+6. Conclusion & References - Summary with industry references
+`
+          };
+          
+        case 'market analysis':
+          return {
+            instructions: `
+CATEGORY: MARKET ANALYSIS
+- Use data-driven, analytical language throughout
+- Include numerical data, trends, and specific timeframes
+- Add tables for data comparisons (use HTML <table> tags)
+- Analyze price movements, trading volumes, and market scenarios
+- Interpret data for decision-making purposes
+- Explain how intelligence platforms translate data into strategic insight
+- Reference Brent, WTI, OPEC+ decisions, and regional price differentials
+`,
+            structure: `
+REQUIRED STRUCTURE (use these as <h2> headings):
+1. Market Snapshot - Current market conditions with key figures
+2. Data Analysis - In-depth analysis of trends and indicators
+3. Tables & Charts Section - Include at least one HTML table with market data
+4. Scenario Interpretation - What different scenarios mean for traders
+5. Strategic Implications - How to act on this analysis
+6. Conclusion & References - Summary with data sources
+`
+          };
+          
+        case 'oil trading':
+          return {
+            instructions: `
+CATEGORY: OIL TRADING
+- Maintain strict professional and compliance-oriented tone
+- Reference international standards and institutions: SGS, ICC (International Chamber of Commerce), Incoterms (CIF, FOB, DES, CFR)
+- Explain documentation flows and legal frameworks in detail
+- Highlight common trading risks and compliance failures
+- Show how structured trading intelligence enhances trust and execution quality
+- Reference banking instruments: LC, SBLC, DLC, MT799, MT760
+`,
+            structure: `
+REQUIRED STRUCTURE (use these as <h2> headings):
+1. Trading Framework - Overview of the trading structure
+2. Institutional Standards - SGS, ICC, Incoterms requirements
+3. Documentation Flow - Step-by-step document sequence
+4. Risk & Compliance - Legal and operational risks
+5. Professional Execution Model - Best practices for execution
+6. Conclusion & References - Summary with institutional references
+`
+          };
+          
+        case 'platform updates':
+          return {
+            instructions: `
+CATEGORY: PLATFORM UPDATES
+- Write with transparency and institutional clarity
+- Explain platform updates as infrastructure improvements
+- Focus on user value, trust, and reliability
+- Include real-world use cases or operational benefits
+- Reference compliance alignment and industry credibility
+- Show how PetroDealHub strengthens secure deal environments
+`,
+            structure: `
+REQUIRED STRUCTURE (use these as <h2> headings):
+1. Update Overview - What has changed and why
+2. Why It Matters - The significance of this update
+3. User Impact - How users benefit from these changes
+4. Trust & Compliance Alignment - Security and regulatory aspects
+5. Platform Vision - Future direction and goals
+6. Conclusion, Proof & References - Summary with evidence
+`
+          };
+          
+        default:
+          return {
+            instructions: `
+Apply general professional oil industry writing standards.
+- Cover the topic comprehensively with industry expertise
+- Include relevant data points and examples
+- Maintain authoritative, institutional tone
+`,
+            structure: `
+Use logical sections with clear headings:
+- Introduction and context
+- Main analysis or explanation
+- Key considerations and implications
+- Conclusion with actionable insights
+`
+          };
+      }
+    };
+
     if (type === 'content') {
-      systemPrompt = `You are an expert content writer for PetroDealHub, a leading oil trading platform. 
-      Write professional, engaging blog articles that:
-      - Sound like they're written by a human industry expert, not AI
-      - Include specific facts, statistics, and real-world examples about oil trading
-      - Naturally mention PetroDealHub as a solution where appropriate
-      - Use a professional but approachable tone
-      - Include proper headings and structure
-      - Are SEO-optimized with the keyword "PetroDealHub" appearing 2-3 times naturally
-      - Are approximately 800-1200 words`;
+      const categoryPrompt = getCategorySpecificPrompt(category);
       
-      prompt = `Write a comprehensive blog article about: "${subject}"
+      systemPrompt = `You are writing a professional, authoritative blog article for an oil & energy intelligence platform named "PetroDealHub".
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+GENERAL RULES (APPLY TO ALL CATEGORIES)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+- Write in clear, professional, industry-grade language matching the title language
+- Do NOT use marketing or promotional language - no hype, no buzzwords
+- The article must read as expert analysis, not advertising - write as a human expert
+- PetroDealHub must be integrated naturally as part of the solution ecosystem (1-2 mentions maximum), never as an ad
+- Use realistic industry terminology and professional formatting
+- Length: 1,300–1,900 words (this is critical)
+- Include subheadings, logical flow, and strong conclusions
+- Where appropriate, include tables, structured lists, or analytical summaries
+- Tone: confident, institutional, credible - like a report from a senior analyst
+
+${categoryPrompt.instructions}
+
+${categoryPrompt.structure}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+HTML FORMATTING RULES
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+- Use <h2> for main section headings (use the structure above)
+- Use <h3> for subsections within main sections
+- Use <p> for paragraphs
+- Use <table class="comparison-table"> for data tables with <thead> and <tbody>
+- Use <blockquote class="expert-quote"> for important insights
+- Use <ul class="benefit-list"> or <ol> for structured lists
+- Use <strong> for emphasis on key terms
+- Return ONLY clean HTML content - NO markdown code blocks, NO DOCTYPE, NO html/head/body tags
+- Start directly with the first content element`;
       
-      Title: ${title}
-      
-      Requirements:
-      1. Start with an engaging introduction that hooks the reader
-      2. Include 3-4 main sections with clear headings
-      3. Add specific industry insights and data points
-      4. Mention how PetroDealHub helps solve related challenges
-      5. End with a compelling conclusion and call-to-action
-      
-      Return the article in HTML format with proper <h2>, <h3>, <p>, <ul>, <li> tags.`;
+      prompt = `Write a comprehensive, professional blog article about: "${subject}"
+
+Title: ${title}
+${category ? `Category: ${category}` : ''}
+
+Create an authoritative article following the category-specific structure and guidelines provided. 
+
+Remember:
+- Write as a senior industry analyst, not AI
+- Use specific data, examples, and references
+- Maintain institutional credibility throughout
+- 1,300-1,900 words minimum
+- Return ONLY clean HTML (no code blocks, no document wrappers)`;
 
     } else if (type === 'seo') {
       systemPrompt = `You are an SEO expert specializing in the oil and energy industry.`;
@@ -202,7 +382,7 @@ serve(async (req) => {
           { role: 'system', content: systemPrompt },
           { role: 'user', content: prompt }
         ],
-        max_tokens: type === 'content' ? 2000 : 1000,
+        max_tokens: type === 'content' ? 4000 : 1000,
         temperature: 0.7,
       }),
     });

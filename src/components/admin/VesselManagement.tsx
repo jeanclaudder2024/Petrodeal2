@@ -85,6 +85,10 @@ interface Vessel {
   commodity_source_company_id: number | null;
   buyer_name: string | null;
   seller_name: string | null;
+  // NEW: UUID-based commercial party references (for Broker Only View)
+  buyer_company_uuid?: string | null;
+  seller_company_uuid?: string | null;
+  commodity_product_id?: string | null;
   // Deal & Commercial Terms
   deal_reference_id: string | null;
   deal_status: string | null;
@@ -125,6 +129,27 @@ interface Refinery {
   country: string;
 }
 
+// NEW: Actual buyer/seller from separate tables (UUID IDs)
+interface ActualBuyerCompany {
+  id: string; // UUID
+  name: string;
+  trade_name?: string;
+  country?: string;
+}
+
+interface ActualSellerCompany {
+  id: string; // UUID
+  name: string;
+  trade_name?: string;
+  country?: string;
+}
+
+interface OilProductOption {
+  id: string; // UUID
+  commodity_name?: string;
+  product_code?: string;
+}
+
 interface Country {
   code: string;
   name: string;
@@ -149,6 +174,11 @@ const VesselManagement = ({ vesselIdToEdit, onVesselEditComplete }: VesselManage
   const [sellerCompanies, setSellerCompanies] = useState<Company[]>([]);
   const [realCompanies, setRealCompanies] = useState<Company[]>([]);
   const [refineries, setRefineries] = useState<Refinery[]>([]);
+  
+  // NEW: Actual buyer/seller/products from correct tables
+  const [actualBuyerCompanies, setActualBuyerCompanies] = useState<ActualBuyerCompany[]>([]);
+  const [actualSellerCompanies, setActualSellerCompanies] = useState<ActualSellerCompany[]>([]);
+  const [oilProducts, setOilProducts] = useState<OilProductOption[]>([]);
   const [showInlineMap, setShowInlineMap] = useState(false);
   const [activeTab, setActiveTab] = useState('basic');
   const mapRef = useRef<HTMLDivElement>(null);
@@ -261,6 +291,10 @@ const VesselManagement = ({ vesselIdToEdit, onVesselEditComplete }: VesselManage
     commodity_source_company_id: null,
     buyer_name: null,
     seller_name: null,
+    // NEW: UUID-based commercial party references
+    buyer_company_uuid: null,
+    seller_company_uuid: null,
+    commodity_product_id: null,
     deal_reference_id: null,
     deal_status: 'open',
     contract_type: null,
@@ -338,6 +372,51 @@ const VesselManagement = ({ vesselIdToEdit, onVesselEditComplete }: VesselManage
     }
   };
 
+  // NEW: Fetch actual buyer companies from buyer_companies table
+  const fetchActualBuyerCompanies = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('buyer_companies')
+        .select('id, name, trade_name, country')
+        .order('name');
+
+      if (error) throw error;
+      setActualBuyerCompanies(data || []);
+    } catch (error) {
+      console.error('Error fetching buyer companies:', error);
+    }
+  };
+
+  // NEW: Fetch actual seller companies from seller_companies table
+  const fetchActualSellerCompanies = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('seller_companies')
+        .select('id, name, trade_name, country')
+        .order('name');
+
+      if (error) throw error;
+      setActualSellerCompanies(data || []);
+    } catch (error) {
+      console.error('Error fetching seller companies:', error);
+    }
+  };
+
+  // NEW: Fetch oil products from oil_products table
+  const fetchOilProducts = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('oil_products')
+        .select('id, commodity_name, product_code')
+        .order('commodity_name');
+
+      if (error) throw error;
+      setOilProducts(data || []);
+    } catch (error) {
+      console.error('Error fetching oil products:', error);
+    }
+  };
+
   const fetchRefineries = async () => {
     try {
       const { data, error } = await supabase
@@ -357,6 +436,10 @@ const VesselManagement = ({ vesselIdToEdit, onVesselEditComplete }: VesselManage
     fetchPorts();
     fetchCompanies();
     fetchRefineries();
+    // NEW: Fetch actual buyer/seller/products from correct tables
+    fetchActualBuyerCompanies();
+    fetchActualSellerCompanies();
+    fetchOilProducts();
   }, []);
 
   // Handle vesselIdToEdit prop from ConnectionManagement
@@ -520,6 +603,10 @@ const VesselManagement = ({ vesselIdToEdit, onVesselEditComplete }: VesselManage
         payment_notes: vesselData.payment_notes,
         company_id: vesselData.company_id ? Number(vesselData.company_id) : null,
         metadata: vesselData.metadata,
+        // NEW: UUID-based commercial party references (Broker Only View)
+        buyer_company_uuid: (vesselData as any).buyer_company_uuid || null,
+        seller_company_uuid: (vesselData as any).seller_company_uuid || null,
+        commodity_product_id: (vesselData as any).commodity_product_id || null,
         // CRITICAL: DO NOT include refinery_id - it causes FK constraint errors
         // Use target_refinery text field instead
       };
@@ -718,6 +805,58 @@ const VesselManagement = ({ vesselIdToEdit, onVesselEditComplete }: VesselManage
     }
   };
 
+  // Geographic region mapping for commercial party assignment
+  const GEOGRAPHIC_REGIONS: Record<string, string[]> = {
+    'Asia': ['China', 'Japan', 'South Korea', 'Singapore', 'Malaysia', 'Thailand', 'Indonesia', 'India', 'Hong Kong', 'Taiwan', 'Vietnam', 'Philippines'],
+    'Middle East': ['UAE', 'United Arab Emirates', 'Saudi Arabia', 'Qatar', 'Kuwait', 'Bahrain', 'Oman', 'Iraq', 'Iran'],
+    'Europe': ['Netherlands', 'UK', 'United Kingdom', 'Germany', 'France', 'Belgium', 'Norway', 'Sweden', 'Denmark', 'Italy', 'Spain', 'Greece', 'Turkey'],
+    'Americas': ['United States', 'Canada', 'Brazil', 'Colombia', 'Mexico', 'Venezuela', 'Argentina', 'Chile', 'Peru'],
+    'Africa': ['Nigeria', 'Angola', 'Libya', 'Algeria', 'Egypt', 'South Africa', 'Kenya', 'Morocco'],
+  };
+
+  const detectRegionFromPort = (portText: string | null, portId: number | null): string | null => {
+    if (!portText && !portId) return null;
+    // Check port name/text against geographic keywords
+    const textToCheck = portText?.toLowerCase() || '';
+    // Also check by port ID from ports list
+    let portCountry = '';
+    if (portId) {
+      const port = ports.find(p => p.id === portId);
+      if (port) {
+        portCountry = port.country?.toLowerCase() || '';
+        // Also check port name
+        if (!textToCheck) {
+          const portName = port.name?.toLowerCase() || '';
+          for (const [region, countries] of Object.entries(GEOGRAPHIC_REGIONS)) {
+            for (const country of countries) {
+              if (portName.includes(country.toLowerCase()) || portCountry.includes(country.toLowerCase())) {
+                return region;
+              }
+            }
+          }
+        }
+      }
+    }
+    for (const [region, countries] of Object.entries(GEOGRAPHIC_REGIONS)) {
+      for (const country of countries) {
+        if (textToCheck.includes(country.toLowerCase()) || portCountry.includes(country.toLowerCase())) {
+          return region;
+        }
+      }
+    }
+    return null;
+  };
+
+  const getCompaniesByRegion = (companies: { id: string; name: string; country?: string }[], region: string | null): { id: string; name: string; country?: string }[] => {
+    if (!region) return companies;
+    const regionCountries = GEOGRAPHIC_REGIONS[region] || [];
+    const filtered = companies.filter(c => {
+      const country = c.country?.toLowerCase() || '';
+      return regionCountries.some(rc => country.includes(rc.toLowerCase()));
+    });
+    return filtered.length > 0 ? filtered : companies;
+  };
+
   // Bulk auto-fill all vessels using AI search (same as individual AI autofill)
   const handleBulkAutofill = async () => {
     // Filter vessels that have required fields (name, imo, and mmsi)
@@ -748,6 +887,14 @@ const VesselManagement = ({ vesselIdToEdit, onVesselEditComplete }: VesselManage
     let successCount = 0;
     let failedCount = 0;
 
+    // Pre-fetch commercial parties for assignment
+    const allBuyers = [...actualBuyerCompanies];
+    const allSellers = [...actualSellerCompanies];
+    const allProducts = [...oilProducts];
+    let buyerIndex = 0;
+    let sellerIndex = 0;
+    let productIndex = 0;
+
     for (let i = 0; i < eligibleVessels.length; i++) {
       const vessel = eligibleVessels[i];
       setBulkProgress(prev => ({ ...prev, current: i + 1 }));
@@ -774,7 +921,7 @@ const VesselManagement = ({ vesselIdToEdit, onVesselEditComplete }: VesselManage
           };
           
           // Update vessel in database with AI data
-          const updateData = {
+          const updateData: any = {
             ...data.vesselData,
             ...protectedFields,
             ai_autofill_source: 'AIS'
@@ -786,6 +933,48 @@ const VesselManagement = ({ vesselIdToEdit, onVesselEditComplete }: VesselManage
               delete updateData[key];
             }
           });
+
+          // --- Commercial Party Assignment with Geographic Logic ---
+          const updatedVesselData = { ...vessel, ...data.vesselData };
+          
+          // Detect destination region for buyer assignment
+          const destRegion = detectRegionFromPort(
+            updatedVesselData.discharge_port || updatedVesselData.loading_port,
+            updatedVesselData.destination_port
+          );
+          
+          // Detect loading region for seller assignment
+          const loadRegion = detectRegionFromPort(
+            updatedVesselData.loading_port || updatedVesselData.discharge_port,
+            updatedVesselData.departure_port
+          );
+
+          // Assign buyer (prefer geographic match)
+          if (allBuyers.length > 0) {
+            const regionBuyers = getCompaniesByRegion(allBuyers, destRegion);
+            const selectedBuyer = regionBuyers[buyerIndex % regionBuyers.length];
+            updateData.buyer_company_uuid = selectedBuyer.id;
+            buyerIndex++;
+            // Cycle through all buyers before repeating
+            if (buyerIndex >= allBuyers.length) buyerIndex = 0;
+          }
+
+          // Assign seller (prefer geographic match)
+          if (allSellers.length > 0) {
+            const regionSellers = getCompaniesByRegion(allSellers, loadRegion);
+            const selectedSeller = regionSellers[sellerIndex % regionSellers.length];
+            updateData.seller_company_uuid = selectedSeller.id;
+            sellerIndex++;
+            if (sellerIndex >= allSellers.length) sellerIndex = 0;
+          }
+
+          // Assign commodity/oil product (cycle through all)
+          if (allProducts.length > 0) {
+            const selectedProduct = allProducts[productIndex % allProducts.length];
+            updateData.commodity_product_id = selectedProduct.id;
+            productIndex++;
+            if (productIndex >= allProducts.length) productIndex = 0;
+          }
 
           const { error: updateError } = await supabase
             .from('vessels')
@@ -814,7 +1003,7 @@ const VesselManagement = ({ vesselIdToEdit, onVesselEditComplete }: VesselManage
     const skippedMsg = skippedCount > 0 ? ` Skipped ${skippedCount} (missing Name/IMO/MMSI).` : '';
     toast({
       title: "Bulk AI Auto-Fill Complete",
-      description: `Successfully updated ${successCount} vessels. Failed: ${failedCount}.${skippedMsg}`,
+      description: `Successfully updated ${successCount} vessels (with buyer/seller/commodity). Failed: ${failedCount}.${skippedMsg}`,
       variant: failedCount > 0 ? "destructive" : "default"
     });
   };
@@ -1961,18 +2150,21 @@ const VesselManagement = ({ vesselIdToEdit, onVesselEditComplete }: VesselManage
                           <Lock className="h-4 w-4" />
                           Broker Only View (Hidden from Public)
                         </h4>
+                        <div className="text-xs text-muted-foreground mb-2">
+                          Data from buyer_companies ({actualBuyerCompanies.length}), seller_companies ({actualSellerCompanies.length}), oil_products ({oilProducts.length})
+                        </div>
                         <div className="grid grid-cols-3 gap-4">
                           <div>
-                            <Label htmlFor="buyer_company_id">Buyer Company</Label>
+                            <Label htmlFor="buyer_company_uuid">Buyer Company (UUID)</Label>
                             <Select 
-                              value={formData.buyer_company_id?.toString() || "none"} 
+                              value={(formData as any).buyer_company_uuid || "none"} 
                               onValueChange={(value) => {
-                                const company = buyerCompanies.find(c => c.id.toString() === value);
+                                const company = actualBuyerCompanies.find(c => c.id === value);
                                 setFormData(prev => ({ 
                                   ...prev, 
-                                  buyer_company_id: value === "none" ? null : Number(value),
+                                  buyer_company_uuid: value === "none" ? null : value,
                                   buyer_name: company?.name || null
-                                }));
+                                } as any));
                               }}
                             >
                               <SelectTrigger>
@@ -1980,25 +2172,25 @@ const VesselManagement = ({ vesselIdToEdit, onVesselEditComplete }: VesselManage
                               </SelectTrigger>
                               <SelectContent>
                                 <SelectItem value="none">Select buyer</SelectItem>
-                                {buyerCompanies.map((company) => (
-                                  <SelectItem key={company.id} value={company.id.toString()}>
-                                    {company.name} ({company.country})
+                                {actualBuyerCompanies.map((company) => (
+                                  <SelectItem key={company.id} value={company.id}>
+                                    {company.name} {company.country ? `(${company.country})` : ''}
                                   </SelectItem>
                                 ))}
                               </SelectContent>
                             </Select>
                           </div>
                           <div>
-                            <Label htmlFor="seller_company_id">Seller Company</Label>
+                            <Label htmlFor="seller_company_uuid">Seller Company (UUID)</Label>
                             <Select 
-                              value={formData.seller_company_id?.toString() || "none"} 
+                              value={(formData as any).seller_company_uuid || "none"} 
                               onValueChange={(value) => {
-                                const company = sellerCompanies.find(c => c.id.toString() === value);
+                                const company = actualSellerCompanies.find(c => c.id === value);
                                 setFormData(prev => ({ 
                                   ...prev, 
-                                  seller_company_id: value === "none" ? null : Number(value),
+                                  seller_company_uuid: value === "none" ? null : value,
                                   seller_name: company?.name || null
-                                }));
+                                } as any));
                               }}
                             >
                               <SelectTrigger>
@@ -2006,28 +2198,35 @@ const VesselManagement = ({ vesselIdToEdit, onVesselEditComplete }: VesselManage
                               </SelectTrigger>
                               <SelectContent>
                                 <SelectItem value="none">Select seller</SelectItem>
-                                {sellerCompanies.map((company) => (
-                                  <SelectItem key={company.id} value={company.id.toString()}>
-                                    {company.name} ({company.country})
+                                {actualSellerCompanies.map((company) => (
+                                  <SelectItem key={company.id} value={company.id}>
+                                    {company.name} {company.country ? `(${company.country})` : ''}
                                   </SelectItem>
                                 ))}
                               </SelectContent>
                             </Select>
                           </div>
                           <div>
-                            <Label htmlFor="commodity_source_company_id">Commodity Sources</Label>
+                            <Label htmlFor="commodity_product_id">Commodity / Oil Product</Label>
                             <Select 
-                              value={formData.commodity_source_company_id?.toString() || "none"} 
-                              onValueChange={(value) => setFormData(prev => ({ ...prev, commodity_source_company_id: value === "none" ? null : Number(value) }))}
+                              value={(formData as any).commodity_product_id || "none"} 
+                              onValueChange={(value) => {
+                                const product = oilProducts.find(p => p.id === value);
+                                setFormData(prev => ({ 
+                                  ...prev, 
+                                  commodity_product_id: value === "none" ? null : value,
+                                  commodity_name: product?.commodity_name || null
+                                } as any));
+                              }}
                             >
                               <SelectTrigger>
-                                <SelectValue placeholder="Select source" />
+                                <SelectValue placeholder="Select product" />
                               </SelectTrigger>
                               <SelectContent>
-                                <SelectItem value="none">Select source</SelectItem>
-                                {realCompanies.map((company) => (
-                                  <SelectItem key={company.id} value={company.id.toString()}>
-                                    {company.name} ({company.country})
+                                <SelectItem value="none">Select product</SelectItem>
+                                {oilProducts.map((product) => (
+                                  <SelectItem key={product.id} value={product.id}>
+                                    {product.commodity_name || product.product_code || 'Unknown'}
                                   </SelectItem>
                                 ))}
                               </SelectContent>

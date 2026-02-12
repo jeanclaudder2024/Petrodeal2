@@ -1,575 +1,504 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { 
   FileText, Upload, Trash2, Edit2, Play, Search, 
-  Loader2, RefreshCw, CloudUpload
+  Loader2, Download, Calendar, HardDrive, Settings2
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { useTemplates } from './hooks/useDocumentAPI';
-import { Template, API_BASE_URL, normalizeTemplateName } from './types';
+import { useTemplates, useVessels, usePlans } from './hooks/useDocumentAPI';
+import { Template } from './types';
 
-// Sentinel value for "Use document default" - Radix Select forbids empty string
-const FONT_NONE = '__none__';
+const FONT_OPTIONS = [
+  'Arial', 'Times New Roman', 'Calibri', 'Helvetica', 
+  'Georgia', 'Verdana', 'Courier New'
+];
+
+const FONT_SIZES = [8, 9, 10, 11, 12, 14, 16, 18, 20, 24, 28, 32];
 
 interface TemplatesTabProps {
-  isAuthenticated: boolean;
-  onRefresh?: () => void;
+  onEditPlaceholders?: (template: Template) => void;
+  onTestTemplate?: (template: Template) => void;
 }
 
-export default function TemplatesTab({ isAuthenticated, onRefresh }: TemplatesTabProps) {
+export default function TemplatesTab({ onEditPlaceholders, onTestTemplate }: TemplatesTabProps) {
   const { templates, loading, fetchTemplates, uploadTemplate, deleteTemplate, updateMetadata } = useTemplates();
+  const { vessels, fetchVessels, processDocument } = useVessels();
+  const { plans, fetchPlans } = usePlans();
   
-  const [selectedFile, setSelectedFile] = useState<File | null>(null);
-  const [uploading, setUploading] = useState(false);
-  const [deleting, setDeleting] = useState<string | null>(null);
-  const [metadataDialogOpen, setMetadataDialogOpen] = useState(false);
-  const [placeholdersDialogOpen, setPlaceholdersDialogOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [uploadDialogOpen, setUploadDialogOpen] = useState(false);
+  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [testDialogOpen, setTestDialogOpen] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<Template | null>(null);
+  const [uploading, setUploading] = useState(false);
+  const [processing, setProcessing] = useState(false);
   
   // Upload form state
-  const [displayName, setDisplayName] = useState('');
-  const [description, setDescription] = useState('');
-  const [fontFamily, setFontFamily] = useState(FONT_NONE);
-  const [fontSize, setFontSize] = useState('');
-  
-  // Metadata edit form state
-  const [metaDisplayName, setMetaDisplayName] = useState('');
-  const [metaDescription, setMetaDescription] = useState('');
-  const [metaFontFamily, setMetaFontFamily] = useState('');
-  const [metaFontSize, setMetaFontSize] = useState('');
-  
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const [uploadForm, setUploadForm] = useState({
+    file: null as File | null,
+    name: '',
+    description: '',
+    fontFamily: '',
+    fontSize: 12,
+    planIds: [] as string[],
+  });
+
+  // Edit form state
+  const [editForm, setEditForm] = useState({
+    displayName: '',
+    description: '',
+    fontFamily: '',
+    fontSize: 12,
+    planIds: [] as string[],
+  });
 
   useEffect(() => {
-    if (isAuthenticated) {
-      fetchTemplates();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isAuthenticated]);
+    fetchTemplates();
+    fetchVessels();
+    fetchPlans();
+  }, [fetchTemplates, fetchVessels, fetchPlans]);
 
-  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setSelectedFile(file);
-    }
-  };
+  const filteredTemplates = templates.filter(t =>
+    t.name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    t.file_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    t.description?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
-  const handleUploadAreaClick = () => {
-    fileInputRef.current?.click();
-  };
-
-  const handleUpload = async () => {
-    if (!isAuthenticated) {
-      toast.error('Please login first');
-      return;
-    }
-    if (!selectedFile) {
-      toast.error('Please select a file first');
+  const handleUpload = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!uploadForm.file || !uploadForm.name) {
+      toast.error('Please fill in required fields');
       return;
     }
 
     setUploading(true);
     try {
-      const formData = new FormData();
-      formData.append('file', selectedFile);
-      if (displayName) formData.append('name', displayName);
-      if (description) formData.append('description', description);
-      if (fontFamily && fontFamily !== FONT_NONE) formData.append('font_family', fontFamily);
-      if (fontSize) formData.append('font_size', fontSize);
-
-      const response = await fetch(`${API_BASE_URL}/upload-template`, {
-        method: 'POST',
-        credentials: 'include',
-        body: formData,
-      });
-
-      if (!response.ok) {
-        const error = await response.json().catch(() => ({ detail: 'Upload failed' }));
-        throw new Error(error.detail || 'Upload failed');
-      }
-
-      const data = await response.json();
-      if (data.warnings && Array.isArray(data.warnings)) {
-        data.warnings.forEach((msg: string) => {
-          toast.warning('Upload Warning', { description: msg });
-        });
-      }
-
-      const db = data.database_count ?? 0;
-      const csv = data.csv_count ?? 0;
-      const rnd = data.random_count ?? 0;
-      const aiDetail = data.ai_analysis && (db || csv || rnd)
-        ? ` AI: ${db} database, ${csv} CSV, ${rnd} random.`
-        : '';
-      toast.success('Upload Success', {
-        description: data.mapping_created
-          ? `Template "${data.filename}" uploaded with ${data.placeholder_count} placeholders; mapping created for ${data.mapped_count ?? 0}.${aiDetail}`
-          : `Template "${data.filename}" uploaded with ${data.placeholder_count} placeholders`,
-      });
-
-      // Reset form
-      setSelectedFile(null);
-      setDisplayName('');
-      setDescription('');
-      setFontFamily(FONT_NONE);
-      setFontSize('');
-      if (fileInputRef.current) fileInputRef.current.value = '';
-
-      // Reload templates
-      setTimeout(() => {
-        fetchTemplates();
-        onRefresh?.();
-      }, 500);
+      await uploadTemplate(
+        uploadForm.file,
+        uploadForm.name,
+        uploadForm.description,
+        uploadForm.fontFamily,
+        uploadForm.fontSize,
+        uploadForm.planIds
+      );
+      toast.success('Template uploaded successfully');
+      setUploadDialogOpen(false);
+      setUploadForm({ file: null, name: '', description: '', fontFamily: '', fontSize: 12, planIds: [] });
     } catch (error) {
-      toast.error('Upload Failed', {
-        description: error instanceof Error ? error.message : 'Unknown error',
-      });
+      toast.error(error instanceof Error ? error.message : 'Upload failed');
     } finally {
       setUploading(false);
     }
   };
 
-  const handleDelete = async (templateName: string) => {
-    if (!isAuthenticated) {
-      toast.error('Please login first');
-      return;
-    }
-    // Normalize template name for deletion
-    const normalizedName = normalizeTemplateName(templateName);
-    if (!confirm(`Delete template "${normalizedName}"?`)) return;
-
-    setDeleting(normalizedName);
+  const handleDelete = async (template: Template) => {
+    if (!confirm(`Delete template "${template.name}"?`)) return;
+    
     try {
-      await deleteTemplate(normalizedName);
-      toast.success('Deleted', { description: `Template "${normalizedName}" deleted` });
-      setTimeout(() => fetchTemplates(), 1000);
-    } catch {
-      /* deleteTemplate already toasts on error */
-    } finally {
-      setDeleting(null);
+      await deleteTemplate(template.file_name || template.name);
+      toast.success('Template deleted');
+    } catch (error) {
+      toast.error('Failed to delete template');
     }
   };
 
-  const openMetadataModal = (template: Template) => {
+  const handleEdit = (template: Template) => {
     setSelectedTemplate(template);
-    const meta = template.metadata || {};
-    setMetaDisplayName(meta.display_name || template.display_name || template.title || template.name || '');
-    setMetaDescription(meta.description || template.description || '');
-    const font = meta.font_family || template.font_family || '';
-    setMetaFontFamily(font || FONT_NONE);
-    setMetaFontSize((meta.font_size || template.font_size)?.toString() || '');
-    setMetadataDialogOpen(true);
+    setEditForm({
+      displayName: template.display_name || template.name,
+      description: template.description || '',
+      fontFamily: template.font_family || '',
+      fontSize: template.font_size || 12,
+      planIds: template.plan_ids || [],
+    });
+    setEditDialogOpen(true);
   };
 
-  const saveMetadata = async () => {
+  const handleSaveEdit = async () => {
     if (!selectedTemplate) return;
-
-    setUploading(true);
+    
     try {
-      const payload = {
-        display_name: metaDisplayName,
-        description: metaDescription,
-        font_family: (metaFontFamily && metaFontFamily !== FONT_NONE) ? metaFontFamily : undefined,
-        font_size: metaFontSize ? parseInt(metaFontSize) : undefined,
-      };
-
-      const templateId = selectedTemplate.id ?? selectedTemplate.template_id ?? normalizeTemplateName(selectedTemplate.name || selectedTemplate.file_name || '');
-      await updateMetadata(String(templateId), payload);
-      toast.success('Metadata Saved', { description: 'Template details updated successfully' });
-      setMetadataDialogOpen(false);
-      setTimeout(() => {
-        fetchTemplates();
-      }, 500);
-    } catch (error) {
-      toast.error('Save Failed', {
-        description: error instanceof Error ? error.message : 'Unknown error',
+      await updateMetadata(selectedTemplate.id, {
+        display_name: editForm.displayName,
+        description: editForm.description,
+        font_family: editForm.fontFamily,
+        font_size: editForm.fontSize,
+        plan_ids: editForm.planIds,
       });
-    } finally {
-      setUploading(false);
+      toast.success('Template updated');
+      setEditDialogOpen(false);
+    } catch (error) {
+      toast.error('Failed to update template');
     }
   };
 
-  const viewPlaceholders = (template: Template) => {
-    setSelectedTemplate(template);
-    setPlaceholdersDialogOpen(true);
+  const handleTest = async (vesselImo: string) => {
+    if (!selectedTemplate || !vesselImo) return;
+    
+    setProcessing(true);
+    try {
+      const result = await processDocument(selectedTemplate.file_name || selectedTemplate.name, vesselImo);
+      if (result.success && result.document_url) {
+        window.open(result.document_url, '_blank');
+        toast.success('Document generated successfully');
+      } else if (result.document_id) {
+        window.open(`http://localhost:8000/download/${result.document_id}`, '_blank');
+        toast.success('Document generated successfully');
+      }
+      setTestDialogOpen(false);
+    } catch (error) {
+      toast.error('Failed to generate document');
+    } finally {
+      setProcessing(false);
+    }
   };
 
-  const formatBytes = (bytes: number) => {
-    if (bytes === 0) return '0 Bytes';
+  const formatFileSize = (bytes?: number) => {
+    if (!bytes) return 'N/A';
     const k = 1024;
-    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const sizes = ['B', 'KB', 'MB'];
     const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+    return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
+  };
+
+  const formatDate = (dateString?: string) => {
+    if (!dateString) return 'N/A';
+    return new Date(dateString).toLocaleDateString('en-US', {
+      year: 'numeric', month: 'short', day: 'numeric'
+    });
   };
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-      {/* Left Column - Upload Form */}
-      <div className="md:col-span-1 space-y-4">
-        <Card>
-          <CardHeader className="bg-primary text-primary-foreground">
-            <CardTitle className="flex items-center gap-2">
-              <Upload className="h-5 w-5" />
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row gap-4 justify-between">
+        <div className="relative flex-1 max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search templates..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+        
+        <Dialog open={uploadDialogOpen} onOpenChange={setUploadDialogOpen}>
+          <DialogTrigger asChild>
+            <Button className="gap-2">
+              <Upload className="h-4 w-4" />
               Upload Template
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="pt-6 space-y-4">
-            <div>
-              <Label>Display Name</Label>
-              <Input
-                value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
-                placeholder="Optional friendly name"
-                className="mt-1"
-              />
-            </div>
-            <div>
-              <Label>Description</Label>
-              <Textarea
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                placeholder="Describe the template for other admins"
-                rows={2}
-                className="mt-1"
-              />
-            </div>
-            <div className="grid grid-cols-2 gap-2">
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-lg">
+            <DialogHeader>
+              <DialogTitle>Upload New Template</DialogTitle>
+            </DialogHeader>
+            <form onSubmit={handleUpload} className="space-y-4">
               <div>
-                <Label>Default Font Family</Label>
-                <Select value={fontFamily || FONT_NONE} onValueChange={(v) => setFontFamily(v)}>
-                  <SelectTrigger className="mt-1">
-                    <SelectValue placeholder="Use document default" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value={FONT_NONE}>Use document default</SelectItem>
-                    <SelectItem value="Arial">Arial</SelectItem>
-                    <SelectItem value="Calibri">Calibri</SelectItem>
-                    <SelectItem value="Times New Roman">Times New Roman</SelectItem>
-                    <SelectItem value="Helvetica">Helvetica</SelectItem>
-                    <SelectItem value="Courier New">Courier New</SelectItem>
-                    <SelectItem value="Verdana">Verdana</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <Label>Font Size (pt)</Label>
+                <Label>Template File (.docx) *</Label>
                 <Input
-                  type="number"
-                  value={fontSize}
-                  onChange={(e) => setFontSize(e.target.value)}
-                  placeholder="Auto"
-                  min={8}
-                  max={72}
+                  type="file"
+                  accept=".docx"
+                  onChange={(e) => setUploadForm(f => ({ ...f, file: e.target.files?.[0] || null }))}
                   className="mt-1"
                 />
               </div>
-            </div>
-            <div className="border-t pt-4">
-              <div
-                onClick={handleUploadAreaClick}
-                className="border-2 border-dashed rounded-lg p-8 text-center cursor-pointer hover:border-primary hover:bg-primary/5 transition-colors"
-              >
-                {selectedFile ? (
-                  <>
-                    <FileText className="h-12 w-12 text-green-600 mx-auto mb-3" />
-                    <h5 className="text-green-600 font-semibold">{selectedFile.name}</h5>
-                    <p className="text-sm text-muted-foreground mt-1">Ready to upload</p>
-                  </>
-                ) : (
-                  <>
-                    <CloudUpload className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
-                    <h5>Drop DOCX file here</h5>
-                    <p className="text-sm text-muted-foreground">or click to browse</p>
-                  </>
-                )}
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept=".docx"
-                  onChange={handleFileSelect}
-                  className="hidden"
+              <div>
+                <Label>Display Name *</Label>
+                <Input
+                  value={uploadForm.name}
+                  onChange={(e) => setUploadForm(f => ({ ...f, name: e.target.value }))}
+                  placeholder="Enter template name"
+                  className="mt-1"
                 />
               </div>
-            </div>
-            <Button
-              onClick={handleUpload}
-              disabled={!selectedFile || uploading || !isAuthenticated}
-              className="w-full"
-            >
-              {uploading ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                  Uploading...
-                </>
-              ) : (
-                <>
-                  <Upload className="h-4 w-4 mr-2" />
-                  Upload Template
-                </>
-              )}
-            </Button>
-          </CardContent>
-        </Card>
+              <div>
+                <Label>Description</Label>
+                <Textarea
+                  value={uploadForm.description}
+                  onChange={(e) => setUploadForm(f => ({ ...f, description: e.target.value }))}
+                  placeholder="Enter description"
+                  rows={3}
+                  className="mt-1"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <Label>Font Family</Label>
+                  <Select
+                    value={uploadForm.fontFamily}
+                    onValueChange={(v) => setUploadForm(f => ({ ...f, fontFamily: v }))}
+                  >
+                    <SelectTrigger className="mt-1">
+                      <SelectValue placeholder="Select font" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {FONT_OPTIONS.map(font => (
+                        <SelectItem key={font} value={font}>{font}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Font Size</Label>
+                  <Select
+                    value={uploadForm.fontSize.toString()}
+                    onValueChange={(v) => setUploadForm(f => ({ ...f, fontSize: parseInt(v) }))}
+                  >
+                    <SelectTrigger className="mt-1">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {FONT_SIZES.map(size => (
+                        <SelectItem key={size} value={size.toString()}>{size}pt</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <div className="flex justify-end gap-2 pt-4">
+                <Button type="button" variant="outline" onClick={() => setUploadDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={uploading}>
+                  {uploading ? <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Uploading...</> : 'Upload'}
+                </Button>
+              </div>
+            </form>
+          </DialogContent>
+        </Dialog>
       </div>
 
-      {/* Right Column - Templates List */}
-      <div className="md:col-span-2">
+      {/* Templates Grid */}
+      {loading ? (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      ) : filteredTemplates.length === 0 ? (
         <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="flex items-center gap-2">
-              <FileText className="h-5 w-5" />
-              Templates
-            </CardTitle>
-            <Button variant="outline" size="sm" onClick={() => fetchTemplates()}>
-              <RefreshCw className="h-4 w-4 mr-1" />
-              Refresh
-            </Button>
-          </CardHeader>
-          <CardContent>
-            {loading ? (
-              <div className="text-center text-muted-foreground py-8">
-                <Loader2 className="h-6 w-6 animate-spin mx-auto mb-2" />
-                Loading templates...
-              </div>
-            ) : templates.length === 0 ? (
-              <div className="text-center text-muted-foreground py-8">
-                No templates found
-              </div>
-            ) : (
-              <div className="space-y-3">
-                {templates.map((template, index) => {
-                  const meta = template.metadata || {};
-                  const placeholderList = template.placeholders || [];
-                  const preview = placeholderList.slice(0, 12);
-                  const extraCount = Math.max(0, placeholderList.length - 12);
-                  const templateDescription = meta.description || template.description || 'No description provided';
-                  const fontFamily = meta.font_family || template.font_family || 'Default';
-                  const fontSize = (meta.font_size || template.font_size) ? `${meta.font_size || template.font_size}pt` : '';
-                  const fontSummary = fontSize ? `${fontFamily} · ${fontSize}` : fontFamily;
-                  const templateSize = template.size || template.file_size || 0;
-                  const templateDisplayName = meta.display_name || template.display_name || template.title || template.name;
-                  const templateId = template.id || template.template_id || template.name;
-                  const templateName = normalizeTemplateName(template.name || template.file_name || '');
-                  // Ensure unique key by combining ID with index as fallback
-                  const uniqueKey = templateId ? `${templateId}-${index}` : `template-${template.name || template.file_name || 'unknown'}-${index}`;
-
-                  // Construct editor URL - remove /api if present, ensure proper base URL
-                  const editorBaseUrl = API_BASE_URL.replace('/api', '').replace(/\/$/, '');
-                  const editorUrl = `${editorBaseUrl}/cms/editor.html?template_id=${templateId}`;
-
-                  return (
-                    <Card key={uniqueKey} className="border-l-4 border-l-primary">
-                      <CardContent className="pt-4">
-                        <div className="flex justify-between items-start gap-4">
-                          <div className="flex-1">
-                            <h5 className="font-semibold flex items-center gap-2 mb-1">
-                              <FileText className="h-4 w-4 text-primary" />
-                              {templateDisplayName}
-                            </h5>
-                            <div className="text-sm text-muted-foreground mb-2">
-                              <span className="flex items-center gap-1">
-                                <FileText className="h-3 w-3" />
-                                {formatBytes(templateSize)} · 
-                                <span className="ml-1">{placeholderList.length} placeholders</span>
-                              </span>
-                            </div>
-                            <p className="text-sm text-muted-foreground mb-2">{templateDescription}</p>
-                            <div className="text-sm text-muted-foreground mb-2">
-                              <span className="flex items-center gap-1">
-                                <FileText className="h-3 w-3" />
-                                {fontSummary}
-                              </span>
-                            </div>
-                            <div className="flex flex-wrap gap-1 mb-2">
-                              {preview.map((ph, idx) => (
-                                <Badge key={idx} variant="secondary" className="text-xs">
-                                  {ph}
-                                </Badge>
-                              ))}
-                              {extraCount > 0 && (
-                                <span className="text-xs text-muted-foreground">+{extraCount} more</span>
-                              )}
-                            </div>
-                          </div>
-                          <div className="flex flex-col gap-2 min-w-[120px]">
-                            <Button
-                              size="sm"
-                              variant="default"
-                              className="w-full"
-                              onClick={() => {
-                                window.open(editorUrl, '_blank');
-                              }}
-                            >
-                              <Play className="h-3 w-3 mr-1" />
-                              Test
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="default"
-                              className="w-full"
-                              onClick={() => {
-                                window.open(editorUrl, '_blank');
-                              }}
-                            >
-                              <Edit2 className="h-3 w-3 mr-1" />
-                              Edit Rules
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="w-full"
-                              onClick={() => viewPlaceholders(template)}
-                            >
-                              <Search className="h-3 w-3 mr-1" />
-                              Placeholders
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="w-full"
-                              onClick={() => openMetadataModal(template)}
-                            >
-                              <Edit2 className="h-3 w-3 mr-1" />
-                              Metadata
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="destructive"
-                              className="w-full"
-                              onClick={() => handleDelete(templateName)}
-                              disabled={deleting === templateName}
-                            >
-                              {deleting === templateName ? (
-                                <Loader2 className="h-3 w-3 animate-spin mr-1" />
-                              ) : (
-                                <Trash2 className="h-3 w-3 mr-1" />
-                              )}
-                              Delete
-                            </Button>
-                          </div>
-                        </div>
-                      </CardContent>
-                    </Card>
-                  );
-                })}
-              </div>
-            )}
+          <CardContent className="flex flex-col items-center justify-center py-12">
+            <FileText className="h-12 w-12 text-muted-foreground/50 mb-4" />
+            <p className="text-muted-foreground">No templates found</p>
+            <p className="text-sm text-muted-foreground/70">Upload your first template to get started</p>
           </CardContent>
         </Card>
-      </div>
+      ) : (
+        <div className="grid gap-4">
+          {filteredTemplates.map((template) => (
+            <Card key={template.id} className="hover:shadow-md transition-shadow">
+              <CardContent className="p-5">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-3 mb-2">
+                      <FileText className="h-5 w-5 text-primary shrink-0" />
+                      <h3 className="font-semibold truncate">
+                        {template.display_name || template.name}
+                      </h3>
+                      <Badge variant={template.is_active ? "default" : "secondary"}>
+                        {template.is_active ? "Active" : "Inactive"}
+                      </Badge>
+                    </div>
+                    
+                    {template.description && (
+                      <p className="text-sm text-muted-foreground mb-3 line-clamp-2">
+                        {template.description}
+                      </p>
+                    )}
+                    
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+                      <div className="flex items-center gap-1.5 text-muted-foreground">
+                        <FileText className="h-3.5 w-3.5" />
+                        <span className="truncate">{template.file_name}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-muted-foreground">
+                        <HardDrive className="h-3.5 w-3.5" />
+                        <span>{formatFileSize(template.file_size)}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-muted-foreground">
+                        <Calendar className="h-3.5 w-3.5" />
+                        <span>{formatDate(template.created_at)}</span>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-muted-foreground">
+                        <Settings2 className="h-3.5 w-3.5" />
+                        <span>{template.placeholders?.length || 0} placeholders</span>
+                      </div>
+                    </div>
 
-      {/* Metadata Modal */}
-      <Dialog open={metadataDialogOpen} onOpenChange={setMetadataDialogOpen}>
-        <DialogContent aria-describedby={undefined}>
+                    {template.placeholders && template.placeholders.length > 0 && (
+                      <div className="mt-3 flex flex-wrap gap-1.5">
+                        {template.placeholders.slice(0, 6).map((ph, i) => (
+                          <Badge key={i} variant="outline" className="text-xs font-mono">
+                            {ph}
+                          </Badge>
+                        ))}
+                        {template.placeholders.length > 6 && (
+                          <Badge variant="outline" className="text-xs">
+                            +{template.placeholders.length - 6} more
+                          </Badge>
+                        )}
+                      </div>
+                    )}
+
+                    {template.font_family && (
+                      <p className="text-xs text-muted-foreground mt-2">
+                        Font: {template.font_family} {template.font_size}pt
+                      </p>
+                    )}
+                  </div>
+                  
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleEdit(template)}
+                      title="Edit metadata"
+                    >
+                      <Edit2 className="h-4 w-4" />
+                    </Button>
+                    {onEditPlaceholders && (
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => onEditPlaceholders(template)}
+                        title="Configure placeholders"
+                      >
+                        <Settings2 className="h-4 w-4" />
+                      </Button>
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => {
+                        setSelectedTemplate(template);
+                        setTestDialogOpen(true);
+                      }}
+                      title="Test generation"
+                    >
+                      <Play className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleDelete(template)}
+                      className="text-destructive hover:text-destructive"
+                      title="Delete"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* Edit Dialog */}
+      <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
+        <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>Edit Template Metadata</DialogTitle>
+            <DialogTitle>Edit Template</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
             <div>
               <Label>Display Name</Label>
               <Input
-                value={metaDisplayName}
-                onChange={(e) => setMetaDisplayName(e.target.value)}
-                placeholder="Display name in CMS"
+                value={editForm.displayName}
+                onChange={(e) => setEditForm(f => ({ ...f, displayName: e.target.value }))}
                 className="mt-1"
               />
             </div>
             <div>
               <Label>Description</Label>
               <Textarea
-                value={metaDescription}
-                onChange={(e) => setMetaDescription(e.target.value)}
-                placeholder="Visible to CMS admins"
+                value={editForm.description}
+                onChange={(e) => setEditForm(f => ({ ...f, description: e.target.value }))}
                 rows={3}
                 className="mt-1"
               />
             </div>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 gap-4">
               <div>
-                <Label>Default Font</Label>
-                <Select value={metaFontFamily || FONT_NONE} onValueChange={(v) => setMetaFontFamily(v)}>
+                <Label>Font Family</Label>
+                <Select
+                  value={editForm.fontFamily}
+                  onValueChange={(v) => setEditForm(f => ({ ...f, fontFamily: v }))}
+                >
                   <SelectTrigger className="mt-1">
-                    <SelectValue placeholder="Use document default" />
+                    <SelectValue placeholder="Select font" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value={FONT_NONE}>Use document default</SelectItem>
-                    <SelectItem value="Arial">Arial</SelectItem>
-                    <SelectItem value="Calibri">Calibri</SelectItem>
-                    <SelectItem value="Times New Roman">Times New Roman</SelectItem>
-                    <SelectItem value="Helvetica">Helvetica</SelectItem>
-                    <SelectItem value="Courier New">Courier New</SelectItem>
-                    <SelectItem value="Verdana">Verdana</SelectItem>
+                    {FONT_OPTIONS.map(font => (
+                      <SelectItem key={font} value={font}>{font}</SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
               <div>
-                <Label>Font Size (pt)</Label>
-                <Input
-                  type="number"
-                  value={metaFontSize}
-                  onChange={(e) => setMetaFontSize(e.target.value)}
-                  placeholder="Auto"
-                  min={8}
-                  max={72}
-                  className="mt-1"
-                />
+                <Label>Font Size</Label>
+                <Select
+                  value={editForm.fontSize.toString()}
+                  onValueChange={(v) => setEditForm(f => ({ ...f, fontSize: parseInt(v) }))}
+                >
+                  <SelectTrigger className="mt-1">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {FONT_SIZES.map(size => (
+                      <SelectItem key={size} value={size.toString()}>{size}pt</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
             </div>
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setMetadataDialogOpen(false)}>
+            <div className="flex justify-end gap-2 pt-4">
+              <Button variant="outline" onClick={() => setEditDialogOpen(false)}>
                 Cancel
               </Button>
-              <Button onClick={saveMetadata} disabled={uploading}>
-                {uploading ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                    Saving...
-                  </>
-                ) : (
-                  'Save Metadata'
-                )}
-              </Button>
+              <Button onClick={handleSaveEdit}>Save Changes</Button>
             </div>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* Placeholders Modal */}
-      <Dialog open={placeholdersDialogOpen} onOpenChange={setPlaceholdersDialogOpen}>
-        <DialogContent className="max-w-2xl" aria-describedby={undefined}>
+      {/* Test Dialog */}
+      <Dialog open={testDialogOpen} onOpenChange={setTestDialogOpen}>
+        <DialogContent>
           <DialogHeader>
-            <DialogTitle>
-              Placeholders · {selectedTemplate ? (selectedTemplate.metadata?.display_name || selectedTemplate.display_name || selectedTemplate.title || selectedTemplate.name) : ''}
-            </DialogTitle>
+            <DialogTitle>Test Document Generation</DialogTitle>
           </DialogHeader>
-          <ScrollArea className="max-h-96">
-            {selectedTemplate && selectedTemplate.placeholders && selectedTemplate.placeholders.length > 0 ? (
-              <div className="space-y-2">
-                {selectedTemplate.placeholders.map((ph, index) => (
-                  <div key={index} className="flex justify-between items-center border-b py-2">
-                    <code className="text-sm">{ph}</code>
-                    <span className="text-xs text-muted-foreground">#{index + 1}</span>
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-sm text-muted-foreground py-4">
-                No placeholders detected in this template.
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Template: <strong>{selectedTemplate?.name}</strong>
+            </p>
+            <div>
+              <Label>Select Vessel</Label>
+              <Select onValueChange={(imo) => handleTest(imo)}>
+                <SelectTrigger className="mt-1">
+                  <SelectValue placeholder="Choose a vessel..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {vessels.map(vessel => (
+                    <SelectItem key={vessel.id} value={vessel.imo}>
+                      {vessel.name} ({vessel.imo}) - {vessel.vessel_type}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            {processing && (
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Generating document...
               </div>
             )}
-          </ScrollArea>
-          <div className="flex justify-end mt-4">
-            <Button variant="outline" onClick={() => setPlaceholdersDialogOpen(false)}>
-              Close
-            </Button>
           </div>
         </DialogContent>
       </Dialog>

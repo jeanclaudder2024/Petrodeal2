@@ -248,3 +248,145 @@
       hsl(var(--background)/0.75) 100%);
   }
 }
+
+/* ===== Blog Article Styling ===== */
+.prose .lead {
+  @apply text-xl text-muted-foreground leading-relaxed mb-6;
+}
+
+.prose .callout {
+  @apply p-5 rounded-xl my-6 border-l-4;
+  background: linear-gradient(135deg, hsl(var(--muted)) 0%, hsl(var(--muted)/0.5) 100%);
+}
+
+.prose .callout-stat {
+  border-color: hsl(var(--accent));
+  background: linear-gradient(135deg, hsl(var(--accent)/0.15) 0%, hsl(var(--accent)/0.05) 100%);
+}
+
+.prose .callout-tip {
+  border-color: hsl(var(--accent-green));
+  background: linear-gradient(135deg, hsl(var(--accent-green)/0.15) 0%, hsl(var(--accent-green)/0.05) 100%);
+}
+
+.prose .callout strong {
+  @apply text-foreground;
+}
+
+.prose .comparison-table {
+  @apply w-full border-collapse my-6 rounded-lg overflow-hidden;
+}
+
+.prose .comparison-table th {
+  @apply p-3 text-left text-sm font-semibold text-white;
+  background: linear-gradient(135deg, hsl(var(--primary)) 0%, hsl(var(--accent)) 100%);
+}
+
+.prose .comparison-table td {
+  @apply p-3 text-sm border-b border-border;
+}
+
+.prose .comparison-table tr:nth-child(even) td {
+  @apply bg-muted/30;
+}
+
+.prose .comparison-table tr:hover td {
+  @apply bg-muted/50;
+}
+
+.prose .expert-quote {
+  @apply bg-muted/50 border-l-4 border-accent p-5 my-6 italic rounded-r-lg;
+}
+
+.prose .expert-quote cite {
+  @apply block mt-3 not-italic font-semibold text-accent text-sm;
+}
+
+.prose .benefit-list {
+  @apply space-y-3 my-6;
+}
+
+.prose .benefit-list li {
+  @apply flex items-start gap-3;
+}
+
+.prose .benefit-list li::before {
+  content: "✓";
+  @apply text-accent-green font-bold flex-shrink-0;
+}
+
+.prose .benefit-list strong {
+  @apply text-foreground;
+}
+
+/* Enhanced prose styling for blog posts */
+.prose-blog {
+  @apply max-w-none;
+}
+
+.prose-blog h2 {
+  @apply text-2xl font-bold text-foreground mt-10 mb-4 border-b border-border pb-2;
+}
+
+.prose-blog h3 {
+  @apply text-xl font-semibold text-foreground mt-8 mb-3;
+}
+
+.prose-blog p {
+  @apply text-muted-foreground leading-relaxed mb-4 text-lg;
+}
+
+.prose-blog strong {
+  @apply text-foreground font-semibold;
+}
+
+.prose-blog a {
+  @apply text-accent underline-offset-4 transition-colors;
+}
+
+.prose-blog a:hover {
+  color: hsl(var(--accent-green));
+}
+
+.prose-blog ul, .prose-blog ol {
+  @apply my-4 pl-6;
+}
+
+.prose-blog li {
+  @apply text-muted-foreground mb-2 text-lg;
+}
+
+.prose-blog table {
+  @apply w-full border-collapse my-6;
+}
+
+.prose-blog th {
+  @apply bg-primary text-primary-foreground p-3 text-left font-semibold;
+}
+
+.prose-blog td {
+  @apply p-3 border-b border-border;
+}
+
+/* Gradient utility classes for subscription plan icons */
+.gradient-hero {
+  background: linear-gradient(135deg, hsl(221 83% 53%) 0%, hsl(200 85% 55%) 100%);
+}
+
+.gradient-gold {
+  background: linear-gradient(135deg, hsl(45 100% 55%) 0%, hsl(35 100% 50%) 100%);
+}
+
+.hero-button {
+  background: linear-gradient(135deg, hsl(221 83% 53%) 0%, hsl(200 85% 55%) 100%);
+  color: white;
+}
+
+.premium-button {
+  background: linear-gradient(135deg, hsl(45 100% 55%) 0%, hsl(35 100% 50%) 100%);
+  color: hsl(222 47% 11%);
+}
+
+.shadow-glow {
+  box-shadow: 0 0 20px hsl(221 83% 53% / 0.3);
+}

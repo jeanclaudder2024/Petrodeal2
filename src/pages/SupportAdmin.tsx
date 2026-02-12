@@ -11,7 +11,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { useToast } from '@/hooks/use-toast';
 import LoadingFallback from '@/components/LoadingFallback';
 import { db } from '@/lib/supabase-helper';
-import { Search, Filter, Eye, MessageSquare, Clock, User, Mail } from 'lucide-react';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Search, Filter, Eye, Trash2, Clock, User, Mail } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 
 interface Ticket {
@@ -46,6 +47,7 @@ const SupportAdmin = () => {
   const [statusFilter, setStatusFilter] = useState('all');
   const [priorityFilter, setPriorityFilter] = useState('all');
   const [categoryFilter, setCategoryFilter] = useState('all');
+  const [deleteTicketId, setDeleteTicketId] = useState<string | null>(null);
 
   useEffect(() => {
     if (!roleLoading && !isAdmin) {
@@ -150,6 +152,33 @@ const SupportAdmin = () => {
       toast({
         title: "Error",
         description: "Failed to update ticket priority.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleDeleteTicket = async () => {
+    if (!deleteTicketId) return;
+    try {
+      const { error } = await db
+        .from('support_tickets')
+        .delete()
+        .eq('id', deleteTicketId);
+
+      if (error) throw error;
+
+      toast({
+        title: "Ticket Deleted",
+        description: "The support ticket has been deleted successfully.",
+      });
+
+      setDeleteTicketId(null);
+      loadData();
+    } catch (error: any) {
+      console.error('Error deleting ticket:', error);
+      toast({
+        title: "Error",
+        description: "Failed to delete ticket.",
         variant: "destructive",
       });
     }
@@ -354,16 +383,27 @@ const SupportAdmin = () => {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="flex items-center gap-2 px-3 py-1 text-sm font-medium"
-                        onClick={() => navigate(`/ticket/${ticket.id}`)}
-                        title="View Ticket Details"
-                      >
-                        <Eye className="h-4 w-4" />
-                        View
-                      </Button>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="flex items-center gap-2 px-3 py-1 text-sm font-medium"
+                          onClick={() => navigate(`/ticket/${ticket.id}`)}
+                          title="View Ticket Details"
+                        >
+                          <Eye className="h-4 w-4" />
+                          View
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="flex items-center gap-1 px-2 py-1 text-sm text-destructive hover:bg-destructive hover:text-destructive-foreground"
+                          onClick={() => setDeleteTicketId(ticket.id)}
+                          title="Delete Ticket"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -378,6 +418,22 @@ const SupportAdmin = () => {
           </div>
         </CardContent>
       </Card>
+
+      {/* Delete Confirmation Dialog */}
+      <Dialog open={!!deleteTicketId} onOpenChange={() => setDeleteTicketId(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Delete Support Ticket</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this ticket? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeleteTicketId(null)}>Cancel</Button>
+            <Button variant="destructive" onClick={handleDeleteTicket}>Delete</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

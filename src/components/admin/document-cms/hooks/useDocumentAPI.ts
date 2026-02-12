@@ -9,11 +9,10 @@ import {
   DatabaseTable, 
   DatabaseColumn,
   Vessel,
-  DataSource,
-  normalizeTemplate
+  DataSource
 } from '../types';
 
-// Fetch helper with credentials and proper error handling
+// Fetch helper with credentials
 async function apiFetch<T>(
   endpoint: string, 
   options: RequestInit = {}
@@ -27,31 +26,8 @@ async function apiFetch<T>(
   });
 
   if (!response.ok) {
-    // Handle authentication errors
-    if (response.status === 401) {
-      const error = await response.json().catch(() => ({ detail: 'Not authenticated' }));
-      const errorMessage = error.detail || 'Authentication required. Please login to the Python API.';
-      toast.error(errorMessage);
-      throw new Error(errorMessage);
-    }
-    
-    // Handle server errors (500) - might be temporary file issues
-    if (response.status === 500) {
-      const error = await response.json().catch(() => ({ 
-        detail: 'Server error - some template files may be missing or corrupted' 
-      }));
-      const errorMessage = error.detail || 'Server error occurred';
-      // Log but don't show toast for 500 errors in template listing
-      console.warn('Server error:', errorMessage);
-      throw new Error(errorMessage);
-    }
-    
-    // Handle other errors
-    const error = await response.json().catch(() => ({ 
-      detail: `Request failed with status ${response.status}` 
-    }));
-    const errorMessage = error.detail || `HTTP ${response.status}`;
-    throw new Error(errorMessage);
+    const error = await response.json().catch(() => ({ detail: 'Request failed' }));
+    throw new Error(error.detail || `HTTP ${response.status}`);
   }
 
   return response.json();
@@ -65,21 +41,11 @@ export function useTemplates() {
   const fetchTemplates = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await apiFetch<{ templates: any[] }>('/templates');
-      // Normalize all templates to ensure consistent structure
-      const normalizedTemplates = (data.templates || []).map(template => normalizeTemplate(template));
-      setTemplates(normalizedTemplates);
+      const data = await apiFetch<{ templates: Template[] }>('/templates');
+      setTemplates(data.templates || []);
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to fetch templates';
-      // Don't show error toast for 500 errors - they might be temporary file issues
-      if (errorMessage.includes('500') || errorMessage.includes('Internal Server Error')) {
-        console.warn('Template fetch error (may be temporary):', errorMessage);
-        // Set empty array to prevent UI errors
-        setTemplates([]);
-      } else {
-        toast.error(`Failed to fetch templates: ${errorMessage}`);
-        console.error(error);
-      }
+      toast.error('Failed to fetch templates');
+      console.error(error);
     } finally {
       setLoading(false);
     }
@@ -108,18 +74,8 @@ export function useTemplates() {
     });
 
     if (!response.ok) {
-      // Handle authentication errors
-      if (response.status === 401) {
-        const error = await response.json().catch(() => ({ detail: 'Not authenticated' }));
-        const errorMessage = error.detail || 'Authentication required. Please login to the Python API.';
-        toast.error(errorMessage);
-        throw new Error(errorMessage);
-      }
-      
       const error = await response.json().catch(() => ({ detail: 'Upload failed' }));
-      const errorMessage = error.detail || 'Upload failed';
-      toast.error(errorMessage);
-      throw new Error(errorMessage);
+      throw new Error(error.detail || 'Upload failed');
     }
 
     await fetchTemplates();
@@ -127,67 +83,10 @@ export function useTemplates() {
   }, [fetchTemplates]);
 
   const deleteTemplate = useCallback(async (templateName: string) => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/templates/${encodeURIComponent(templateName)}`, {
-        method: 'DELETE',
-        credentials: 'include',
-      });
-
-      if (!response.ok) {
-        if (response.status === 401) {
-          const error = await response.json().catch(() => ({ detail: 'Not authenticated' }));
-          const msg = error.detail || 'Authentication required. Please log in to the document API (control).';
-          toast.error(msg);
-          throw new Error(msg);
-        }
-        if (response.status === 404) {
-          const err = await response.json().catch(() => ({}));
-          const msg = err.detail || 'Template not found or delete endpoint unavailable (404). Check control subdomain and login.';
-          toast.error(msg);
-          throw new Error(msg);
-        }
-        const error = await response.json().catch(() => ({ detail: 'Delete failed' }));
-        const msg = error.detail || `Delete failed: ${response.status}`;
-        toast.error(msg);
-        throw new Error(msg);
-      }
-
-      const result = await response.json();
-      if (result.warnings && Array.isArray(result.warnings) && result.warnings.length > 0) {
-        // Show specific error messages instead of generic message
-        result.warnings.forEach((w: string) => {
-          const warningMsg = String(w);
-          if (/supabase|database/i.test(warningMsg)) {
-            toast.warning(warningMsg, { duration: 6000 });
-          } else {
-            toast.warning(warningMsg);
-          }
-        });
-      }
-      
-      // Show success message if deletion succeeded (even with warnings)
-      if (result.success) {
-        if (result.deleted_from_supabase === false && result.warnings?.length > 0) {
-          // Partial success - deleted locally but not from Supabase
-          toast.warning(
-            'Template deleted locally. Some Supabase records may still exist. Check warnings above.',
-            { duration: 6000 }
-          );
-        } else if (result.deleted_from_supabase === true) {
-          toast.success('Template deleted successfully from database and local storage');
-        } else {
-          toast.success('Template deleted successfully');
-        }
-      }
-      await fetchTemplates();
-      return result;
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Failed to delete template';
-      if (!msg.toLowerCase().includes('not authenticated') && !msg.toLowerCase().includes('template not found') && !msg.toLowerCase().includes('delete failed')) {
-        toast.error(`Delete failed: ${msg}`);
-      }
-      throw e;
-    }
+    await apiFetch(`/templates/${encodeURIComponent(templateName)}`, {
+      method: 'DELETE',
+    });
+    await fetchTemplates();
   }, [fetchTemplates]);
 
   const updateMetadata = useCallback(async (
@@ -200,36 +99,12 @@ export function useTemplates() {
       plan_ids?: string[];
     }
   ) => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/templates/${encodeURIComponent(templateId)}/metadata`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify(metadata),
-      });
-
-      if (!response.ok) {
-        // Handle authentication errors
-        if (response.status === 401) {
-          const error = await response.json().catch(() => ({ detail: 'Not authenticated' }));
-          const errorMessage = error.detail || 'Authentication required. Please login to the Python API.';
-          toast.error(errorMessage);
-          throw new Error(errorMessage);
-        }
-        
-        const error = await response.json().catch(() => ({ detail: 'Update failed' }));
-        const errorMessage = error.detail || `Failed to update template: ${response.status}`;
-        toast.error(errorMessage);
-        throw new Error(errorMessage);
-      }
-
-      await fetchTemplates();
-      return await response.json();
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to update template';
-      toast.error(errorMessage);
-      throw error;
-    }
+    await apiFetch(`/templates/${templateId}/metadata`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(metadata),
+    });
+    await fetchTemplates();
   }, [fetchTemplates]);
 
   const getTemplateDetails = useCallback(async (templateId: string) => {
@@ -255,19 +130,11 @@ export function usePlaceholderSettings() {
   const fetchSettings = useCallback(async (templateName: string) => {
     setLoading(true);
     try {
-      const data = await apiFetch<PlaceholderSettings & { settings?: Record<string, Record<string, unknown>> }>(
+      const data = await apiFetch<PlaceholderSettings>(
         `/placeholder-settings?template_name=${encodeURIComponent(templateName)}`
       );
-      // Normalize source: 'random', null, empty → 'database' so Doc CMS shows database by default
-      const normalized: Record<string, Record<string, unknown>> = {};
-      Object.entries(data.settings || {}).forEach(([ph, s]) => {
-        const raw = (s.source as string) ?? '';
-        const source = (raw === 'random' || !raw) ? 'database' : s.source;
-        normalized[ph] = { ...s, source };
-      });
-      const out = { ...data, settings: normalized };
-      setSettings(prev => ({ ...prev, [templateName]: out }));
-      return out;
+      setSettings(prev => ({ ...prev, [templateName]: data }));
+      return data;
     } catch (error) {
       console.error('Failed to fetch placeholder settings:', error);
       return null;
@@ -276,32 +143,13 @@ export function usePlaceholderSettings() {
     }
   }, []);
 
-  const saveSettings = useCallback(async (payload: PlaceholderSettings) => {
-    const settingsForApi: Record<string, Record<string, unknown>> = {};
-    Object.entries(payload.settings || {}).forEach(([ph, s]) => {
-      if (!ph) return;
-      settingsForApi[ph] = {
-        source: s.source || 'database',
-        customValue: typeof s.value === 'string' ? s.value : String(s.value ?? ''),
-        databaseTable: typeof s.table === 'string' ? s.table : String(s.table ?? ''),
-        databaseField: typeof s.field === 'string' ? s.field : String(s.field ?? ''),
-        csvId: typeof s.csv_id === 'string' ? s.csv_id : String(s.csv_id ?? ''),
-        csvField: typeof s.csv_field === 'string' ? s.csv_field : String(s.csv_field ?? ''),
-        csvRow: typeof s.csv_row === 'number' ? s.csv_row : (s.csv_row != null ? Number(s.csv_row) : 0),
-        randomOption: s.random_option || 'auto',
-      };
-    });
-    const req = {
-      template_name: payload.template_name,
-      template_id: payload.template_id || undefined,
-      settings: settingsForApi,
-    };
+  const saveSettings = useCallback(async (placeholderSettings: PlaceholderSettings) => {
     await apiFetch('/placeholder-settings', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(req),
+      body: JSON.stringify(placeholderSettings),
     });
-    setSettings(prev => ({ ...prev, [payload.template_name]: { ...payload, settings: payload.settings } }));
+    setSettings(prev => ({ ...prev, [placeholderSettings.template_name]: placeholderSettings }));
   }, []);
 
   return { settings, loading, fetchSettings, saveSettings };
@@ -309,53 +157,29 @@ export function usePlaceholderSettings() {
 
 // Plans Hook
 export function usePlans() {
-  const [plans, setPlans] = useState<Record<string, Plan>>({});
+  const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(false);
 
   const fetchPlans = useCallback(async () => {
     setLoading(true);
     try {
-      // Try JSON endpoint first (more reliable for immediate updates)
-      let data = null;
+      // Try database plans first, fallback to JSON
       try {
-        data = await apiFetch<{ plans: Record<string, Plan> | Plan[] }>('/plans');
-        if (data && data.plans) {
-          // Convert to Record format if needed
-          if (Array.isArray(data.plans)) {
-            const plansRecord: Record<string, Plan> = {};
-            data.plans.forEach((plan: Plan) => {
-              const planId = plan.plan_id || plan.id || plan.name || '';
-              if (planId) plansRecord[planId] = plan;
-            });
-            setPlans(plansRecord);
-          } else {
-            setPlans(data.plans);
-          }
-        }
+        const data = await apiFetch<{ plans: Record<string, Plan> | Plan[] }>('/plans-db');
+        const plansList = Array.isArray(data.plans) 
+          ? data.plans 
+          : Object.values(data.plans);
+        setPlans(plansList);
       } catch {
-        // Fallback to database endpoint
-        try {
-          data = await apiFetch<{ plans: Record<string, Plan> | Plan[] }>('/plans-db');
-          if (data && data.plans) {
-            if (Array.isArray(data.plans)) {
-              const plansRecord: Record<string, Plan> = {};
-              data.plans.forEach((plan: Plan) => {
-                const planId = plan.plan_id || plan.id || plan.name || '';
-                if (planId) plansRecord[planId] = plan;
-              });
-              setPlans(plansRecord);
-            } else {
-              setPlans(data.plans);
-            }
-          }
-        } catch (e2) {
-          console.error('Failed to load plans from both endpoints:', e2);
-          setPlans({});
-        }
+        const data = await apiFetch<{ plans: Record<string, Plan> | Plan[] }>('/plans');
+        const plansList = Array.isArray(data.plans) 
+          ? data.plans 
+          : Object.values(data.plans);
+        setPlans(plansList);
       }
     } catch (error) {
-      console.error('Error loading plans:', error);
-      setPlans({});
+      toast.error('Failed to fetch plans');
+      console.error(error);
     } finally {
       setLoading(false);
     }
@@ -438,18 +262,8 @@ export function useDataSources() {
     });
 
     if (!response.ok) {
-      // Handle authentication errors
-      if (response.status === 401) {
-        const error = await response.json().catch(() => ({ detail: 'Not authenticated' }));
-        const errorMessage = error.detail || 'Authentication required. Please login to the Python API.';
-        toast.error(errorMessage);
-        throw new Error(errorMessage);
-      }
-      
       const error = await response.json().catch(() => ({ detail: 'Upload failed' }));
-      const errorMessage = error.detail || 'Upload failed';
-      toast.error(errorMessage);
-      throw new Error(errorMessage);
+      throw new Error(error.detail || 'Upload failed');
     }
 
     await fetchDataSources();
@@ -464,14 +278,7 @@ export function useDataSources() {
   }, [fetchDataSources, fetchCsvFiles]);
 
   const getCsvFields = useCallback(async (csvId: string) => {
-    const data = await apiFetch<{ fields: Array<string | { name: string; label?: string }> }>(
-      `/csv-fields/${csvId}`
-    );
-    const raw = data.fields || [];
-    const fields = raw
-      .map((f) => (typeof f === 'string' ? f : (f && 'name' in f ? f.name : '')))
-      .filter(Boolean);
-    return { fields };
+    return apiFetch<{ fields: string[] }>(`/csv-fields/${csvId}`);
   }, []);
 
   return {
@@ -494,12 +301,8 @@ export function useDatabaseSchema() {
   const fetchTables = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await apiFetch<{ tables: Array<string | { name: string; label?: string }> }>('/database-tables');
-      const raw = data.tables || [];
-      const tablesList = raw
-        .map((t): { name: string } => typeof t === 'string' ? { name: t } : { name: (t as { name?: string }).name || '' })
-        .filter(t => t.name && t.name.toLowerCase() !== 'brokers')
-        .map(t => ({ name: t.name, columns: [] as DatabaseColumn[] }));
+      const data = await apiFetch<{ tables: string[] }>('/database-tables');
+      const tablesList = (data.tables || []).map(name => ({ name, columns: [] }));
       setTables(tablesList);
     } catch (error) {
       console.error('Failed to fetch database tables:', error);

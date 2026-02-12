@@ -2,9 +2,9 @@ import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Users, Crown, Shield, TrendingUp, User, Briefcase, Rocket, Building2 } from 'lucide-react';
+import { Users, Crown, Shield, TrendingUp, User, Briefcase, Rocket, Building2, Search } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { db } from '@/lib/supabase-helper';
 import { useToast } from '@/hooks/use-toast';
@@ -30,6 +30,7 @@ const UserManagement = () => {
   const [users, setUsers] = useState<UserWithRole[]>([]);
   const [subscriberStats, setSubscriberStats] = useState<SubscriberStats>({ basic: 0, professional: 0, enterprise: 0 });
   const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
   const { toast } = useToast();
 
   useEffect(() => {
@@ -219,6 +220,17 @@ const UserManagement = () => {
             </div>
           </div>
 
+          {/* Search */}
+          <div className="relative mb-4">
+            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-muted-foreground h-4 w-4" />
+            <Input
+              placeholder="Search by email or name..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-9"
+            />
+          </div>
+
           {/* Users Table */}
           <div className="rounded-md border">
             <Table>
@@ -227,18 +239,34 @@ const UserManagement = () => {
                   <TableHead>User</TableHead>
                   <TableHead>Role</TableHead>
                   <TableHead>Joined</TableHead>
-                  <TableHead>Actions</TableHead>
+                  <TableHead>Last Sign In</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {users.length === 0 ? (
+                {users
+                  .filter(u => {
+                    if (!searchTerm) return true;
+                    const term = searchTerm.toLowerCase();
+                    return u.email?.toLowerCase().includes(term) || 
+                           u.first_name?.toLowerCase().includes(term) || 
+                           u.last_name?.toLowerCase().includes(term);
+                  })
+                  .length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={4} className="text-center text-muted-foreground py-8">
                       No users found
                     </TableCell>
                   </TableRow>
                 ) : (
-                  users.map((user) => (
+                  users
+                    .filter(u => {
+                      if (!searchTerm) return true;
+                      const term = searchTerm.toLowerCase();
+                      return u.email?.toLowerCase().includes(term) || 
+                             u.first_name?.toLowerCase().includes(term) || 
+                             u.last_name?.toLowerCase().includes(term);
+                    })
+                    .map((user) => (
                     <TableRow key={user.id} className="hover:bg-muted/50">
                       <TableCell>
                         <div>
@@ -263,20 +291,9 @@ const UserManagement = () => {
                         {new Date(user.created_at).toLocaleDateString()}
                       </TableCell>
                       <TableCell>
-                        <Select
-                          value={user.role || 'user'}
-                          onValueChange={(newRole) => updateUserRole(user.id, newRole)}
-                        >
-                          <SelectTrigger className="w-32">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="user">User</SelectItem>
-                            <SelectItem value="trader">Trader</SelectItem>
-                            <SelectItem value="broker">Broker</SelectItem>
-                            <SelectItem value="admin">Admin</SelectItem>
-                          </SelectContent>
-                        </Select>
+                        <span className="text-sm text-muted-foreground">
+                          {user.last_sign_in_at ? new Date(user.last_sign_in_at).toLocaleDateString() : 'Never'}
+                        </span>
                       </TableCell>
                     </TableRow>
                   ))

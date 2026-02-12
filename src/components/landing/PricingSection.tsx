@@ -246,12 +246,13 @@ const PricingSection = () => {
     annualPrice: Number(dbPlan.annual_price) || 0,
     description: dbPlan.description || "",
     features: dbPlan.features || [],
-    cta: "Get Started",
+    cta: (dbPlan as any).is_contact_sales ? "Contact Sales" : "Get Started",
     popular: dbPlan.is_popular || false,
+    isContactSales: (dbPlan as any).is_contact_sales || false,
     icon: dbPlan.plan_tier === 'enterprise' ? Star : dbPlan.plan_tier === 'professional' ? Crown : Zap,
     gradient: dbPlan.plan_tier === 'enterprise' ? "from-primary to-accent-green" : 
               dbPlan.plan_tier === 'professional' ? "from-accent to-gold" : "from-water to-primary",
-    onClick: () => navigate("/auth")
+    onClick: (dbPlan as any).is_contact_sales ? () => navigate("/contact") : () => navigate("/auth")
   })) : staticPlans;
 
   return <section className="py-32 relative overflow-hidden">
@@ -303,6 +304,7 @@ const PricingSection = () => {
 
         <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-7xl mx-auto">
           {displayPlans.map((plan, index) => {
+            const isContactSales = (plan as any).isContactSales || false;
             const price = isAnnual ? plan.annualPrice : plan.monthlyPrice;
             const period = isAnnual ? 'year' : 'month';
             const discountInfo = getDiscountForPlan(plan.tier);
@@ -337,7 +339,12 @@ const PricingSection = () => {
                   <p className="text-muted-foreground mb-4">{plan.description}</p>
                   
                   <div className="mb-4">
-                    {discountInfo ? (
+                    {isContactSales ? (
+                      <div>
+                        <span className="text-3xl font-bold text-primary">Custom Pricing</span>
+                        <p className="text-sm text-muted-foreground mt-1">Tailored to your needs</p>
+                      </div>
+                    ) : discountInfo ? (
                       <div className="space-y-1">
                         <div className="text-2xl line-through text-muted-foreground">
                           ${price.toFixed(2)}
@@ -375,11 +382,13 @@ const PricingSection = () => {
                   <ArrowRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" />
                 </Button>
                 
-                <div className="mt-4 text-center">
-                  <p className="text-sm text-muted-foreground font-medium">
-                    Includes 5-day free trial period
-                  </p>
-                </div>
+                {!isContactSales && (
+                  <div className="mt-4 text-center">
+                    <p className="text-sm text-muted-foreground font-medium">
+                      Includes 5-day free trial period
+                    </p>
+                  </div>
+                )}
               </div>
             </Card>;
           })}

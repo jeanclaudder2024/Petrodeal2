@@ -26,8 +26,10 @@ import {
   Globe,
   Bot,
   MessageSquareText,
-  HelpCircle
+  HelpCircle,
+  FileSpreadsheet
 } from 'lucide-react';
+import BulkBlogUploadDialog from './BulkBlogUploadDialog';
 import { Separator } from '@/components/ui/separator';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -66,6 +68,7 @@ const BlogManagement = () => {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState('posts');
   const [isCreateDialogOpen, setIsCreateDialogOpen] = useState(false);
+  const [isBulkUploadOpen, setIsBulkUploadOpen] = useState(false);
   const [selectedPost, setSelectedPost] = useState<BlogPost | null>(null);
   const [step, setStep] = useState(1);
   const [generating, setGenerating] = useState<'content' | 'image' | 'seo' | 'geo' | null>(null);
@@ -123,10 +126,42 @@ const BlogManagement = () => {
   };
 
   const generateSlug = (title: string) => {
-    return title
+    // Normalize Unicode characters and remove diacritics
+    let slug = title
       .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '');
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '') // Remove diacritics
+      .replace(/[^a-z0-9\s-]/g, '')    // Keep only alphanumeric, spaces, dashes
+      .replace(/\s+/g, '-')            // Spaces to dashes
+      .replace(/-+/g, '-')             // Multiple dashes to single
+      .replace(/^-+|-+$/g, '');        // Trim dashes
+    
+    // If slug is empty or too short (e.g., non-Latin titles), use 'post' as base
+    if (slug.length < 3) {
+      slug = 'post';
+    }
+    
+    // Add timestamp for guaranteed uniqueness
+    slug = `${slug}-${Date.now()}`;
+    
+    return slug;
+  };
+
+  // Helper function to clean HTML content from markdown artifacts
+  const cleanHTMLContent = (content: string): string => {
+    let cleaned = content;
+    // Remove markdown code fences
+    cleaned = cleaned.replace(/^```html\s*/gi, '');
+    cleaned = cleaned.replace(/^```\s*/gi, '');
+    cleaned = cleaned.replace(/```\s*$/gi, '');
+    // Remove full HTML document wrapper if present
+    cleaned = cleaned.replace(/<!DOCTYPE[^>]*>/gi, '');
+    cleaned = cleaned.replace(/<html[^>]*>/gi, '');
+    cleaned = cleaned.replace(/<\/html>/gi, '');
+    cleaned = cleaned.replace(/<head>[\s\S]*?<\/head>/gi, '');
+    cleaned = cleaned.replace(/<body[^>]*>/gi, '');
+    cleaned = cleaned.replace(/<\/body>/gi, '');
+    return cleaned.trim();
   };
 
   const generateContent = async () => {
@@ -137,24 +172,36 @@ const BlogManagement = () => {
 
     setGenerating('content');
     try {
+      // Get selected category name to pass to the edge function
+      const selectedCategory = categories.find(c => c.id === formData.category_id);
+      const categoryName = selectedCategory?.name || null;
+      
       const { data, error } = await supabase.functions.invoke('generate-blog-content', {
-        body: { title: formData.title, subject: formData.subject, type: 'content' }
+        body: { 
+          title: formData.title, 
+          subject: formData.subject, 
+          type: 'content',
+          category: categoryName  // Pass category for category-specific writing mode
+        }
       });
 
       if (error) throw error;
 
       if (data?.content) {
+        // Clean the content from markdown artifacts
+        const cleanedContent = cleanHTMLContent(data.content);
+        
         // Extract excerpt from first paragraph
-        const excerptMatch = data.content.match(/<p>(.*?)<\/p>/);
-        const excerpt = excerptMatch ? excerptMatch[1].substring(0, 200) + '...' : '';
+        const excerptMatch = cleanedContent.match(/<p[^>]*>(.*?)<\/p>/);
+        const excerpt = excerptMatch ? excerptMatch[1].replace(/<[^>]*>/g, '').substring(0, 200) + '...' : '';
         
         setFormData(prev => ({
           ...prev,
-          content: data.content,
+          content: cleanedContent,
           excerpt,
           slug: generateSlug(prev.title)
         }));
-        toast({ title: "Success", description: "Blog content generated" });
+        toast({ title: "Success", description: `Professional ${categoryName || 'general'} content generated` });
       }
     } catch (error) {
       console.error('Content generation error:', error);
@@ -172,28 +219,30 @@ const BlogManagement = () => {
 
     setGenerating('image');
     try {
-      // First get the image prompt
-      const { data: promptData, error: promptError } = await supabase.functions.invoke('generate-blog-content', {
-        body: { title: formData.title, subject: formData.subject, type: 'image_prompt' }
-      });
-
-      if (promptError) throw promptError;
-
-      // For now, we'll use a placeholder - in production, integrate with image generation API
-      toast({ 
-        title: "Image Prompt Generated", 
-        description: "Use this prompt in an image generator: " + promptData?.content?.substring(0, 100) + "..." 
-      });
+      toast({ title: "Generating...", description: "Creating AI-powered featured image, please wait..." });
       
-      // Set a placeholder image URL
-      setFormData(prev => ({
-        ...prev,
-        featured_image: '/placeholder.svg'
-      }));
+      const { data, error } = await supabase.functions.invoke('generate-blog-image', {
+        body: { title: formData.title, subject: formData.subject }
+      });
 
+      if (error) throw error;
+
+      if (data?.success && data?.imageUrl) {
+        setFormData(prev => ({
+          ...prev,
+          featured_image: data.imageUrl
+        }));
+        toast({ title: "Success", description: "Featured image generated and uploaded!" });
+      } else {
+        throw new Error(data?.error || 'Image generation failed');
+      }
     } catch (error) {
       console.error('Image generation error:', error);
-      toast({ title: "Error", description: "Failed to generate image", variant: "destructive" });
+      toast({ 
+        title: "Error", 
+        description: error instanceof Error ? error.message : "Failed to generate image", 
+        variant: "destructive" 
+      });
     } finally {
       setGenerating(null);
     }
@@ -274,19 +323,35 @@ const BlogManagement = () => {
     try {
       const { data: { user } } = await supabase.auth.getUser();
       
+      // Clean title from any markdown artifacts
+      const cleanedTitle = formData.title
+        .replace(/^```html\s*/gi, '')
+        .replace(/```\s*$/gi, '')
+        .replace(/<[^>]*>/g, '')
+        .trim();
+      
+      // Clean content from any markdown artifacts before saving
+      const cleanedContent = cleanHTMLContent(formData.content);
+      
+      // Determine effective status - auto-publish past dates
+      const isPastDate = formData.publish_date && formData.publish_date <= new Date();
+      const effectiveStatus = formData.status === 'scheduled' && isPastDate 
+        ? 'published' 
+        : formData.status;
+      
       const postData = {
-        title: formData.title,
-        slug: formData.slug || generateSlug(formData.title),
+        title: cleanedTitle,
+        slug: formData.slug || generateSlug(cleanedTitle),
         excerpt: formData.excerpt || null,
-        content: formData.content,
+        content: cleanedContent,
         featured_image: formData.featured_image || null,
         category_id: formData.category_id || null,
         author_id: user?.id || null,
         tags: formData.tags ? formData.tags.split(',').map(t => t.trim()) : [],
-        status: formData.status,
-        publish_date: formData.status === 'scheduled' && formData.publish_date 
+        status: effectiveStatus,
+        publish_date: formData.publish_date 
           ? formData.publish_date.toISOString() 
-          : formData.status === 'published' ? new Date().toISOString() : null,
+          : effectiveStatus === 'published' ? new Date().toISOString() : null,
         meta_title: formData.meta_title || null,
         meta_description: formData.meta_description || null,
         meta_keywords: formData.meta_keywords ? formData.meta_keywords.split(',').map(k => k.trim()) : null,
@@ -486,10 +551,16 @@ const BlogManagement = () => {
 
           <TabsContent value="posts">
             <div className="flex justify-between items-center mb-4">
-              <Button onClick={() => { resetForm(); setIsCreateDialogOpen(true); }}>
-                <Plus className="h-4 w-4 mr-2" />
-                New Blog Post
-              </Button>
+              <div className="flex gap-2">
+                <Button onClick={() => { resetForm(); setIsCreateDialogOpen(true); }}>
+                  <Plus className="h-4 w-4 mr-2" />
+                  New Blog Post
+                </Button>
+                <Button variant="outline" onClick={() => setIsBulkUploadOpen(true)}>
+                  <FileSpreadsheet className="h-4 w-4 mr-2" />
+                  Upload XLS
+                </Button>
+              </div>
               <Button variant="outline" onClick={fetchData}>
                 <RefreshCw className="h-4 w-4 mr-2" />
                 Refresh
@@ -866,7 +937,7 @@ const BlogManagement = () => {
                           mode="single"
                           selected={formData.publish_date || undefined}
                           onSelect={(date) => setFormData(prev => ({ ...prev, publish_date: date || null }))}
-                          disabled={(date) => date < new Date()}
+                          className="pointer-events-auto"
                         />
                       </PopoverContent>
                     </Popover>
@@ -925,6 +996,14 @@ const BlogManagement = () => {
             </div>
           </DialogContent>
         </Dialog>
+
+        {/* Bulk Upload Dialog */}
+        <BulkBlogUploadDialog
+          isOpen={isBulkUploadOpen}
+          onClose={() => setIsBulkUploadOpen(false)}
+          categories={categories}
+          onComplete={fetchData}
+        />
       </CardContent>
     </Card>
   );

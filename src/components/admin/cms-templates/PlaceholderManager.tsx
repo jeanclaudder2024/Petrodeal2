@@ -44,7 +44,7 @@ export function PlaceholderManager({
   onDelete
 }: PlaceholderManagerProps) {
   const [selectedPlaceholder, setSelectedPlaceholder] = useState<string | null>(null);
-  const [source, setSource] = useState<PlaceholderSource>('database');
+  const [source, setSource] = useState<PlaceholderSource>('random');
   const [customValue, setCustomValue] = useState('');
   const [databaseTable, setDatabaseTable] = useState('');
   const [databaseField, setDatabaseField] = useState('');
@@ -60,18 +60,12 @@ export function PlaceholderManager({
     setSelectedPlaceholder(placeholder);
     const saved = getSavedConfig(placeholder);
     if (saved) {
-      // Normalize source: convert 'random', null, or empty to 'database'
-      // Cast to string to handle edge cases where database returns unexpected values
-      const rawSource = saved.source as string | null | undefined;
-      const normalizedSource = (rawSource === 'random' || !rawSource || rawSource === '') 
-        ? 'database' 
-        : saved.source;
-      setSource(normalizedSource as PlaceholderSource);
+      setSource(saved.source);
       setCustomValue(saved.custom_value || '');
       setDatabaseTable(saved.database_table || '');
       setDatabaseField(saved.database_field || '');
     } else {
-      setSource('database');
+      setSource('random');
       setCustomValue('');
       setDatabaseTable('');
       setDatabaseField('');
@@ -83,27 +77,14 @@ export function PlaceholderManager({
 
     setSaving(true);
     try {
-      // CRITICAL: Validate and normalize source before saving
-      // Default to 'database' if source is invalid, random, or not set
-      let validatedSource = source;
-      const savedConfig = getSavedConfig(selectedPlaceholder);
-      
-      // If source is 'random' but user didn't explicitly configure it, convert to 'database'
-      // This prevents accidental 'random' being saved
-      if (validatedSource === 'random' && !savedConfig) {
-        console.log(`[handleSave] Converting 'random' to 'database' for new placeholder: ${selectedPlaceholder}`);
-        validatedSource = 'database';
-        setSource('database'); // Update UI state too
-      }
-
       await onSave({
         template_id: templateId,
         placeholder: selectedPlaceholder,
-        source: validatedSource,
-        custom_value: validatedSource === 'custom' ? customValue : null,
-        database_table: validatedSource === 'database' ? databaseTable : null,
-        database_field: validatedSource === 'database' ? databaseField : null,
-        random_option: validatedSource === 'random' ? 'auto' : 'fixed'
+        source,
+        custom_value: source === 'custom' ? customValue : null,
+        database_table: source === 'database' ? databaseTable : null,
+        database_field: source === 'database' ? databaseField : null,
+        random_option: source === 'random' ? 'auto' : 'fixed'
       });
     } finally {
       setSaving(false);
@@ -123,13 +104,6 @@ export function PlaceholderManager({
     const saved = getSavedConfig(placeholder);
     if (!saved) return null;
     
-    // Normalize source: convert 'random', null, or empty to 'database'
-    // Cast to string to handle edge cases where database returns unexpected values
-    const rawSource = saved.source as string | null | undefined;
-    const normalizedSource = (rawSource === 'random' || !rawSource || rawSource === '') 
-      ? 'database' 
-      : saved.source;
-    
     const styles: Record<PlaceholderSource, string> = {
       custom: 'bg-blue-500/10 text-blue-600 border-blue-500/20',
       database: 'bg-green-500/10 text-green-600 border-green-500/20',
@@ -138,8 +112,8 @@ export function PlaceholderManager({
     };
 
     return (
-      <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${styles[normalizedSource as PlaceholderSource]}`}>
-        {normalizedSource}
+      <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${styles[saved.source]}`}>
+        {saved.source}
       </Badge>
     );
   };
@@ -223,10 +197,10 @@ export function PlaceholderManager({
                   className="grid grid-cols-2 gap-2"
                 >
                   {[
-                    { value: 'database', label: 'Database', icon: Database, desc: 'From table field (default)' },
+                    { value: 'random', label: 'Auto-generate', icon: Shuffle, desc: 'Random values' },
+                    { value: 'database', label: 'Database', icon: Database, desc: 'From table field' },
                     { value: 'custom', label: 'Custom', icon: PenLine, desc: 'Fixed value' },
                     { value: 'csv', label: 'CSV File', icon: FileSpreadsheet, desc: 'From CSV column' },
-                    { value: 'random', label: 'Auto-generate', icon: Shuffle, desc: 'AI-generated values' },
                   ].map(opt => (
                     <label
                       key={opt.value}

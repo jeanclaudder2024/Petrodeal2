@@ -76,6 +76,13 @@ const MarketingPopupDisplay = () => {
 
   const handleClose = () => {
     setIsVisible(false);
+    // Always mark as dismissed in sessionStorage to prevent re-trigger on route changes
+    if (popup) {
+      const shownPopups = JSON.parse(sessionStorage.getItem('shownPopups') || '[]');
+      if (!shownPopups.includes(popup.id)) {
+        sessionStorage.setItem('shownPopups', JSON.stringify([...shownPopups, popup.id]));
+      }
+    }
     setTimeout(() => setPopup(null), 300);
   };
 
@@ -117,8 +124,8 @@ const MarketingPopupDisplay = () => {
   if (!popup || !isVisible) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-300">
-      <div className="relative w-full max-w-lg overflow-hidden rounded-2xl shadow-2xl animate-in zoom-in-95 slide-in-from-bottom-4 duration-500">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm animate-in fade-in duration-300" onClick={handleClose}>
+      <div className="relative w-full max-w-lg overflow-hidden rounded-2xl shadow-2xl animate-in zoom-in-95 slide-in-from-bottom-4 duration-500" onClick={(e) => e.stopPropagation()}>
         
         {/* Background with oil platform theme */}
         <div className="absolute inset-0 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900" />

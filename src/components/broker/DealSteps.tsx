@@ -28,6 +28,7 @@ import {
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { format } from 'date-fns';
+import DealProcessExplainer from './DealProcessExplainer';
 
 interface DealStep {
   id: string;
@@ -213,11 +214,7 @@ const DealSteps: React.FC<DealStepsProps> = ({ dealId, onClose }) => {
       }
     } catch (error) {
       console.error('Error fetching deal steps:', error);
-      toast({
-        title: "Error",
-        description: "Failed to load deal steps",
-        variant: "destructive"
-      });
+      setSteps([]); // Will trigger fallback UI
     } finally {
       setLoading(false);
     }
@@ -486,6 +483,27 @@ const DealSteps: React.FC<DealStepsProps> = ({ dealId, onClose }) => {
           <span className="ml-3 text-muted-foreground">Loading deal steps...</span>
         </CardContent>
       </Card>
+    );
+  }
+
+  // Fallback: if steps failed to load, show infographic
+  if (steps.length === 0) {
+    return (
+      <div className="space-y-4">
+        <Card className="border-amber-200 dark:border-amber-900/50 bg-amber-50/50 dark:bg-amber-900/10">
+          <CardContent className="py-4">
+            <div className="flex items-center gap-3">
+              <AlertCircle className="h-5 w-5 text-amber-600" />
+              <div>
+                <p className="font-medium text-amber-800 dark:text-amber-300">Deal steps are being configured</p>
+                <p className="text-sm text-amber-700 dark:text-amber-400">Here's how the deal process works:</p>
+              </div>
+              <Button variant="outline" size="sm" className="ml-auto" onClick={onClose}>Close</Button>
+            </div>
+          </CardContent>
+        </Card>
+        <DealProcessExplainer />
+      </div>
     );
   }
 

@@ -90,7 +90,7 @@ export function AppSidebar() {
                 src="/lovable-uploads/92162cb9-ec10-41e2-bb64-5e35030478d1.png" 
                 alt="PetroDeallHub" 
                 className="transition-smooth hover:scale-105 w-auto"
-                style={{ height: '156px' }}
+                style={{ height: '156px', filter: 'drop-shadow(0 0 8px rgba(255,255,255,0.3))' }}
               />
               <div className="absolute -top-1 -right-1 w-3 h-3 bg-accent rounded-full animate-pulse" />
             </div>

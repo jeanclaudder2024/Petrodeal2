@@ -49,7 +49,7 @@ const Support = () => {
   const [faqs, setFaqs] = useState<FAQ[]>([]);
   const [contactInfo, setContactInfo] = useState<ContactInfo>({
     email_support: 'support@petrodeallhub.com',
-    phone_support: '+1 (555) 123-4567',
+    phone_support: '+1 (202) 773-6521',
     business_hours: 'Mon-Fri: 9AM-6PM EST'
   });
   const [contactForm, setContactForm] = useState({

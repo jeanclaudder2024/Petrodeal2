@@ -1,0 +1,1 @@
+ALTER TABLE public.document_templates ADD COLUMN IF NOT EXISTS category text;

@@ -31,6 +31,7 @@ const Navigation = () => {
               src="/lovable-uploads/92162cb9-ec10-41e2-bb64-5e35030478d1.png" 
               alt="PetroDeallHub" 
               className="h-10 w-auto"
+              style={{ filter: 'drop-shadow(0 0 8px rgba(255,255,255,0.3))' }}
             />
           </div>
 

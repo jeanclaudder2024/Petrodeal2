@@ -47,9 +47,7 @@ const trackEvent = (
 ) => {
   if (typeof window === 'undefined') return;
 
-  if (import.meta.env.DEV) {
-    console.log(`[Analytics] Event tracked: ${eventName}`, params);
-  }
+  console.log(`[Analytics] Event tracked: ${eventName}`, params);
 
   providers.forEach(provider => {
     switch (provider) {

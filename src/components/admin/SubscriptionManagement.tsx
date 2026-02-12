@@ -194,7 +194,8 @@ const SubscriptionManagement = () => {
     real_time_analytics: false,
     features: [''],
     is_popular: false,
-    sort_order: 0
+    sort_order: 0,
+    is_contact_sales: false
   });
 
   // Promotion frame form state
@@ -501,7 +502,8 @@ const SubscriptionManagement = () => {
         .from('subscription_plans')
         .insert({
           ...newPlan,
-          features: newPlan.features.filter(f => f.trim() !== '')
+          features: newPlan.features.filter(f => f.trim() !== ''),
+          is_contact_sales: newPlan.is_contact_sales
         });
 
       if (error) throw error;
@@ -525,7 +527,8 @@ const SubscriptionManagement = () => {
         real_time_analytics: false,
         features: [''],
         is_popular: false,
-        sort_order: 0
+        sort_order: 0,
+        is_contact_sales: false
       });
       fetchData();
     } catch (error) {
@@ -557,7 +560,8 @@ const SubscriptionManagement = () => {
           features: editingPlan.features.filter(f => f.trim() !== ''),
           is_active: editingPlan.is_active,
           is_popular: editingPlan.is_popular,
-          sort_order: editingPlan.sort_order
+          sort_order: editingPlan.sort_order,
+          is_contact_sales: (editingPlan as any).is_contact_sales || false
         })
         .eq('id', editingPlan.id);
 
@@ -1200,7 +1204,21 @@ const SubscriptionManagement = () => {
                             ? setEditingPlan({...editingPlan, annual_price: parseFloat(e.target.value) || 0})
                             : setNewPlan({...newPlan, annual_price: parseFloat(e.target.value) || 0})
                           }
+                          disabled={editingPlan ? (editingPlan as any).is_contact_sales : newPlan.is_contact_sales}
                         />
+                      </div>
+                      <div className="col-span-2 flex items-center gap-3 p-3 border rounded-lg bg-muted/30">
+                        <Switch
+                          checked={editingPlan ? (editingPlan as any).is_contact_sales || false : newPlan.is_contact_sales}
+                          onCheckedChange={(checked) => editingPlan 
+                            ? setEditingPlan({...editingPlan, is_contact_sales: checked} as any)
+                            : setNewPlan({...newPlan, is_contact_sales: checked})
+                          }
+                        />
+                        <div>
+                          <Label className="font-semibold">Contact Sales Mode</Label>
+                          <p className="text-xs text-muted-foreground">When enabled, no price is shown. A "Contact Sales" button replaces pricing.</p>
+                        </div>
                       </div>
                     </div>
                     <div className="flex gap-2 mt-6">
@@ -1233,8 +1251,8 @@ const SubscriptionManagement = () => {
                       <tr key={plan.id} className="border-b">
                         <td className="py-3 font-medium">{plan.plan_name}</td>
                         <td className="py-3">{plan.plan_tier}</td>
-                        <td className="py-3">${plan.monthly_price}</td>
-                        <td className="py-3">${plan.annual_price}</td>
+                        <td className="py-3">{(plan as any).is_contact_sales ? <Badge variant="outline">Contact Sales</Badge> : `$${plan.monthly_price}`}</td>
+                        <td className="py-3">{(plan as any).is_contact_sales ? <Badge variant="outline">Contact Sales</Badge> : `$${plan.annual_price}`}</td>
                         <td className="py-3">
                           <Badge variant={plan.is_active ? "default" : "secondary"}>
                             {plan.is_active ? 'Active' : 'Inactive'}

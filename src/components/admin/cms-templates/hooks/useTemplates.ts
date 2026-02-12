@@ -1,9 +1,9 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import type { DocumentTemplate, TemplatePlaceholder, PlanTemplatePermission, SubscriptionPlan } from '../types';
 
-const API_BASE_URL = 'http://localhost:8000';
+import { getDocumentApiUrl } from '@/config/documentApi';
 
 export function useTemplates() {
   const [templates, setTemplates] = useState<DocumentTemplate[]>([]);
@@ -55,7 +55,7 @@ export function useTemplates() {
   const deleteTemplate = async (id: string) => {
     try {
       // Delete from API first
-      const response = await fetch(`${API_BASE_URL}/template/${id}`, {
+      const response = await fetch(`${getDocumentApiUrl()}/template/${id}`, {
         method: 'DELETE',
       });
 
@@ -103,8 +103,6 @@ export function useTemplates() {
 export function usePlaceholders(templateId: string | null) {
   const [placeholders, setPlaceholders] = useState<TemplatePlaceholder[]>([]);
   const [loading, setLoading] = useState(false);
-  // Track which templates have been auto-fixed to prevent infinite loops
-  const autoFixedTemplatesRef = useRef<Set<string>>(new Set());
 
   const fetchPlaceholders = useCallback(async () => {
     if (!templateId) {
@@ -121,14 +119,7 @@ export function usePlaceholders(templateId: string | null) {
         .order('placeholder');
 
       if (error) throw error;
-      
-      // Normalize source field: convert 'random', null, or empty to 'database'
-      const normalizedPlaceholders = (data || []).map((p: TemplatePlaceholder) => ({
-        ...p,
-        source: (p.source === 'random' || !p.source || p.source === '') ? 'database' : p.source
-      }));
-      
-      setPlaceholders(normalizedPlaceholders);
+      setPlaceholders(data as TemplatePlaceholder[] || []);
     } catch (err) {
       console.error('Error fetching placeholders:', err);
     } finally {
@@ -138,19 +129,6 @@ export function usePlaceholders(templateId: string | null) {
 
   const savePlaceholder = async (placeholder: Partial<TemplatePlaceholder> & { template_id: string; placeholder: string }) => {
     try {
-      // CRITICAL: Normalize source before saving
-      // Convert 'random', null, empty, or undefined to 'database' by default
-      // Only allow 'random' if it's explicitly chosen by the user
-      let normalizedSource = placeholder.source;
-      if (!normalizedSource || normalizedSource === '' || normalizedSource === 'random') {
-        // Check if user explicitly chose 'random' with random_option set
-        const isExplicitRandom = normalizedSource === 'random' && placeholder.random_option && placeholder.random_option !== 'fixed';
-        if (!isExplicitRandom) {
-          normalizedSource = 'database';
-          console.log(`[savePlaceholder] Normalized source from '${placeholder.source}' to 'database' for placeholder: ${placeholder.placeholder}`);
-        }
-      }
-
       const { data: existing } = await supabase
         .from('template_placeholders')
         .select('id')
@@ -158,32 +136,27 @@ export function usePlaceholders(templateId: string | null) {
         .eq('placeholder', placeholder.placeholder)
         .single();
 
-      const saveData = {
-        source: normalizedSource,
-        custom_value: placeholder.custom_value,
-        database_table: placeholder.database_table,
-        database_field: placeholder.database_field,
-        csv_id: placeholder.csv_id,
-        csv_field: placeholder.csv_field,
-        csv_row: placeholder.csv_row,
-        random_option: placeholder.random_option,
-        updated_at: new Date().toISOString()
-      };
-
       if (existing) {
         const { error } = await supabase
           .from('template_placeholders')
-          .update(saveData)
+          .update({
+            source: placeholder.source,
+            custom_value: placeholder.custom_value,
+            database_table: placeholder.database_table,
+            database_field: placeholder.database_field,
+            csv_id: placeholder.csv_id,
+            csv_field: placeholder.csv_field,
+            csv_row: placeholder.csv_row,
+            random_option: placeholder.random_option,
+            updated_at: new Date().toISOString()
+          })
           .eq('id', existing.id);
 
         if (error) throw error;
       } else {
         const { error } = await supabase
           .from('template_placeholders')
-          .insert({
-            ...placeholder,
-            source: normalizedSource
-          });
+          .insert(placeholder);
 
         if (error) throw error;
       }
@@ -219,59 +192,6 @@ export function usePlaceholders(templateId: string | null) {
   useEffect(() => {
     fetchPlaceholders();
   }, [fetchPlaceholders]);
-
-  // Auto-fix: Update any 'random' sources to 'database' in the database (one-time per template)
-  useEffect(() => {
-    const autoFixRandomSources = async () => {
-      if (!templateId || loading || autoFixedTemplatesRef.current.has(templateId)) {
-        return;
-      }
-
-      try {
-        // Fetch raw data directly to check for 'random' sources that need fixing
-        const { data: rawPlaceholders, error } = await supabase
-          .from('template_placeholders')
-          .select('id, source, placeholder')
-          .eq('template_id', templateId);
-
-        if (error) {
-          console.error('[autoFixRandomSources] Error fetching:', error);
-          return;
-        }
-
-        // Find placeholders with 'random', null, or empty source
-        const placeholdersToFix = (rawPlaceholders || []).filter(
-          (p) => p.source === 'random' || !p.source || p.source === ''
-        );
-
-        if (placeholdersToFix.length > 0) {
-          console.log(`[autoFixRandomSources] Fixing ${placeholdersToFix.length} placeholders with 'random' source for template ${templateId}`);
-          
-          // Update all 'random' sources to 'database' in a batch
-          const ids = placeholdersToFix.map(p => p.id);
-          const { error: updateError } = await supabase
-            .from('template_placeholders')
-            .update({ source: 'database', updated_at: new Date().toISOString() })
-            .in('id', ids);
-
-          if (updateError) {
-            console.error('[autoFixRandomSources] Error updating:', updateError);
-          } else {
-            console.log(`[autoFixRandomSources] Successfully updated ${ids.length} placeholders to 'database'`);
-            // Refresh placeholders to reflect the changes
-            await fetchPlaceholders();
-          }
-        }
-
-        // Mark this template as auto-fixed
-        autoFixedTemplatesRef.current.add(templateId);
-      } catch (err) {
-        console.error('[autoFixRandomSources] Unexpected error:', err);
-      }
-    };
-
-    autoFixRandomSources();
-  }, [templateId, loading, fetchPlaceholders]);
 
   return {
     placeholders,

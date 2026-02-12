@@ -192,3 +192,6 @@ verify_jwt = true
 
 [functions.linkedin-analytics-sync]
 verify_jwt = true
+
+[functions.generate-blog-image]
+verify_jwt = true

@@ -32,7 +32,7 @@ interface VesselInfo {
   flag?: string;
 }
 
-const API_BASE_URL = 'http://localhost:8000';
+import { getDocumentApiUrl } from '@/config/documentApi';
 
 export default function DocumentTemplateManager() {
   const [templates, setTemplates] = useState<DocumentTemplate[]>([]);
@@ -55,7 +55,7 @@ export default function DocumentTemplateManager() {
   const fetchTemplates = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${API_BASE_URL}/templates`);
+      const response = await fetch(`${getDocumentApiUrl()}/templates`);
       if (response.ok) {
         const data = await response.json();
         let templatesList = data.templates || [];
@@ -145,7 +145,7 @@ export default function DocumentTemplateManager() {
 
   const fetchVessels = async () => {
     try {
-      const response = await fetch(`${API_BASE_URL}/vessels`);
+      const response = await fetch(`${getDocumentApiUrl()}/vessels`);
       if (response.ok) {
         const data = await response.json();
         setVessels(data.vessels || []);
@@ -174,7 +174,7 @@ export default function DocumentTemplateManager() {
       formData.append('description', newTemplate.description);
       formData.append('file', newTemplate.file);
 
-      const response = await fetch(`${API_BASE_URL}/upload-template`, {
+      const response = await fetch(`${getDocumentApiUrl()}/upload-template`, {
         method: 'POST',
         body: formData,
       });
@@ -224,7 +224,7 @@ export default function DocumentTemplateManager() {
 
       console.log('Processing document with template ID:', templateId, 'for vessel:', vesselImo);
 
-      const response = await fetch(`${API_BASE_URL}/process-document`, {
+      const response = await fetch(`${getDocumentApiUrl()}/process-document`, {
         method: 'POST',
         body: formData,
       });
@@ -241,7 +241,7 @@ export default function DocumentTemplateManager() {
           
           // Auto-download the document
           setTimeout(() => {
-            window.open(`${API_BASE_URL}/download/${result.document_id}`, '_blank');
+            window.open(`${getDocumentApiUrl()}/download/${result.document_id}`, '_blank');
           }, 1000);
         } else {
           toast.error(result.message || 'Document processing failed');
@@ -262,7 +262,7 @@ export default function DocumentTemplateManager() {
     }
 
     try {
-      const response = await fetch(`${API_BASE_URL}/template/${templateId}`, {
+      const response = await fetch(`${getDocumentApiUrl()}/template/${templateId}`, {
         method: 'DELETE',
       });
 

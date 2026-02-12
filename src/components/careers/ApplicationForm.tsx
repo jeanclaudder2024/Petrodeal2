@@ -165,7 +165,7 @@ const ApplicationForm = ({ jobId, jobTitle }: ApplicationFormProps) => {
             type="tel"
             value={formData.phone}
             onChange={(e) => setFormData({ ...formData, phone: e.target.value })}
-            placeholder="+1 (555) 123-4567"
+            placeholder="+1 (202) 773-6521"
             className="mt-1 bg-[#0f1720] border-slate-600 text-white placeholder:text-slate-500 focus:border-orange-500"
           />
         </div>
