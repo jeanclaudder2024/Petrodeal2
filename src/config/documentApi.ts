@@ -1,18 +1,31 @@
 // Document Processing API Configuration
-// Single source of truth for Document Processor (Python FastAPI) URL
+// On your domain (e.g. https://petrodealhub.com): API = /api (same domain, no localhost).
+// On localhost: API = http://localhost:5000 for local dev.
 
-// Local dev: document-processor runs on port 5000; use VITE_DOCUMENT_API_URL in .env to override
-const DEFAULT_API_URL =
-  (typeof import.meta !== 'undefined' && import.meta.env?.VITE_DOCUMENT_API_URL) ||
-  'http://localhost:5000';
+function getDefaultApiUrl(): string {
+  // Build-time override (e.g. VPS build with VITE_DOCUMENT_API_URL=/api)
+  if (typeof import.meta !== 'undefined' && import.meta.env?.VITE_DOCUMENT_API_URL) {
+    return import.meta.env.VITE_DOCUMENT_API_URL;
+  }
+  // In browser: if we're on localhost, point to local Python; else use same domain /api
+  if (typeof window !== 'undefined') {
+    const host = window.location.hostname;
+    if (host === 'localhost' || host === '127.0.0.1') {
+      return 'http://localhost:5000';
+    }
+    // Production on your domain (petrodealhub.com, etc.): always use /api on same domain
+    return '/api';
+  }
+  return '/api';
+}
 
-// Get the configured API URL (localStorage override > env > default)
+// Get the configured API URL (localStorage override > default)
 export function getDocumentApiUrl(): string {
   try {
     const saved = localStorage.getItem('document_api_url');
     if (saved && saved.trim()) return saved.trim();
   } catch {}
-  return DEFAULT_API_URL;
+  return getDefaultApiUrl();
 }
 
 // Set a custom API URL

@@ -111,20 +111,19 @@ echo "11. Checking PM2 status..."
 pm2 status
 echo ""
 
-# 12. Test API (document-processor uses port 5000)
+# 12. Test API (document-processor uses port 8000 on VPS by default)
 echo "12. Testing API health endpoint..."
-if curl -s http://localhost:5000/health > /dev/null 2>&1; then
-    echo "   ✅ API is responding on port 5000!"
-    echo ""
-    echo "   Health check response:"
-    curl -s http://localhost:5000/health | head -5
-elif curl -s http://localhost:8000/health > /dev/null 2>&1; then
+if curl -s http://localhost:8000/health > /dev/null 2>&1; then
     echo "   ✅ API is responding on port 8000!"
     echo ""
     echo "   Health check response:"
     curl -s http://localhost:8000/health | head -5
+elif curl -s http://localhost:5000/health > /dev/null 2>&1; then
+    echo "   ✅ API is responding on port 5000!"
+    echo ""
+    curl -s http://localhost:5000/health | head -5
 else
-    echo "   ❌ API is not responding on 5000"
+    echo "   ❌ API is not responding on 8000 or 5000"
     echo ""
     echo "   Checking error logs:"
     pm2 logs python-api --err --lines 20 --nostream 2>/dev/null | tail -15
@@ -136,7 +135,7 @@ echo "UPDATE COMPLETE"
 echo "=========================================="
 echo ""
 echo "On VPS, ensure:"
-echo "  1. Nginx proxies /api/ and /health to http://localhost:5000 (see nginx-config.conf)"
+echo "  1. Nginx proxies /api/ and /health to http://localhost:8000 (see nginx-config.conf)"
 echo "  2. document-processor/.env has SUPABASE_URL and SUPABASE_KEY"
 echo "  3. Reload nginx after config change: sudo nginx -t && sudo systemctl reload nginx"
 echo ""

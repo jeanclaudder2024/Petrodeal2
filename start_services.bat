@@ -1,11 +1,13 @@
 @echo off
+REM Optional: run React + Python locally for development only.
+REM Production: full system runs on VPS only - see RUN_FULL_SYSTEM_ON_VPS_ONLY.md
 echo ========================================
-echo Starting Document CMS Services
+echo Starting Document CMS Services (local dev only)
 echo ========================================
 echo.
 
 echo [1/2] Starting Document Processor (Python API)...
-start "Python API" cmd /k "cd /d %~dp0document-processor && python main.py"
+start "Python API" cmd /k "cd /d %~dp0document-processor && set PORT=5000 && python main.py"
 
 timeout /t 3 /nobreak >nul
 

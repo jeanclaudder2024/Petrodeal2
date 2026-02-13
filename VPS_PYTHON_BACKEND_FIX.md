@@ -7,7 +7,7 @@ On your PC the Python API works on **localhost**. On the VPS it didn’t work be
 ## Why it didn’t work on the VPS
 
 1. **React was calling `localhost:5000`** – In the browser, “localhost” is the **user’s device**, not the VPS. So the site was trying to reach an API on the visitor’s machine, not your server.
-2. **Nginx was pointing to port 8000** – Your config sent `/api` to port 8000, but the document-processor runs on **port 5000**.
+2. **Nginx and Python must use the same port** – On VPS, document-processor runs on **port 8000** and Nginx proxies `/api` to `localhost:8000`.
 3. **Build had no API base URL** – The frontend must be built with `VITE_DOCUMENT_API_URL=/api` so it calls **your domain/api** (e.g. `https://yoursite.com/api`), and Nginx forwards that to Python.
 
 ---
@@ -21,7 +21,7 @@ ssh root@your-vps-ip
 cd /opt/petrodealhub
 ```
 
-### Step 2: Point Nginx to Python on port 5000
+### Step 2: Point Nginx to Python on port 8000
 
 Edit the Nginx config (path may differ on your server):
 
@@ -30,11 +30,11 @@ sudo nano /etc/nginx/sites-available/default
 # or: sudo nano /etc/nginx/conf.d/petrodealhub.conf
 ```
 
-Make sure the **Python API** block looks like this (port **5000**, not 8000):
+Make sure the **Python API** block looks like this (port **8000** on VPS):
 
 ```nginx
 location /api/ {
-    proxy_pass http://localhost:5000/;
+    proxy_pass http://localhost:8000/;
     proxy_http_version 1.1;
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
@@ -47,7 +47,7 @@ location /api/ {
 }
 
 location /health {
-    proxy_pass http://localhost:5000/health;
+    proxy_pass http://localhost:8000/health;
     proxy_set_header Host $host;
     proxy_set_header X-Real-IP $remote_addr;
     proxy_set_header X-Forwarded-Proto $scheme;
@@ -109,7 +109,7 @@ pm2 save
 
 ```bash
 # Must return {"status":"healthy",...}
-curl http://localhost:5000/health
+curl http://localhost:8000/health
 
 # From outside, if your domain is yoursite.com:
 curl https://yoursite.com/api/health
@@ -162,9 +162,9 @@ Then fix Nginx as in Step 2 and reload Nginx.
 
 | Item | Command / check |
 |------|------------------|
-| Nginx proxies `/api/` to port **5000** | `grep -A2 "location /api" /etc/nginx/sites-enabled/*` |
+| Nginx proxies `/api/` to port **8000** | `grep -A2 "location /api" /etc/nginx/sites-enabled/*` |
 | `.env` in document-processor with Supabase keys | `cat /opt/petrodealhub/document-processor/.env` |
-| Python runs on 5000 | `curl http://localhost:5000/health` |
+| Python runs on 8000 | `curl http://localhost:8000/health` |
 | Site calls same-domain API | Build with `VITE_DOCUMENT_API_URL=/api` then `npm run build` |
 | PM2 runs python-api | `pm2 list` → python-api online |
 
@@ -191,7 +191,7 @@ python main.py
 
 - Missing `.env` or wrong `SUPABASE_URL` / `SUPABASE_KEY`
 - Missing system libs (e.g. for `pdf2image`): on Ubuntu/Debian try `sudo apt install -y poppler-utils`
-- Port 5000 in use: `sudo lsof -i :5000`
+- Port 8000 in use: `sudo lsof -i :8000`
 
 After fixing, restart:
 

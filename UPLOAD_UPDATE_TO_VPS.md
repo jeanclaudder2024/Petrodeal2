@@ -71,10 +71,7 @@ If your frontend has another name, run `pm2 list` and use that name (e.g. `petro
 ### 6. Check that everything is running
 
 ```bash
-# Python API (document-processor often runs on port 5000)
-curl http://localhost:5000/health
-
-# Or if you use the root API on 8000:
+# Python API (document-processor runs on port 8000 on VPS)
 curl http://localhost:8000/health
 
 # PM2 status
@@ -93,7 +90,7 @@ git submodule update --init --recursive document-processor && \
 cd document-processor && git pull origin master && cd .. && \
 npm install && npm run build && \
 pm2 restart python-api react-app && \
-echo "Done. API: curl http://localhost:5000/health"
+echo "Done. API: curl http://localhost:8000/health"
 ```
 
 Replace `react-app` with your frontend app name if different (`pm2 list`).
@@ -171,7 +168,7 @@ Document generation in the app will not work on the VPS until you run the Python
 | Restart API       | `pm2 restart python-api`            |
 | Restart frontend  | `pm2 restart react-app`             |
 | **Stop Python**   | `pm2 stop python-api && pm2 delete python-api && pm2 save` |
-| Check API         | `curl http://localhost:5000/health`  |
+| Check API         | `curl http://localhost:8000/health`  |
 | PM2 list          | `pm2 list`                           |
 | PM2 logs          | `pm2 logs python-api`                |
 
