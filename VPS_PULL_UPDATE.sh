@@ -77,8 +77,17 @@ else
 fi
 echo ""
 
-# 7. Restart API
-echo "7. Restarting API..."
+# 7. Build frontend with VPS API URL (so React calls /api on same host, nginx proxies to Python)
+echo "7. Building frontend (API base URL = /api for VPS)..."
+cd /opt/petrodealhub
+export VITE_DOCUMENT_API_URL=/api
+npm install --no-audit --no-fund 2>/dev/null || true
+npm run build 2>&1 | tail -5
+echo "   ✅ Frontend built"
+echo ""
+
+# 8. Restart API
+echo "8. Restarting API..."
 pm2 delete python-api 2>/dev/null || true
 sleep 2
 cd /opt/petrodealhub/document-processor
@@ -86,28 +95,39 @@ pm2 start venv/bin/python --name python-api -- main.py
 echo "   ✅ API restarted"
 echo ""
 
-# 8. Wait for API to start
-echo "8. Waiting 10 seconds for API to start..."
-sleep 10
+# 9. Restart frontend
+echo "9. Restarting frontend..."
+pm2 restart react-app 2>/dev/null || true
+echo "   ✅ Frontend restarted"
 echo ""
 
-# 9. Check PM2 status
-echo "9. Checking PM2 status..."
-pm2 status python-api
+# 10. Wait for API to start
+echo "10. Waiting for API to start..."
+sleep 5
 echo ""
 
-# 10. Test API
-echo "10. Testing API health endpoint..."
-if curl -s http://localhost:8000/health > /dev/null 2>&1; then
-    echo "   ✅ API is responding!"
+# 11. Check PM2 status
+echo "11. Checking PM2 status..."
+pm2 status
+echo ""
+
+# 12. Test API (document-processor uses port 5000)
+echo "12. Testing API health endpoint..."
+if curl -s http://localhost:5000/health > /dev/null 2>&1; then
+    echo "   ✅ API is responding on port 5000!"
+    echo ""
+    echo "   Health check response:"
+    curl -s http://localhost:5000/health | head -5
+elif curl -s http://localhost:8000/health > /dev/null 2>&1; then
+    echo "   ✅ API is responding on port 8000!"
     echo ""
     echo "   Health check response:"
     curl -s http://localhost:8000/health | head -5
 else
-    echo "   ❌ API is not responding"
+    echo "   ❌ API is not responding on 5000"
     echo ""
     echo "   Checking error logs:"
-    pm2 logs python-api --err --lines 20 --nostream | tail -15
+    pm2 logs python-api --err --lines 20 --nostream 2>/dev/null | tail -15
 fi
 echo ""
 
@@ -115,8 +135,10 @@ echo "=========================================="
 echo "UPDATE COMPLETE"
 echo "=========================================="
 echo ""
-echo "If API is not responding, check logs:"
-echo "  pm2 logs python-api --err --lines 50"
+echo "On VPS, ensure:"
+echo "  1. Nginx proxies /api/ and /health to http://localhost:5000 (see nginx-config.conf)"
+echo "  2. document-processor/.env has SUPABASE_URL and SUPABASE_KEY"
+echo "  3. Reload nginx after config change: sudo nginx -t && sudo systemctl reload nginx"
 echo ""
-echo "If you see errors, you may need to run the fix scripts first."
+echo "If API is not responding: pm2 logs python-api --err --lines 50"
 echo ""
