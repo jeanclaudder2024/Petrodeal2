@@ -28,7 +28,7 @@ import {
 } from 'lucide-react';
 import { Settings } from 'lucide-react';
 import { toast } from 'sonner';
-import { DOCUMENT_API_URL, checkApiHealth, documentApiFetch, checkAIStatus, AIStatus } from '@/config/documentApi';
+import { getDocumentApiUrl, checkApiHealth, documentApiFetch, checkAIStatus, AIStatus } from '@/config/documentApi';
 import EnhancedTestDialog from './document-publishing/EnhancedTestDialog';
 import DataSourcesTab from './document-publishing/DataSourcesTab';
 import AdvancedPlaceholderMapping from './document-publishing/AdvancedPlaceholderMapping';
@@ -195,7 +195,7 @@ export default function DocumentPublishing() {
           {isConnected && <CheckCircle className="h-4 w-4 text-primary" />}
         </AlertTitle>
         <AlertDescription className="flex items-center justify-between">
-          <span className="text-xs text-muted-foreground break-all">{DOCUMENT_API_URL}</span>
+          <span className="text-xs text-muted-foreground break-all">{getDocumentApiUrl()}</span>
           <Button 
             variant="outline" 
             size="sm" 
@@ -209,16 +209,22 @@ export default function DocumentPublishing() {
         </AlertDescription>
       </Alert>
 
-      {/* CORS Help Alert */}
+      {/* Connection help when API is unreachable (e.g. Lovable deploy) */}
       {isConnected === false && (
         <Alert variant="default" className="border-warning bg-warning/10">
           <AlertTriangle className="h-4 w-4 text-warning" />
-          <AlertTitle>CORS Configuration Required</AlertTitle>
-          <AlertDescription className="text-sm">
-            If you're seeing connection errors, update your Replit FastAPI CORS settings to include:
-            <code className="block mt-2 p-2 bg-muted rounded text-xs">
-              allow_origins=["*"] or add "https://07b81e23-32e6-4ee0-a4ca-0408cd48eca6.lovableproject.com"
-            </code>
+          <AlertTitle>Document API unreachable</AlertTitle>
+          <AlertDescription className="text-sm space-y-2">
+            <p>
+              This app is hosted on a different domain than your Python backend. Set the <strong>Document API URL</strong> to your backend&apos;s full URL (VPS or Replit).
+            </p>
+            <ul className="list-disc list-inside text-xs mt-2 space-y-1">
+              <li>VPS: <code className="bg-muted px-1 rounded">https://yourdomain.com/api</code></li>
+              <li>Replit: your Replit backend URL (e.g. <code className="bg-muted px-1 rounded">https://xxx.replit.dev</code>)</li>
+            </ul>
+            <p className="text-xs mt-2">
+              Open the <strong>Settings</strong> tab on this page, set the Document API URL to your backend (e.g. <code className="bg-muted px-1 rounded">https://yourdomain.com/api</code>), then click <strong>Retry</strong> above. Your backend must allow CORS from this origin: <code className="bg-muted px-1 rounded break-all">{typeof window !== 'undefined' ? window.location.origin : ''}</code>
+            </p>
           </AlertDescription>
         </Alert>
       )}
@@ -291,7 +297,7 @@ export default function DocumentPublishing() {
                       <p>• Database-mapped placeholders will still function normally</p>
                       <p className="font-medium text-foreground mt-2">What to do:</p>
                       <p>• Check your OpenAI API key and credit balance</p>
-                      <p>• Verify the Replit backend is running</p>
+                      <p>• Verify your document API backend (VPS or Replit) is running and reachable</p>
                     </div>
                   )}
                 </div>
