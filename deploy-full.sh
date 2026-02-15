@@ -40,15 +40,15 @@ if [ -n "$DEPLOY_SSH" ]; then
 else
   echo "2. Run the full deploy ON YOUR VPS:"
   echo ""
-  echo "   ssh root@your-vps-host   # or your VPS user@host"
+  echo "   ssh root@srv898241.hstgr.cloud   # or your VPS user@host"
   echo "   cd /opt/petrodealhub"
   echo "   bash FULL_DEPLOY.sh"
   echo ""
   echo "   Or in one line:"
-  echo "   ssh root@your-vps-host 'cd /opt/petrodealhub && bash FULL_DEPLOY.sh'"
+  echo "   ssh root@srv898241.hstgr.cloud 'cd /opt/petrodealhub && bash FULL_DEPLOY.sh'"
   echo ""
   echo "   To run deploy automatically from this script, set:"
-  echo "   DEPLOY_SSH=user@your-vps ./deploy-full.sh"
+  echo "   DEPLOY_SSH=root@srv898241.hstgr.cloud ./deploy-full.sh"
   echo ""
 fi
 

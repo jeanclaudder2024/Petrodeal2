@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { toast } from 'sonner';
+import { getDocumentApiUrl } from '@/config/documentApi';
 import { 
-  API_BASE_URL, 
   Template, 
   PlaceholderSettings, 
   Plan, 
@@ -12,12 +12,13 @@ import {
   DataSource
 } from '../types';
 
-// Fetch helper with credentials
+// Fetch helper with credentials (uses current API URL from settings)
 async function apiFetch<T>(
   endpoint: string, 
   options: RequestInit = {}
 ): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+  const baseUrl = getDocumentApiUrl();
+  const response = await fetch(`${baseUrl}${endpoint}`, {
     ...options,
     credentials: 'include',
     headers: {
@@ -25,12 +26,31 @@ async function apiFetch<T>(
     },
   });
 
+  const text = await response.text();
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ detail: 'Request failed' }));
-    throw new Error(error.detail || `HTTP ${response.status}`);
+    try {
+      const error = JSON.parse(text);
+      throw new Error(error.detail || error.message || `HTTP ${response.status}`);
+    } catch (e) {
+      if (e instanceof Error && e.message.startsWith('HTTP')) throw e;
+      if (text.trimStart().startsWith('<')) {
+        throw new Error(
+          'API returned HTML instead of JSON. Set the API base URL to the document API root (e.g. https://petrodealhub.com/api), not the /portal page.'
+        );
+      }
+      throw new Error(text || `Request failed (${response.status})`);
+    }
   }
-
-  return response.json();
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    if (text.trimStart().startsWith('<')) {
+      throw new Error(
+        'API returned HTML instead of JSON. Use API base URL https://petrodealhub.com/api (not .../portal).'
+      );
+    }
+    throw new Error('Invalid JSON response');
+  }
 }
 
 // Templates Hook
@@ -67,19 +87,32 @@ export function useTemplates() {
     if (fontSize) formData.append('font_size', fontSize.toString());
     if (planIds?.length) formData.append('plan_ids', JSON.stringify(planIds));
 
-    const response = await fetch(`${API_BASE_URL}/upload-template`, {
+    const response = await fetch(`${getDocumentApiUrl()}/upload-template`, {
       method: 'POST',
       body: formData,
       credentials: 'include',
     });
 
+    const uploadResponseText = await response.text();
     if (!response.ok) {
-      const error = await response.json().catch(() => ({ detail: 'Upload failed' }));
-      throw new Error(error.detail || 'Upload failed');
+      try {
+        const error = JSON.parse(uploadResponseText);
+        throw new Error(error.detail || error.message || 'Upload failed');
+      } catch (e) {
+        if (e instanceof Error && e.message !== 'Upload failed') throw e;
+        if (response.status === 413) {
+          throw new Error('File too large. Server limit may need increasing (client_max_body_size in Nginx).');
+        }
+        if (uploadResponseText.trimStart().startsWith('<')) {
+          throw new Error(
+            'Upload endpoint returned HTML. Use API base URL https://petrodealhub.com/api (not .../portal).'
+          );
+        }
+        throw new Error(uploadResponseText || 'Upload failed');
+      }
     }
-
     await fetchTemplates();
-    return response.json();
+    return JSON.parse(uploadResponseText || '{}');
   }, [fetchTemplates]);
 
   const deleteTemplate = useCallback(async (templateName: string) => {
@@ -255,20 +288,28 @@ export function useDataSources() {
     formData.append('file', file);
     formData.append('data_type', dataType);
 
-    const response = await fetch(`${API_BASE_URL}/upload-csv`, {
+    const response = await fetch(`${getDocumentApiUrl()}/upload-csv`, {
       method: 'POST',
       body: formData,
       credentials: 'include',
     });
 
+    const csvResponseText = await response.text();
     if (!response.ok) {
-      const error = await response.json().catch(() => ({ detail: 'Upload failed' }));
-      throw new Error(error.detail || 'Upload failed');
+      try {
+        const error = JSON.parse(csvResponseText);
+        throw new Error(error.detail || error.message || 'Upload failed');
+      } catch (e) {
+        if (e instanceof Error && e.message !== 'Upload failed') throw e;
+        if (response.status === 413) {
+          throw new Error('File too large. Server limit may need increasing (client_max_body_size in Nginx).');
+        }
+        throw new Error(csvResponseText || 'Upload failed');
+      }
     }
-
     await fetchDataSources();
     await fetchCsvFiles();
-    return response.json();
+    return JSON.parse(csvResponseText || '{}');
   }, [fetchDataSources, fetchCsvFiles]);
 
   const deleteCsv = useCallback(async (csvId: string) => {

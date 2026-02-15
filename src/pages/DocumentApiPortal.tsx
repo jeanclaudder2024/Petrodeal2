@@ -14,7 +14,7 @@ export default function DocumentApiPortal() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Document API Portal</h1>
         <p className="text-muted-foreground mt-1">
-          Connect this app to the Python Document Processor API. Set the backend URL and verify the connection.
+          Connect this app to the Python Document Processor API. Set the <strong>API base URL</strong> to <code className="text-xs bg-muted px-1 rounded">https://petrodealhub.com/api</code> (not the /portal page).
         </p>
       </div>
 

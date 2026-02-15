@@ -1,7 +1,8 @@
 // Document Processing API Configuration
-// Single source of truth for Replit FastAPI URL
+// Default: same-origin /api (when built with VITE_DOCUMENT_API_URL=/api) or petrodealhub.com
 
-const DEFAULT_API_URL = 'https://fe34d3a6-e8b0-49d1-b955-27b149abae9c-00-1sdj1ekjwvpbv.picard.replit.dev';
+const DEFAULT_API_URL =
+  import.meta.env.VITE_DOCUMENT_API_URL || 'https://petrodealhub.com/api';
 
 // Get the configured API URL (from localStorage override or default)
 export function getDocumentApiUrl(): string {

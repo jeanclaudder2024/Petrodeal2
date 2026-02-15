@@ -95,7 +95,7 @@ echo "API health:"
 curl -s http://localhost:8000/health 2>/dev/null || echo "   (wait a few seconds and run: curl http://localhost:8000/health)"
 echo ""
 echo "API portal:"
-echo "   http://localhost:8000/portal (or https://yourdomain.com/api/portal)"
+echo "   http://localhost:8000/portal (or https://petrodealhub.com/api/portal)"
 echo ""
 
 echo "=========================================="

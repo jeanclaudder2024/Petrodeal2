@@ -39,15 +39,15 @@ if ($env:DEPLOY_SSH) {
 } else {
     Write-Host "2. Run the full deploy ON YOUR VPS:"
     Write-Host ""
-    Write-Host "   ssh root@your-vps-host   # or your VPS user@host"
+    Write-Host "   ssh root@srv898241.hstgr.cloud   # or your VPS user@host"
     Write-Host "   cd /opt/petrodealhub"
     Write-Host "   bash FULL_DEPLOY.sh"
     Write-Host ""
     Write-Host "   Or in one line:"
-    Write-Host "   ssh root@your-vps-host 'cd /opt/petrodealhub && bash FULL_DEPLOY.sh'"
+    Write-Host "   ssh root@srv898241.hstgr.cloud 'cd /opt/petrodealhub && bash FULL_DEPLOY.sh'"
     Write-Host ""
     Write-Host "   To run deploy automatically from this script, set:"
-    Write-Host "   `$env:DEPLOY_SSH = 'user@your-vps'; .\deploy-full.ps1"
+    Write-Host "   `$env:DEPLOY_SSH = 'root@srv898241.hstgr.cloud'; .\deploy-full.ps1"
     Write-Host ""
 }
 

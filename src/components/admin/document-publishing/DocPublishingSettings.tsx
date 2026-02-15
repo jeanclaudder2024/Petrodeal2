@@ -74,7 +74,7 @@ export default function DocPublishingSettings() {
           API Endpoint Settings
         </CardTitle>
         <CardDescription>
-          Configure the FastAPI document processing backend URL. Changes persist in your browser.
+          Use the <strong>API base URL</strong> (e.g. <code className="text-xs">https://petrodealhub.com/api</code>), not the /portal page. Changes persist in your browser.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
@@ -93,7 +93,7 @@ export default function DocPublishingSettings() {
           <div className="flex gap-2">
             <Input
               id="api-url"
-              placeholder="https://your-api-domain.com"
+              placeholder="https://petrodealhub.com/api"
               value={inputUrl}
               onChange={(e) => {
                 setInputUrl(e.target.value);
