@@ -68,6 +68,7 @@ import Policies from "./pages/Policies";
 import PrivacyPolicy from "./pages/PrivacyPolicy";
 import Support from "./pages/Support";
 import Documentation from "./pages/Documentation";
+import DocumentApiPortal from "./pages/DocumentApiPortal";
 import SupportCenter from "./pages/SupportCenter";
 import MyTickets from "./pages/MyTickets";
 import NewTicket from "./pages/NewTicket";
@@ -172,6 +173,14 @@ const App = () => (
             <Route path="/policies" element={<Policies />} />
             <Route path="/privacy-policy" element={<PrivacyPolicy />} />
           <Route path="/documentation" element={<Documentation />} />
+          <Route
+            path="/document-api-portal"
+            element={
+              <AppLayout>
+                <DocumentApiPortal />
+              </AppLayout>
+            }
+          />
           <Route 
             path="/support" 
             element={
