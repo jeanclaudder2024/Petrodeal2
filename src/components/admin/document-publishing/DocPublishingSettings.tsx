@@ -135,7 +135,9 @@ export default function DocPublishingSettings() {
                 ? 'The endpoint is reachable and responding correctly.'
                 : isProduction && (inputUrl.startsWith('http://localhost') || inputUrl.startsWith('http://127.0.0.1'))
                   ? 'localhost does not work from the live site. Use "Use site API (/api)" above, then Test.'
-                  : 'Could not reach the endpoint. Check the URL and ensure CORS is configured.'}
+                  : isProduction && (inputUrl === '/api' || inputUrl.startsWith('/api'))
+                    ? 'The document API on this server is not responding. On the VPS, check: (1) Python API is running: pm2 status python-api. (2) Test locally: curl http://localhost:8000/health. (3) Nginx must proxy /api/ to localhost:8000. See UPLOAD_UPDATE_TO_VPS.md for restart steps.'
+                    : 'Could not reach the endpoint. Check the URL and ensure CORS is configured.'}
             </AlertDescription>
           </Alert>
         )}

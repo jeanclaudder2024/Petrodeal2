@@ -1,7 +1,5 @@
 // Document Processing CMS Types
-import { DOCUMENT_API_URL } from '@/config/documentApi';
-
-export const API_BASE_URL = DOCUMENT_API_URL;
+// Use getDocumentApiUrl() from '@/config/documentApi' for API base URL at runtime.
 
 export interface Template {
   id: string;

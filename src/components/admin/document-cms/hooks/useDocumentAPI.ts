@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { toast } from 'sonner';
+import { getDocumentApiUrl } from '@/config/documentApi';
 import { 
-  API_BASE_URL, 
   Template, 
   PlaceholderSettings, 
   Plan, 
@@ -17,7 +17,8 @@ async function apiFetch<T>(
   endpoint: string, 
   options: RequestInit = {}
 ): Promise<T> {
-  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+  const baseUrl = getDocumentApiUrl();
+  const response = await fetch(`${baseUrl}${endpoint}`, {
     ...options,
     credentials: 'include',
     headers: {
@@ -67,7 +68,7 @@ export function useTemplates() {
     if (fontSize) formData.append('font_size', fontSize.toString());
     if (planIds?.length) formData.append('plan_ids', JSON.stringify(planIds));
 
-    const response = await fetch(`${API_BASE_URL}/upload-template`, {
+    const response = await fetch(`${getDocumentApiUrl()}/upload-template`, {
       method: 'POST',
       body: formData,
       credentials: 'include',
@@ -255,7 +256,7 @@ export function useDataSources() {
     formData.append('file', file);
     formData.append('data_type', dataType);
 
-    const response = await fetch(`${API_BASE_URL}/upload-csv`, {
+    const response = await fetch(`${getDocumentApiUrl()}/upload-csv`, {
       method: 'POST',
       body: formData,
       credentials: 'include',

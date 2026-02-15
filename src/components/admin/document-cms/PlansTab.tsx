@@ -14,8 +14,9 @@ import {
   UserCheck, Info, CheckCircle2, XCircle
 } from 'lucide-react';
 import { toast } from 'sonner';
+import { getDocumentApiUrl } from '@/config/documentApi';
 import { usePlans, useTemplates } from './hooks/useDocumentAPI';
-import { API_BASE_URL, normalizeTemplateName } from './types';
+import { normalizeTemplateName } from './types';
 
 interface PlansTabProps {
   isAuthenticated: boolean;
@@ -115,7 +116,7 @@ export default function PlansTab({ isAuthenticated }: PlansTabProps) {
       if (existingPlan?.annual_price !== undefined) planData.annual_price = existingPlan.annual_price;
       if (existingPlan?.plan_tier) planData.plan_tier = existingPlan.plan_tier;
 
-      const response = await fetch(`${API_BASE_URL}/update-plan`, {
+      const response = await fetch(`${getDocumentApiUrl()}/update-plan`, {
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
@@ -154,7 +155,7 @@ export default function PlansTab({ isAuthenticated }: PlansTabProps) {
 
     setTestingPermission(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/check-download-permission`, {
+      const response = await fetch(`${getDocumentApiUrl()}/check-download-permission`, {
         method: 'POST',
         credentials: 'include',
         headers: {

@@ -8,7 +8,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { RefreshCw, Download, Ship, Building2, Anchor, Package, Landmark, Factory } from 'lucide-react';
 import { useDocumentEntities } from './useDocumentEntities';
-import { DOCUMENT_API_URL } from '@/config/documentApi';
+import { getDocumentApiUrl } from '@/config/documentApi';
 import { toast } from 'sonner';
 
 interface Template {
@@ -84,7 +84,7 @@ export default function EnhancedTestDialog({ open, onOpenChange, template }: Enh
 
     setGenerating(true);
     try {
-      const response = await fetch(`${DOCUMENT_API_URL}/process-document`, {
+      const response = await fetch(`${getDocumentApiUrl()}/process-document`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

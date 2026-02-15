@@ -1,6 +1,6 @@
 import { useState, useCallback } from 'react';
 import { toast } from 'sonner';
-import { API_BASE_URL } from '../types';
+import { getDocumentApiUrl } from '@/config/documentApi';
 
 export function useDocumentAPIAuth() {
   const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null);
@@ -9,7 +9,7 @@ export function useDocumentAPIAuth() {
   const checkAuth = useCallback(async () => {
     setIsChecking(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/auth/me`, {
+      const response = await fetch(`${getDocumentApiUrl()}/auth/me`, {
         method: 'GET',
         credentials: 'include',
       });
@@ -33,7 +33,7 @@ export function useDocumentAPIAuth() {
 
   const login = useCallback(async (username: string, password: string) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/auth/login`, {
+      const response = await fetch(`${getDocumentApiUrl()}/auth/login`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -65,7 +65,7 @@ export function useDocumentAPIAuth() {
 
   const logout = useCallback(async () => {
     try {
-      await fetch(`${API_BASE_URL}/auth/logout`, {
+      await fetch(`${getDocumentApiUrl()}/auth/logout`, {
         method: 'POST',
         credentials: 'include',
       });

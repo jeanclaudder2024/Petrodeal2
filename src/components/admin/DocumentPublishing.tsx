@@ -131,7 +131,7 @@ export default function DocumentPublishing() {
       formData.append('name', uploadName);
       formData.append('description', uploadDescription);
 
-      const response = await fetch(`${DOCUMENT_API_URL}/upload-template`, {
+      const response = await fetch(`${getDocumentApiUrl()}/upload-template`, {
         method: 'POST',
         body: formData,
       });

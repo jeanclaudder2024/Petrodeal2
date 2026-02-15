@@ -7,7 +7,7 @@ import { FileText, Ship, RefreshCw, FolderOpen, Shield } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { DOCUMENT_API_URL } from '@/config/documentApi';
+import { getDocumentApiUrl } from '@/config/documentApi';
 
 import {
   DocumentCard,
@@ -26,8 +26,6 @@ interface VesselDocumentGeneratorProps {
   vesselImo: string;
   vesselName: string;
 }
-
-const API_BASE_URL = DOCUMENT_API_URL;
 
 export default function VesselDocumentGenerator({ vesselImo, vesselName }: VesselDocumentGeneratorProps) {
   const { user } = useAuth();
@@ -201,7 +199,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
       // Fetch ALL templates first, then check permissions from Supabase
       try {
         // Get all templates from API
-        const allResponse = await fetch(`${API_BASE_URL}/templates`);
+        const allResponse = await fetch(`${getDocumentApiUrl()}/templates`);
         let allTemplatesMap = new Map<string, DocumentTemplate>();
 
         if (allResponse.ok) {
@@ -385,7 +383,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
         templateName = templateName.slice(0, -5);
       }
 
-      const response = await fetch(`${API_BASE_URL}/generate-document`, {
+      const response = await fetch(`${getDocumentApiUrl()}/generate-document`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
