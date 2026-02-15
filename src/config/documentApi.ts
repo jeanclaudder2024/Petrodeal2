@@ -122,13 +122,25 @@ export async function documentApiFetch<T>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<T> {
-  const response = await fetch(`${getDocumentApiUrl()}${endpoint}`, {
+  const baseUrl = getDocumentApiUrl();
+  if (!baseUrl || baseUrl.trim() === '') {
+    throw new Error('Document API URL is not set. Go to Admin → Document Publishing → Settings and set it to /api.');
+  }
+  const url = `${baseUrl.replace(/\/$/, '')}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
+  const response = await fetch(url, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
       ...options.headers,
     },
   });
+
+  const contentType = response.headers.get('content-type') || '';
+  if (!contentType.includes('application/json')) {
+    if (contentType.includes('text/html')) {
+      throw new Error(`Document API returned HTML instead of JSON (HTTP ${response.status}). Set API URL to "/api" in Settings and ensure the document backend is running.`);
+    }
+  }
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: 'Request failed' }));

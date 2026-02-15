@@ -198,9 +198,19 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
 
       // Fetch ALL templates first, then check permissions from Supabase
       try {
-        // Get all templates from API
-        const allResponse = await fetch(`${getDocumentApiUrl()}/templates`);
+        const apiBase = getDocumentApiUrl();
+        if (!apiBase?.trim()) {
+          throw new Error('Document API URL is not set. Set it to /api in Admin → Document Publishing → Settings.');
+        }
+        const allResponse = await fetch(`${apiBase.replace(/\/$/, '')}/templates`);
         let allTemplatesMap = new Map<string, DocumentTemplate>();
+
+        const contentType = allResponse.headers.get('content-type') || '';
+        if (allResponse.ok && !contentType.includes('application/json')) {
+          if (contentType.includes('text/html')) {
+            throw new Error('Document API returned HTML. Set API URL to "/api" in Settings and ensure the document backend is running.');
+          }
+        }
 
         if (allResponse.ok) {
           const allData = await allResponse.json();

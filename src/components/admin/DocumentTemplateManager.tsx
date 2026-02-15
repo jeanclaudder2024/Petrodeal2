@@ -55,7 +55,17 @@ export default function DocumentTemplateManager() {
   const fetchTemplates = async () => {
     try {
       setLoading(true);
-      const response = await fetch(`${getDocumentApiUrl()}/templates`);
+      const apiBase = getDocumentApiUrl();
+      if (!apiBase?.trim()) {
+        toast.error('Document API URL not set. Set to /api in Document Publishing → Settings.');
+        return;
+      }
+      const response = await fetch(`${apiBase.replace(/\/$/, '')}/templates`);
+      const contentType = response.headers.get('content-type') || '';
+      if (response.ok && contentType.includes('text/html')) {
+        toast.error('Document API returned HTML. Set API URL to "/api" and ensure the backend is running.');
+        return;
+      }
       if (response.ok) {
         const data = await response.json();
         let templatesList = data.templates || [];

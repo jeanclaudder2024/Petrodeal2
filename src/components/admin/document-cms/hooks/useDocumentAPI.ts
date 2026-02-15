@@ -18,13 +18,26 @@ async function apiFetch<T>(
   options: RequestInit = {}
 ): Promise<T> {
   const baseUrl = getDocumentApiUrl();
-  const response = await fetch(`${baseUrl}${endpoint}`, {
+  if (!baseUrl || baseUrl.trim() === '') {
+    throw new Error('Document API URL is not set. Go to Admin → Document Publishing → Settings and set it to /api.');
+  }
+  const url = `${baseUrl.replace(/\/$/, '')}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
+  const response = await fetch(url, {
     ...options,
     credentials: 'include',
     headers: {
       ...options.headers,
     },
   });
+
+  const contentType = response.headers.get('content-type') || '';
+  if (!contentType.includes('application/json')) {
+    if (contentType.includes('text/html')) {
+      throw new Error(`Document API returned HTML instead of JSON (HTTP ${response.status}). Check that the API URL is "/api" and the document backend is running on the server.`);
+    }
+    const text = await response.text();
+    throw new Error(text || `Request failed: HTTP ${response.status}`);
+  }
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: 'Request failed' }));
