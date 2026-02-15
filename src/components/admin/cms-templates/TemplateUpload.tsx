@@ -6,7 +6,6 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Upload, Loader2, X, FileText, CloudUpload } from 'lucide-react';
 import { toast } from 'sonner';
-import { getDocumentApiUrl } from '@/config/documentApi';
 
 interface TemplateUploadProps {
   onClose: () => void;
@@ -17,7 +16,7 @@ interface TemplateUploadProps {
 export function TemplateUpload({ 
   onClose, 
   onSuccess,
-  apiBaseUrl = getDocumentApiUrl()
+  apiBaseUrl = 'http://localhost:8000' 
 }: TemplateUploadProps) {
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');

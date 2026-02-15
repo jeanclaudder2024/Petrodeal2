@@ -18,7 +18,6 @@ import { toast } from 'sonner';
 import { getDocumentApiUrl, setDocumentApiUrl, resetDocumentApiUrl, checkApiHealth } from '@/config/documentApi';
 
 export default function DocPublishingSettings() {
-  const isProduction = typeof window !== 'undefined' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1';
   const [currentUrl, setCurrentUrl] = useState(getDocumentApiUrl());
   const [inputUrl, setInputUrl] = useState(getDocumentApiUrl());
   const [testing, setTesting] = useState(false);
@@ -79,18 +78,6 @@ export default function DocPublishingSettings() {
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
-        {/* On production: use same domain, not localhost */}
-        {isProduction && (
-          <Alert className="border-primary/50 bg-primary/5">
-            <Globe className="h-4 w-4" />
-            <AlertTitle>You are on the live site</AlertTitle>
-            <AlertDescription>
-              Use <strong>same domain</strong> so the app calls this site&apos;s API. Do not use localhost here.
-              Click <strong>&quot;Use site API (/api)&quot;</strong> below, then Test and Save.
-            </AlertDescription>
-          </Alert>
-        )}
-
         {/* Current Connection */}
         <div className="p-3 rounded-lg bg-muted/50 border">
           <div className="flex items-center gap-2 mb-1">
@@ -106,7 +93,7 @@ export default function DocPublishingSettings() {
           <div className="flex gap-2">
             <Input
               id="api-url"
-              placeholder={isProduction ? '/api or https://petrodealhub.com/api' : 'http://localhost:5000'}
+              placeholder="https://your-api-domain.com"
               value={inputUrl}
               onChange={(e) => {
                 setInputUrl(e.target.value);
@@ -133,31 +120,13 @@ export default function DocPublishingSettings() {
             <AlertDescription className="text-xs">
               {connectionStatus
                 ? 'The endpoint is reachable and responding correctly.'
-                : isProduction && (inputUrl.startsWith('http://localhost') || inputUrl.startsWith('http://127.0.0.1'))
-                  ? 'localhost does not work from the live site. Use "Use site API (/api)" above, then Test.'
-                  : isProduction && (inputUrl === '/api' || inputUrl.startsWith('/api'))
-                    ? 'The document API on this server is not responding. On the VPS, check: (1) Python API is running: pm2 status python-api. (2) Test locally: curl http://localhost:8000/health. (3) Nginx must proxy /api/ to localhost:8000. See UPLOAD_UPDATE_TO_VPS.md for restart steps.'
-                    : 'Could not reach the endpoint. Check the URL and ensure CORS is configured.'}
+                : 'Could not reach the endpoint. Check the URL and ensure CORS is configured.'}
             </AlertDescription>
           </Alert>
         )}
 
         {/* Actions */}
-        <div className="flex flex-wrap gap-2">
-          {isProduction && (
-            <Button
-              variant="default"
-              onClick={() => {
-                setInputUrl('/api');
-                setDocumentApiUrl('/api');
-                setCurrentUrl('/api');
-                toast.success('Set to /api (same domain). Click Test to verify.');
-              }}
-            >
-              <Wifi className="h-4 w-4 mr-1.5" />
-              Use site API (/api)
-            </Button>
-          )}
+        <div className="flex gap-2">
           <Button onClick={handleSave} disabled={saving || !inputUrl.trim()}>
             <Shield className="h-4 w-4 mr-1.5" />
             Save Endpoint

@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import type { DocumentTemplate, TemplatePlaceholder, PlanTemplatePermission, SubscriptionPlan } from '../types';
 
-import { getDocumentApiUrl } from '@/config/documentApi';
+const API_BASE_URL = 'http://localhost:8000';
 
 export function useTemplates() {
   const [templates, setTemplates] = useState<DocumentTemplate[]>([]);
@@ -55,7 +55,7 @@ export function useTemplates() {
   const deleteTemplate = async (id: string) => {
     try {
       // Delete from API first
-      const response = await fetch(`${getDocumentApiUrl()}/template/${id}`, {
+      const response = await fetch(`${API_BASE_URL}/template/${id}`, {
         method: 'DELETE',
       });
 

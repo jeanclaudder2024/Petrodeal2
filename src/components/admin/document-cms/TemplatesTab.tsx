@@ -14,7 +14,6 @@ import {
 import { toast } from 'sonner';
 import { useTemplates, useVessels, usePlans } from './hooks/useDocumentAPI';
 import { Template } from './types';
-import { getDocumentApiUrl } from '@/config/documentApi';
 
 const FONT_OPTIONS = [
   'Arial', 'Times New Roman', 'Calibri', 'Helvetica', 
@@ -150,7 +149,7 @@ export default function TemplatesTab({ onEditPlaceholders, onTestTemplate }: Tem
         window.open(result.document_url, '_blank');
         toast.success('Document generated successfully');
       } else if (result.document_id) {
-        window.open(`${getDocumentApiUrl()}/download/${result.document_id}`, '_blank');
+        window.open(`http://localhost:8000/download/${result.document_id}`, '_blank');
         toast.success('Document generated successfully');
       }
       setTestDialogOpen(false);

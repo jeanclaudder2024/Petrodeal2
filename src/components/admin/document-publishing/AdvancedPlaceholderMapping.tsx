@@ -43,7 +43,7 @@ import {
 import { useTableSchema } from './hooks/useTableSchema';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { getDocumentApiUrl } from '@/config/documentApi';
+import { DOCUMENT_API_URL } from '@/config/documentApi';
 import BucketMappingEditor from './BucketMappingEditor';
 
 interface Template {
@@ -680,7 +680,7 @@ export default function AdvancedPlaceholderMapping({ templates }: AdvancedPlaceh
           return acc;
         }, {} as Record<string, any>);
 
-        await fetch(`${getDocumentApiUrl()}/save-placeholder-mappings`, {
+        await fetch(`${DOCUMENT_API_URL}/save-placeholder-mappings`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({

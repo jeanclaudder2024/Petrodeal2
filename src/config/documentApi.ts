@@ -1,31 +1,15 @@
 // Document Processing API Configuration
-// On your domain (e.g. https://petrodealhub.com): API = /api (same domain, no localhost).
-// On localhost: API = http://localhost:5000 for local dev.
+// Single source of truth for Replit FastAPI URL
 
-function getDefaultApiUrl(): string {
-  // Build-time override (e.g. VPS build with VITE_DOCUMENT_API_URL=/api)
-  if (typeof import.meta !== 'undefined' && import.meta.env?.VITE_DOCUMENT_API_URL) {
-    return import.meta.env.VITE_DOCUMENT_API_URL;
-  }
-  // In browser: if we're on localhost, point to local Python; else use same domain /api
-  if (typeof window !== 'undefined') {
-    const host = window.location.hostname;
-    if (host === 'localhost' || host === '127.0.0.1') {
-      return 'http://localhost:5000';
-    }
-    // Production on your domain (petrodealhub.com, etc.): always use /api on same domain
-    return '/api';
-  }
-  return '/api';
-}
+const DEFAULT_API_URL = 'https://fe34d3a6-e8b0-49d1-b955-27b149abae9c-00-1sdj1ekjwvpbv.picard.replit.dev';
 
-// Get the configured API URL (localStorage override > default)
+// Get the configured API URL (from localStorage override or default)
 export function getDocumentApiUrl(): string {
   try {
     const saved = localStorage.getItem('document_api_url');
     if (saved && saved.trim()) return saved.trim();
   } catch {}
-  return getDefaultApiUrl();
+  return DEFAULT_API_URL;
 }
 
 // Set a custom API URL
@@ -122,25 +106,13 @@ export async function documentApiFetch<T>(
   endpoint: string,
   options: RequestInit = {}
 ): Promise<T> {
-  const baseUrl = getDocumentApiUrl();
-  if (!baseUrl || baseUrl.trim() === '') {
-    throw new Error('Document API URL is not set. Go to Admin → Document Publishing → Settings and set it to /api.');
-  }
-  const url = `${baseUrl.replace(/\/$/, '')}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
-  const response = await fetch(url, {
+  const response = await fetch(`${getDocumentApiUrl()}${endpoint}`, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
       ...options.headers,
     },
   });
-
-  const contentType = response.headers.get('content-type') || '';
-  if (!contentType.includes('application/json')) {
-    if (contentType.includes('text/html')) {
-      throw new Error(`Document API returned HTML instead of JSON (HTTP ${response.status}). Set API URL to "/api" in Settings and ensure the document backend is running.`);
-    }
-  }
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: 'Request failed' }));

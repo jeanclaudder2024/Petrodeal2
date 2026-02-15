@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { toast } from 'sonner';
-import { getDocumentApiUrl } from '@/config/documentApi';
 import { 
+  API_BASE_URL, 
   Template, 
   PlaceholderSettings, 
   Plan, 
@@ -17,27 +17,13 @@ async function apiFetch<T>(
   endpoint: string, 
   options: RequestInit = {}
 ): Promise<T> {
-  const baseUrl = getDocumentApiUrl();
-  if (!baseUrl || baseUrl.trim() === '') {
-    throw new Error('Document API URL is not set. Go to Admin → Document Publishing → Settings and set it to /api.');
-  }
-  const url = `${baseUrl.replace(/\/$/, '')}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`;
-  const response = await fetch(url, {
+  const response = await fetch(`${API_BASE_URL}${endpoint}`, {
     ...options,
     credentials: 'include',
     headers: {
       ...options.headers,
     },
   });
-
-  const contentType = response.headers.get('content-type') || '';
-  if (!contentType.includes('application/json')) {
-    if (contentType.includes('text/html')) {
-      throw new Error(`Document API returned HTML instead of JSON (HTTP ${response.status}). Check that the API URL is "/api" and the document backend is running on the server.`);
-    }
-    const text = await response.text();
-    throw new Error(text || `Request failed: HTTP ${response.status}`);
-  }
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: 'Request failed' }));
@@ -81,7 +67,7 @@ export function useTemplates() {
     if (fontSize) formData.append('font_size', fontSize.toString());
     if (planIds?.length) formData.append('plan_ids', JSON.stringify(planIds));
 
-    const response = await fetch(`${getDocumentApiUrl()}/upload-template`, {
+    const response = await fetch(`${API_BASE_URL}/upload-template`, {
       method: 'POST',
       body: formData,
       credentials: 'include',
@@ -269,7 +255,7 @@ export function useDataSources() {
     formData.append('file', file);
     formData.append('data_type', dataType);
 
-    const response = await fetch(`${getDocumentApiUrl()}/upload-csv`, {
+    const response = await fetch(`${API_BASE_URL}/upload-csv`, {
       method: 'POST',
       body: formData,
       credentials: 'include',

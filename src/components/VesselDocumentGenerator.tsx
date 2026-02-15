@@ -7,7 +7,7 @@ import { FileText, Ship, RefreshCw, FolderOpen, Shield } from 'lucide-react';
 import { toast } from 'sonner';
 import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
-import { getDocumentApiUrl } from '@/config/documentApi';
+import { DOCUMENT_API_URL } from '@/config/documentApi';
 
 import {
   DocumentCard,
@@ -26,6 +26,8 @@ interface VesselDocumentGeneratorProps {
   vesselImo: string;
   vesselName: string;
 }
+
+const API_BASE_URL = DOCUMENT_API_URL;
 
 export default function VesselDocumentGenerator({ vesselImo, vesselName }: VesselDocumentGeneratorProps) {
   const { user } = useAuth();
@@ -198,19 +200,9 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
 
       // Fetch ALL templates first, then check permissions from Supabase
       try {
-        const apiBase = getDocumentApiUrl();
-        if (!apiBase?.trim()) {
-          throw new Error('Document API URL is not set. Set it to /api in Admin → Document Publishing → Settings.');
-        }
-        const allResponse = await fetch(`${apiBase.replace(/\/$/, '')}/templates`);
+        // Get all templates from API
+        const allResponse = await fetch(`${API_BASE_URL}/templates`);
         let allTemplatesMap = new Map<string, DocumentTemplate>();
-
-        const contentType = allResponse.headers.get('content-type') || '';
-        if (allResponse.ok && !contentType.includes('application/json')) {
-          if (contentType.includes('text/html')) {
-            throw new Error('Document API returned HTML. Set API URL to "/api" in Settings and ensure the document backend is running.');
-          }
-        }
 
         if (allResponse.ok) {
           const allData = await allResponse.json();
@@ -393,7 +385,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
         templateName = templateName.slice(0, -5);
       }
 
-      const response = await fetch(`${getDocumentApiUrl()}/generate-document`, {
+      const response = await fetch(`${API_BASE_URL}/generate-document`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
