@@ -25,7 +25,9 @@ interface TestGenerationDialogProps {
 interface GenerationResult {
   success: boolean;
   docx_base64?: string;
+  pdf_base64?: string;
   file_name?: string;
+  pdf_file_name?: string;
   replacements_made?: number;
   from_database?: number;
   from_ai?: number;
@@ -118,29 +120,31 @@ export default function TestGenerationDialog({
 
       setResult(response);
 
-      if (response.success && response.docx_base64) {
-        // Download the generated document
-        const byteCharacters = atob(response.docx_base64);
+      if (response.success && (response.docx_base64 || response.pdf_base64)) {
+        const base64 = response.docx_base64 || response.pdf_base64;
+        const isPdf = !!response.pdf_base64;
+        const mimeType = isPdf ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+        const defaultName = isPdf ? response.pdf_file_name || `${template.name}_generated.pdf` : response.file_name || `${template.name}_generated.docx`;
+
+        const byteCharacters = atob(base64);
         const byteNumbers = new Array(byteCharacters.length);
         for (let i = 0; i < byteCharacters.length; i++) {
           byteNumbers[i] = byteCharacters.charCodeAt(i);
         }
         const byteArray = new Uint8Array(byteNumbers);
-        const blob = new Blob([byteArray], {
-          type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-        });
+        const blob = new Blob([byteArray], { type: mimeType });
 
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = response.file_name || `${template.name}_generated.docx`;
+        a.download = defaultName;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
 
         toast.success(
-          `Document generated! ${response.replacements_made || 0} placeholders replaced`
+          `Document generated! ${response.replacements_made ?? 0} placeholders replaced`
         );
       } else {
         toast.error('Failed to generate document');

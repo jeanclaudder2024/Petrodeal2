@@ -30,6 +30,21 @@ Look for the Python traceback right after a failed request.
 **4. Template not found**  
 If the backend says "Template 'X' not found", ensure the template file exists under `document-processor/templates/` on the VPS (same name as in the app).
 
+**5. Poppler not installed (PDF conversion)**  
+If the log shows:
+
+```text
+PDFInfoNotInstalledError: Unable to get page count. Is poppler installed and in PATH?
+```
+
+Install poppler on the VPS (required for pdf2image / DOCX→PDF→images):
+
+```bash
+sudo apt-get update
+sudo apt-get install -y poppler-utils
+pm2 restart python-api
+```
+
 ---
 
 ## 404 on api/ai-status

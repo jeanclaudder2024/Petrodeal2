@@ -115,20 +115,24 @@ export default function EnhancedTestDialog({ open, onOpenChange, template }: Enh
 
       const result = await response.json();
 
-      if (result.success && result.docx_base64) {
-        // Download the generated document
-        const byteCharacters = atob(result.docx_base64);
+      if (result.success && (result.docx_base64 || result.pdf_base64)) {
+        const base64 = result.docx_base64 || result.pdf_base64;
+        const isPdf = !!result.pdf_base64;
+        const mimeType = isPdf ? 'application/pdf' : 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+        const defaultName = isPdf ? result.pdf_file_name || `${template.name}_generated.pdf` : result.file_name || `${template.name}_generated.docx`;
+
+        const byteCharacters = atob(base64);
         const byteNumbers = new Array(byteCharacters.length);
         for (let i = 0; i < byteCharacters.length; i++) {
           byteNumbers[i] = byteCharacters.charCodeAt(i);
         }
         const byteArray = new Uint8Array(byteNumbers);
-        const blob = new Blob([byteArray], { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
-        
+        const blob = new Blob([byteArray], { type: mimeType });
+
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = result.file_name || `${template.name}_generated.docx`;
+        a.download = defaultName;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -139,7 +143,7 @@ export default function EnhancedTestDialog({ open, onOpenChange, template }: Enh
         toast.success(`Document generated! ${dbCount} from DB, ${aiCount} from AI`);
         onOpenChange(false);
       } else {
-        toast.error('Failed to generate document');
+        toast.error(result.detail || result.message || 'Failed to generate document');
       }
     } catch (error) {
       console.error('Generation error:', error);

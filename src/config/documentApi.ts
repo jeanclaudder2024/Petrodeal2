@@ -102,7 +102,7 @@ export async function parse402Error(response: Response): Promise<string> {
   }
 }
 
-// Fetch helper with error handling
+// Fetch helper with error handling (shows backend message on 500)
 export async function documentApiFetch<T>(
   endpoint: string,
   options: RequestInit = {}
@@ -115,10 +115,20 @@ export async function documentApiFetch<T>(
     },
   });
 
+  const text = await response.text();
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ detail: 'Request failed' }));
-    throw new Error(error.detail || `HTTP ${response.status}`);
+    let detail = `Request failed (${response.status})`;
+    try {
+      const err = JSON.parse(text);
+      detail = err.detail || err.message || err.error || detail;
+    } catch {
+      if (text && !text.trimStart().startsWith('<')) detail = text.slice(0, 300);
+    }
+    throw new Error(detail);
   }
-
-  return response.json();
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw new Error('Invalid JSON response');
+  }
 }
