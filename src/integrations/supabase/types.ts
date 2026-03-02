@@ -10,7 +10,7 @@ export type Database = {
   // Allows to automatically instantiate createClient with right options
   // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
   __InternalSupabase: {
-    PostgrestVersion: "13.0.4"
+    PostgrestVersion: "14.1"
   }
   public: {
     Tables: {
@@ -3976,6 +3976,36 @@ export type Database = {
         }
         Relationships: []
       }
+      oil_price_settings: {
+        Row: {
+          auto_refresh_interval_minutes: number | null
+          created_at: string
+          id: string
+          mode: string
+          show_last_updated: boolean
+          show_refresh_button: boolean
+          updated_at: string
+        }
+        Insert: {
+          auto_refresh_interval_minutes?: number | null
+          created_at?: string
+          id?: string
+          mode?: string
+          show_last_updated?: boolean
+          show_refresh_button?: boolean
+          updated_at?: string
+        }
+        Update: {
+          auto_refresh_interval_minutes?: number | null
+          created_at?: string
+          id?: string
+          mode?: string
+          show_last_updated?: boolean
+          show_refresh_button?: boolean
+          updated_at?: string
+        }
+        Relationships: []
+      }
       oil_prices: {
         Row: {
           created_at: string
@@ -5917,6 +5947,7 @@ export type Database = {
           real_time_analytics: boolean | null
           refinery_limit: number
           regions_limit: number
+          show_in_frontend: boolean
           sort_order: number | null
           support_level: string | null
           trial_days: number | null
@@ -5944,6 +5975,7 @@ export type Database = {
           real_time_analytics?: boolean | null
           refinery_limit?: number
           regions_limit?: number
+          show_in_frontend?: boolean
           sort_order?: number | null
           support_level?: string | null
           trial_days?: number | null
@@ -5971,6 +6003,7 @@ export type Database = {
           real_time_analytics?: boolean | null
           refinery_limit?: number
           regions_limit?: number
+          show_in_frontend?: boolean
           sort_order?: number | null
           support_level?: string | null
           trial_days?: number | null

@@ -39,7 +39,8 @@ import {
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from '@/hooks/use-toast';
-import { parsePhoneNumberFromString, isValidPhoneNumber } from 'libphonenumber-js';
+import { isValidPhoneNumber } from 'libphonenumber-js';
+import { ALL_COUNTRIES, ALL_COUNTRY_NAMES, getCountryByDialCode, getCountryByName, getDialCodeForCountry } from '@/utils/countries';
 
 // Suggested specializations
 const SUGGESTED_SPECIALIZATIONS = ['Crude Oil', 'EN590', 'Jet Fuel', 'LNG', 'Diesel', 'Gasoline', 'Naphtha', 'Fuel Oil'];
@@ -110,101 +111,21 @@ const BrokerSetup = () => {
   const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({});
   const [dragOver, setDragOver] = useState<string | null>(null);
 
-  const countries = [
-    'United States', 'United Kingdom', 'Canada', 'Australia', 'Germany', 'France', 
-    'Italy', 'Spain', 'Netherlands', 'Belgium', 'Switzerland', 'Austria', 'Sweden', 
-    'Norway', 'Denmark', 'Finland', 'Japan', 'South Korea', 'China', 'India', 
-    'Singapore', 'Malaysia', 'Thailand', 'Indonesia', 'Philippines', 'UAE', 
-    'Saudi Arabia', 'Qatar', 'Kuwait', 'Bahrain', 'Oman', 'Egypt', 'Nigeria', 
-    'South Africa', 'Kenya', 'Morocco', 'Brazil', 'Argentina', 'Chile', 'Mexico', 
-    'Colombia', 'Peru', 'Venezuela', 'Russia', 'Poland', 'Czech Republic', 
-    'Hungary', 'Romania', 'Greece', 'Turkey', 'Israel', 'Jordan', 'Lebanon', 
-    'Iraq', 'Iran', 'Pakistan', 'Bangladesh', 'Sri Lanka', 'Myanmar', 'Vietnam', 
-    'Cambodia', 'Laos', 'Taiwan', 'Hong Kong', 'Macau', 'Mongolia', 'Kazakhstan', 
-    'Uzbekistan', 'Turkmenistan', 'Kyrgyzstan', 'Tajikistan', 'Afghanistan', 
-    'Nepal', 'Bhutan', 'Maldives', 'New Zealand', 'Papua New Guinea', 'Fiji'
-  ];
+  const countries = ALL_COUNTRY_NAMES;
+  const countryCodes = ALL_COUNTRIES;
+  const selectedPhoneCountryIso =
+    getCountryByName(formData.country)?.iso2 ?? getCountryByDialCode(countryCode)?.iso2 ?? 'US';
 
-  const countryCodes = [
-    { country: 'United States', code: '+1', flag: '🇺🇸' },
-    { country: 'United Kingdom', code: '+44', flag: '🇬🇧' },
-    { country: 'Canada', code: '+1', flag: '🇨🇦' },
-    { country: 'Australia', code: '+61', flag: '🇦🇺' },
-    { country: 'Germany', code: '+49', flag: '🇩🇪' },
-    { country: 'France', code: '+33', flag: '🇫🇷' },
-    { country: 'Italy', code: '+39', flag: '🇮🇹' },
-    { country: 'Spain', code: '+34', flag: '🇪🇸' },
-    { country: 'Netherlands', code: '+31', flag: '🇳🇱' },
-    { country: 'Belgium', code: '+32', flag: '🇧🇪' },
-    { country: 'Switzerland', code: '+41', flag: '🇨🇭' },
-    { country: 'Austria', code: '+43', flag: '🇦🇹' },
-    { country: 'Sweden', code: '+46', flag: '🇸🇪' },
-    { country: 'Norway', code: '+47', flag: '🇳🇴' },
-    { country: 'Denmark', code: '+45', flag: '🇩🇰' },
-    { country: 'Finland', code: '+358', flag: '🇫🇮' },
-    { country: 'Japan', code: '+81', flag: '🇯🇵' },
-    { country: 'South Korea', code: '+82', flag: '🇰🇷' },
-    { country: 'China', code: '+86', flag: '🇨🇳' },
-    { country: 'India', code: '+91', flag: '🇮🇳' },
-    { country: 'Singapore', code: '+65', flag: '🇸🇬' },
-    { country: 'Malaysia', code: '+60', flag: '🇲🇾' },
-    { country: 'Thailand', code: '+66', flag: '🇹🇭' },
-    { country: 'Indonesia', code: '+62', flag: '🇮🇩' },
-    { country: 'Philippines', code: '+63', flag: '🇵🇭' },
-    { country: 'UAE', code: '+971', flag: '🇦🇪' },
-    { country: 'Saudi Arabia', code: '+966', flag: '🇸🇦' },
-    { country: 'Qatar', code: '+974', flag: '🇶🇦' },
-    { country: 'Kuwait', code: '+965', flag: '🇰🇼' },
-    { country: 'Bahrain', code: '+973', flag: '🇧🇭' },
-    { country: 'Oman', code: '+968', flag: '🇴🇲' },
-    { country: 'Egypt', code: '+20', flag: '🇪🇬' },
-    { country: 'Nigeria', code: '+234', flag: '🇳🇬' },
-    { country: 'South Africa', code: '+27', flag: '🇿🇦' },
-    { country: 'Kenya', code: '+254', flag: '🇰🇪' },
-    { country: 'Morocco', code: '+212', flag: '🇲🇦' },
-    { country: 'Brazil', code: '+55', flag: '🇧🇷' },
-    { country: 'Argentina', code: '+54', flag: '🇦🇷' },
-    { country: 'Chile', code: '+56', flag: '🇨🇱' },
-    { country: 'Mexico', code: '+52', flag: '🇲🇽' },
-    { country: 'Colombia', code: '+57', flag: '🇨🇴' },
-    { country: 'Peru', code: '+51', flag: '🇵🇪' },
-    { country: 'Venezuela', code: '+58', flag: '🇻🇪' },
-    { country: 'Russia', code: '+7', flag: '🇷🇺' },
-    { country: 'Poland', code: '+48', flag: '🇵🇱' },
-    { country: 'Czech Republic', code: '+420', flag: '🇨🇿' },
-    { country: 'Hungary', code: '+36', flag: '🇭🇺' },
-    { country: 'Romania', code: '+40', flag: '🇷🇴' },
-    { country: 'Greece', code: '+30', flag: '🇬🇷' },
-    { country: 'Turkey', code: '+90', flag: '🇹🇷' },
-    { country: 'Israel', code: '+972', flag: '🇮🇱' },
-    { country: 'Jordan', code: '+962', flag: '🇯🇴' },
-    { country: 'Lebanon', code: '+961', flag: '🇱🇧' },
-    { country: 'Iraq', code: '+964', flag: '🇮🇶' },
-    { country: 'Iran', code: '+98', flag: '🇮🇷' },
-    { country: 'Pakistan', code: '+92', flag: '🇵🇰' },
-    { country: 'Bangladesh', code: '+880', flag: '🇧🇩' },
-    { country: 'Sri Lanka', code: '+94', flag: '🇱🇰' },
-    { country: 'Myanmar', code: '+95', flag: '🇲🇲' },
-    { country: 'Vietnam', code: '+84', flag: '🇻🇳' },
-    { country: 'Cambodia', code: '+855', flag: '🇰🇭' },
-    { country: 'Laos', code: '+856', flag: '🇱🇦' },
-    { country: 'Taiwan', code: '+886', flag: '🇹🇼' },
-    { country: 'Hong Kong', code: '+852', flag: '🇭🇰' },
-    { country: 'Macau', code: '+853', flag: '🇲🇴' },
-    { country: 'Mongolia', code: '+976', flag: '🇲🇳' },
-    { country: 'Kazakhstan', code: '+7', flag: '🇰🇿' },
-    { country: 'Uzbekistan', code: '+998', flag: '🇺🇿' },
-    { country: 'Turkmenistan', code: '+993', flag: '🇹🇲' },
-    { country: 'Kyrgyzstan', code: '+996', flag: '🇰🇬' },
-    { country: 'Tajikistan', code: '+992', flag: '🇹🇯' },
-    { country: 'Afghanistan', code: '+93', flag: '🇦🇫' },
-    { country: 'Nepal', code: '+977', flag: '🇳🇵' },
-    { country: 'Bhutan', code: '+975', flag: '🇧🇹' },
-    { country: 'Maldives', code: '+960', flag: '🇲🇻' },
-    { country: 'New Zealand', code: '+64', flag: '🇳🇿' },
-    { country: 'Papua New Guinea', code: '+675', flag: '🇵🇬' },
-    { country: 'Fiji', code: '+679', flag: '🇫🇯' }
-  ];
+  const handlePhoneCountryChange = (iso2: string) => {
+    const selectedCountry = countryCodes.find((country) => country.iso2 === iso2);
+    if (!selectedCountry) return;
+
+    setCountryCode(selectedCountry.dialCode);
+    setFormData((prev) => ({
+      ...prev,
+      country: selectedCountry.name,
+    }));
+  };
 
   // Phone validation
   const phoneValidation = useMemo(() => {
@@ -271,8 +192,7 @@ const BrokerSetup = () => {
   // Auto-detect country code when country changes
   useEffect(() => {
     if (formData.country) {
-      const match = countryCodes.find(c => c.country === formData.country);
-      if (match) setCountryCode(match.code);
+      setCountryCode((prev) => getDialCodeForCountry(formData.country, prev));
     }
   }, [formData.country]);
 
@@ -764,14 +684,14 @@ const BrokerSetup = () => {
                       <div>
                         <Label htmlFor="phone">Phone Number <span className="text-destructive">*</span></Label>
                         <div className="flex gap-2">
-                          <Select value={countryCode} onValueChange={setCountryCode}>
-                            <SelectTrigger className="w-32">
-                              <SelectValue placeholder="Code" />
+                          <Select value={selectedPhoneCountryIso} onValueChange={handlePhoneCountryChange}>
+                            <SelectTrigger className="w-56">
+                              <SelectValue placeholder="Country code" />
                             </SelectTrigger>
                             <SelectContent className="bg-background border-border z-50 max-h-60 overflow-y-auto">
-                              {countryCodes.map((item, idx) => (
-                                <SelectItem key={`${item.code}-${idx}`} value={item.code} className="hover:bg-muted focus:bg-muted">
-                                  {item.flag} {item.code}
+                              {countryCodes.map((item) => (
+                                <SelectItem key={item.iso2} value={item.iso2} className="hover:bg-muted focus:bg-muted">
+                                  {item.flag} {item.dialCode} {item.name}
                                 </SelectItem>
                               ))}
                             </SelectContent>

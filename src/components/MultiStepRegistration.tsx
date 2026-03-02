@@ -45,7 +45,8 @@ import { toast } from '@/hooks/use-toast';
 import EmailVerificationWaiting from './EmailVerificationWaiting';
 import SponsorBanner from './SponsorBanner';
 import zxcvbn from 'zxcvbn';
-import { parsePhoneNumberFromString, CountryCode } from 'libphonenumber-js';
+import { parsePhoneNumberFromString } from 'libphonenumber-js';
+import { ALL_COUNTRIES, ALL_COUNTRY_NAMES, getCountryByDialCode, getCountryByName, getDialCodeForCountry } from '@/utils/countries';
 
 interface RegistrationForm {
   email: string;
@@ -141,180 +142,34 @@ const MultiStepRegistration = () => {
     return parseInt(formData.securityAnswer) === correctAnswer;
   };
 
-  const countries = [
-    'United States', 'United Kingdom', 'Canada', 'Australia', 'Germany', 'France', 
-    'Italy', 'Spain', 'Netherlands', 'Belgium', 'Switzerland', 'Austria', 'Sweden', 
-    'Norway', 'Denmark', 'Finland', 'Japan', 'South Korea', 'China', 'India', 
-    'Singapore', 'Malaysia', 'Thailand', 'Indonesia', 'Philippines', 'UAE', 
-    'Saudi Arabia', 'Qatar', 'Kuwait', 'Bahrain', 'Oman', 'Egypt', 'Nigeria', 
-    'South Africa', 'Kenya', 'Morocco', 'Brazil', 'Argentina', 'Chile', 'Mexico', 
-    'Colombia', 'Peru', 'Venezuela', 'Russia', 'Poland', 'Czech Republic', 
-    'Hungary', 'Romania', 'Greece', 'Turkey', 'Israel', 'Jordan', 'Lebanon', 
-    'Iraq', 'Iran', 'Pakistan', 'Bangladesh', 'Sri Lanka', 'Myanmar', 'Vietnam', 
-    'Cambodia', 'Laos', 'New Zealand', 'Papua New Guinea', 'Fiji'
-  ];
+  const countries = ALL_COUNTRY_NAMES;
+  const countryCodes = ALL_COUNTRIES;
 
-  const countryCodes = [
-    { code: '+1', country: 'United States/Canada' },
-    { code: '+44', country: 'United Kingdom' },
-    { code: '+91', country: 'India' },
-    { code: '+61', country: 'Australia' },
-    { code: '+81', country: 'Japan' },
-    { code: '+49', country: 'Germany' },
-    { code: '+33', country: 'France' },
-    { code: '+39', country: 'Italy' },
-    { code: '+34', country: 'Spain' },
-    { code: '+86', country: 'China' },
-    { code: '+7', country: 'Russia' },
-    { code: '+82', country: 'South Korea' },
-    { code: '+966', country: 'Saudi Arabia' },
-    { code: '+971', country: 'United Arab Emirates' },
-    { code: '+20', country: 'Egypt' },
-    { code: '+90', country: 'Turkey' },
-    { code: '+62', country: 'Indonesia' },
-    { code: '+234', country: 'Nigeria' },
-    { code: '+27', country: 'South Africa' },
-    { code: '+55', country: 'Brazil' },
-    { code: '+52', country: 'Mexico' },
-    { code: '+63', country: 'Philippines' },
-    { code: '+60', country: 'Malaysia' },
-    { code: '+65', country: 'Singapore' },
-    { code: '+64', country: 'New Zealand' },
-    // Europe
-    { code: '+351', country: 'Portugal' },
-    { code: '+353', country: 'Ireland' },
-    { code: '+354', country: 'Iceland' },
-    { code: '+352', country: 'Luxembourg' },
-    { code: '+32', country: 'Belgium' },
-    { code: '+31', country: 'Netherlands' },
-    { code: '+41', country: 'Switzerland' },
-    { code: '+43', country: 'Austria' },
-    { code: '+46', country: 'Sweden' },
-    { code: '+47', country: 'Norway' },
-    { code: '+45', country: 'Denmark' },
-    { code: '+358', country: 'Finland' },
-    { code: '+48', country: 'Poland' },
-    { code: '+420', country: 'Czech Republic' },
-    { code: '+36', country: 'Hungary' },
-    { code: '+40', country: 'Romania' },
-    { code: '+359', country: 'Bulgaria' },
-    { code: '+385', country: 'Croatia' },
-    { code: '+381', country: 'Serbia' },
-    { code: '+386', country: 'Slovenia' },
-    { code: '+421', country: 'Slovakia' },
-    { code: '+370', country: 'Lithuania' },
-    { code: '+371', country: 'Latvia' },
-    { code: '+372', country: 'Estonia' },
-    { code: '+30', country: 'Greece' },
-    { code: '+356', country: 'Malta' },
-    { code: '+357', country: 'Cyprus' },
-    { code: '+380', country: 'Ukraine' },
-    { code: '+375', country: 'Belarus' },
-    // Middle East
-    { code: '+964', country: 'Iraq' },
-    { code: '+98', country: 'Iran' },
-    { code: '+962', country: 'Jordan' },
-    { code: '+961', country: 'Lebanon' },
-    { code: '+973', country: 'Bahrain' },
-    { code: '+965', country: 'Kuwait' },
-    { code: '+968', country: 'Oman' },
-    { code: '+974', country: 'Qatar' },
-    { code: '+967', country: 'Yemen' },
-    { code: '+963', country: 'Syria' },
-    { code: '+970', country: 'Palestine' },
-    // Africa
-    { code: '+233', country: 'Ghana' },
-    { code: '+251', country: 'Ethiopia' },
-    { code: '+255', country: 'Tanzania' },
-    { code: '+237', country: 'Cameroon' },
-    { code: '+254', country: 'Kenya' },
-    { code: '+212', country: 'Morocco' },
-    { code: '+213', country: 'Algeria' },
-    { code: '+216', country: 'Tunisia' },
-    { code: '+218', country: 'Libya' },
-    { code: '+249', country: 'Sudan' },
-    { code: '+256', country: 'Uganda' },
-    { code: '+225', country: 'Ivory Coast' },
-    { code: '+221', country: 'Senegal' },
-    { code: '+244', country: 'Angola' },
-    { code: '+258', country: 'Mozambique' },
-    { code: '+260', country: 'Zambia' },
-    { code: '+263', country: 'Zimbabwe' },
-    // Americas
-    { code: '+54', country: 'Argentina' },
-    { code: '+56', country: 'Chile' },
-    { code: '+57', country: 'Colombia' },
-    { code: '+51', country: 'Peru' },
-    { code: '+58', country: 'Venezuela' },
-    { code: '+593', country: 'Ecuador' },
-    { code: '+591', country: 'Bolivia' },
-    { code: '+595', country: 'Paraguay' },
-    { code: '+598', country: 'Uruguay' },
-    { code: '+506', country: 'Costa Rica' },
-    { code: '+507', country: 'Panama' },
-    { code: '+1876', country: 'Jamaica' },
-    { code: '+1868', country: 'Trinidad and Tobago' },
-    { code: '+502', country: 'Guatemala' },
-    { code: '+503', country: 'El Salvador' },
-    { code: '+504', country: 'Honduras' },
-    { code: '+505', country: 'Nicaragua' },
-    // South/Central Asia
-    { code: '+92', country: 'Pakistan' },
-    { code: '+880', country: 'Bangladesh' },
-    { code: '+94', country: 'Sri Lanka' },
-    { code: '+977', country: 'Nepal' },
-    { code: '+93', country: 'Afghanistan' },
-    // Southeast Asia
-    { code: '+84', country: 'Vietnam' },
-    { code: '+855', country: 'Cambodia' },
-    { code: '+95', country: 'Myanmar' },
-    { code: '+856', country: 'Laos' },
-    { code: '+66', country: 'Thailand' },
-    { code: '+886', country: 'Taiwan' },
-    { code: '+852', country: 'Hong Kong' },
-    // Pacific
-    { code: '+679', country: 'Fiji' },
-    { code: '+675', country: 'Papua New Guinea' },
-  ].sort((a, b) => a.country.localeCompare(b.country));
-
-  const codeToCountry: Record<string, string> = {
-    '+1': 'US', '+44': 'GB', '+91': 'IN', '+61': 'AU', '+81': 'JP',
-    '+49': 'DE', '+33': 'FR', '+39': 'IT', '+34': 'ES', '+86': 'CN',
-    '+7': 'RU', '+82': 'KR', '+966': 'SA', '+971': 'AE', '+20': 'EG',
-    '+90': 'TR', '+62': 'ID', '+234': 'NG', '+27': 'ZA', '+55': 'BR',
-    '+52': 'MX', '+63': 'PH', '+60': 'MY', '+65': 'SG', '+64': 'NZ',
-    '+351': 'PT', '+353': 'IE', '+354': 'IS', '+352': 'LU', '+32': 'BE',
-    '+31': 'NL', '+41': 'CH', '+43': 'AT', '+46': 'SE', '+47': 'NO',
-    '+45': 'DK', '+358': 'FI', '+48': 'PL', '+420': 'CZ', '+36': 'HU',
-    '+40': 'RO', '+359': 'BG', '+385': 'HR', '+381': 'RS', '+386': 'SI',
-    '+421': 'SK', '+370': 'LT', '+371': 'LV', '+372': 'EE', '+30': 'GR',
-    '+356': 'MT', '+357': 'CY', '+380': 'UA', '+375': 'BY',
-    '+964': 'IQ', '+98': 'IR', '+962': 'JO', '+961': 'LB', '+973': 'BH',
-    '+965': 'KW', '+968': 'OM', '+974': 'QA', '+967': 'YE', '+963': 'SY',
-    '+970': 'PS',
-    '+233': 'GH', '+251': 'ET', '+255': 'TZ', '+237': 'CM', '+254': 'KE',
-    '+212': 'MA', '+213': 'DZ', '+216': 'TN', '+218': 'LY', '+249': 'SD',
-    '+256': 'UG', '+225': 'CI', '+221': 'SN', '+244': 'AO', '+258': 'MZ',
-    '+260': 'ZM', '+263': 'ZW',
-    '+54': 'AR', '+56': 'CL', '+57': 'CO', '+51': 'PE', '+58': 'VE',
-    '+593': 'EC', '+591': 'BO', '+595': 'PY', '+598': 'UY',
-    '+506': 'CR', '+507': 'PA', '+1876': 'JM', '+1868': 'TT',
-    '+502': 'GT', '+503': 'SV', '+504': 'HN', '+505': 'NI',
-    '+92': 'PK', '+880': 'BD', '+94': 'LK', '+977': 'NP', '+93': 'AF',
-    '+84': 'VN', '+855': 'KH', '+95': 'MM', '+856': 'LA', '+66': 'TH',
-    '+886': 'TW', '+852': 'HK',
-    '+679': 'FJ', '+675': 'PG',
-  };
-
-  function validatePhoneNumber(phone: string, countryCode: string) {
+  function validatePhoneNumber(phone: string, countryName: string, countryDialCode: string) {
     if (!phone) return false;
-    const country = codeToCountry[countryCode];
+
+    const country = getCountryByName(countryName) ?? getCountryByDialCode(countryDialCode);
     if (!country) return false;
-    const phoneNumber = parsePhoneNumberFromString(phone, country as CountryCode);
+
+    const phoneNumber = parsePhoneNumberFromString(phone, country.iso2);
     return phoneNumber ? phoneNumber.isValid() : false;
   }
 
-  const isPhoneValid = validatePhoneNumber(formData.phone, formData.countryCode);
+  const isPhoneValid = validatePhoneNumber(formData.phone, formData.country, formData.countryCode);
+  const selectedPhoneCountryIso =
+    getCountryByName(formData.country)?.iso2 ?? getCountryByDialCode(formData.countryCode)?.iso2 ?? 'US';
+
+  const handlePhoneCountryChange = (iso2: string) => {
+    const selectedCountry = countryCodes.find((country) => country.iso2 === iso2);
+    if (!selectedCountry) return;
+
+    setFormData((prev) => ({
+      ...prev,
+      countryCode: selectedCountry.dialCode,
+      country: selectedCountry.name,
+    }));
+  };
+
   const totalSteps = 6;
 
   // Password strength calculation
@@ -380,7 +235,7 @@ const MultiStepRegistration = () => {
   const fetchDynamicPricing = async () => {
     try {
       const [plansRes, discountsRes] = await Promise.all([
-        supabase.from('subscription_plans').select('*').eq('is_active', true).order('sort_order'),
+        supabase.from('subscription_plans').select('*').eq('is_active', true).eq('show_in_frontend', true).order('sort_order'),
         supabase.from('subscription_discounts').select('*').eq('is_active', true).or(`valid_until.is.null,valid_until.gt.${new Date().toISOString()}`)
       ]);
 
@@ -437,7 +292,17 @@ const MultiStepRegistration = () => {
   };
 
   const handleInputChange = (field: keyof RegistrationForm, value: string | string[] | boolean) => {
-    setFormData(prev => ({ ...prev, [field]: value }));
+    setFormData((prev) => {
+      if (field === 'country' && typeof value === 'string') {
+        return {
+          ...prev,
+          country: value,
+          countryCode: getDialCodeForCountry(value, prev.countryCode),
+        };
+      }
+
+      return { ...prev, [field]: value };
+    });
   };
 
   const handleArrayToggle = (field: 'selectedPorts' | 'selectedVessels' | 'selectedRegions', id: string) => {
@@ -906,19 +771,38 @@ const MultiStepRegistration = () => {
               </div>
 
               <div>
+                <Label htmlFor="country">Country *</Label>
+                <Select
+                  value={formData.country}
+                  onValueChange={(value) => handleInputChange('country', value)}
+                >
+                  <SelectTrigger className="mt-1 bg-background">
+                    <SelectValue placeholder="Select your country" />
+                  </SelectTrigger>
+                  <SelectContent className="max-h-60 overflow-y-auto bg-background">
+                    {countries.map((country) => (
+                      <SelectItem key={country} value={country}>
+                        {country}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div>
                 <Label htmlFor="phone">Phone Number *</Label>
-                <div className="flex gap-2 mt-1">
+                <div className="flex flex-col sm:flex-row gap-2 mt-1">
                   <Select
-                    value={formData.countryCode}
-                    onValueChange={(value) => handleInputChange('countryCode', value)}
+                    value={selectedPhoneCountryIso}
+                    onValueChange={handlePhoneCountryChange}
                   >
-                    <SelectTrigger className="w-32 bg-background">
-                      <SelectValue placeholder="Code" />
+                    <SelectTrigger className="w-full sm:w-56 bg-background">
+                      <SelectValue placeholder="Country code" />
                     </SelectTrigger>
                     <SelectContent className="max-h-60 overflow-y-auto bg-background">
                       {countryCodes.map((cc) => (
-                        <SelectItem key={cc.code} value={cc.code}>
-                          {cc.code} {cc.country}
+                        <SelectItem key={cc.iso2} value={cc.iso2}>
+                          {cc.flag} {cc.dialCode} {cc.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -946,25 +830,6 @@ const MultiStepRegistration = () => {
                   onChange={(e) => handleInputChange('company', e.target.value)}
                   className="mt-1"
                 />
-              </div>
-
-              <div>
-                <Label htmlFor="country">Country *</Label>
-                <Select
-                  value={formData.country}
-                  onValueChange={(value) => handleInputChange('country', value)}
-                >
-                  <SelectTrigger className="mt-1 bg-background">
-                    <SelectValue placeholder="Select your country" />
-                  </SelectTrigger>
-                  <SelectContent className="max-h-60 overflow-y-auto bg-background">
-                    {countries.map((country) => (
-                      <SelectItem key={country} value={country}>
-                        {country}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
               </div>
             </div>
           </div>

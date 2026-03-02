@@ -28,7 +28,7 @@ import {
 } from 'lucide-react';
 import { Settings } from 'lucide-react';
 import { toast } from 'sonner';
-import { DOCUMENT_API_URL, checkApiHealth, documentApiFetch, checkAIStatus, AIStatus } from '@/config/documentApi';
+import { getDocumentApiUrl, checkApiHealth, documentApiFetch, checkAIStatus, AIStatus } from '@/config/documentApi';
 import EnhancedTestDialog from './document-publishing/EnhancedTestDialog';
 import DataSourcesTab from './document-publishing/DataSourcesTab';
 import AdvancedPlaceholderMapping from './document-publishing/AdvancedPlaceholderMapping';
@@ -131,7 +131,7 @@ export default function DocumentPublishing() {
       formData.append('name', uploadName);
       formData.append('description', uploadDescription);
 
-      const response = await fetch(`${DOCUMENT_API_URL}/upload-template`, {
+      const response = await fetch(`${getDocumentApiUrl()}/upload-template`, {
         method: 'POST',
         body: formData,
       });
@@ -195,7 +195,7 @@ export default function DocumentPublishing() {
           {isConnected && <CheckCircle className="h-4 w-4 text-primary" />}
         </AlertTitle>
         <AlertDescription className="flex items-center justify-between">
-          <span className="text-xs text-muted-foreground break-all">{DOCUMENT_API_URL}</span>
+          <span className="text-xs text-muted-foreground break-all">{getDocumentApiUrl()}</span>
           <Button 
             variant="outline" 
             size="sm" 

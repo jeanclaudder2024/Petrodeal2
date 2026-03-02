@@ -357,7 +357,8 @@ const CompanyManagement = () => {
       for (let i = 0; i < rows.length; i++) {
         const row = rows[i];
         const companyName = row['Name'] || row['name'] || row['Company Name'] || row['company_name'] || '';
-        const logoUrl = row['Company Logo URL'] || row['logo_url'] || row['Logo URL'] || row['Logo'] || '';
+        const country = row['Country'] || row['country'] || row['COUNTRY'] || '';
+        const logoUrl = row['Company Logo URL'] || row['logo_url'] || row['Logo URL'] || row['Logo'] || row['Image URL'] || row['image_url'] || '';
 
         if (!companyName.trim()) {
           failedCount++;
@@ -370,7 +371,7 @@ const CompanyManagement = () => {
           let aiData: any = {};
           try {
             const { data: aiResult, error: aiError } = await supabase.functions.invoke('autofill-company-data', {
-              body: { companyName, country: null, companyType: 'real' }
+              body: { companyName, country: country || null, companyType: 'real' }
             });
             if (!aiError && aiResult?.success && aiResult?.data) {
               aiData = aiResult.data;

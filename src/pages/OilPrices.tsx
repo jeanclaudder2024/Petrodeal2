@@ -1,24 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { 
-  TrendingUp, 
-  TrendingDown, 
-  DollarSign, 
-  BarChart3, 
-  RefreshCw, 
-  Clock,
+import {
+  TrendingUp,
+  TrendingDown,
+  DollarSign,
+  BarChart3,
   Activity,
   Globe,
   Fuel,
   ArrowUpRight,
   ArrowDownRight,
-  Minus
+  Minus,
 } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, AreaChart, Area } from 'recharts';
-import { db, supabase } from '@/lib/supabase-helper';
+import { db } from '@/lib/supabase-helper';
 import { useToast } from '@/hooks/use-toast';
 
 interface OilPriceData {
@@ -38,7 +35,6 @@ interface OilPriceData {
 const OilPrices = () => {
   const [prices, setPrices] = useState<OilPriceData[]>([]);
   const [loading, setLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
   const { toast } = useToast();
 
@@ -55,21 +51,6 @@ const OilPrices = () => {
     }
   };
 
-  const triggerPriceUpdate = async () => {
-    setRefreshing(true);
-    try {
-      const { data, error } = await supabase.functions.invoke('fetch-oil-prices');
-      if (error) throw error;
-      toast({ title: "Prices Updated", description: `Updated ${data?.updated_count || 0} oil prices` });
-      await fetchOilPrices();
-    } catch (error) {
-      console.error('Error updating oil prices:', error);
-      toast({ title: "Update Error", description: "Failed to update prices", variant: "destructive" });
-    } finally {
-      setRefreshing(false);
-    }
-  };
-
   useEffect(() => {
     fetchOilPrices();
   }, []);
@@ -80,15 +61,6 @@ const OilPrices = () => {
       currency: currency,
       minimumFractionDigits: 2,
     }).format(price);
-  };
-
-  const formatLastUpdated = (dateString: string) => {
-    const date = new Date(dateString);
-    const now = new Date();
-    const diffMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60));
-    if (diffMinutes < 60) return `${diffMinutes}m ago`;
-    if (diffMinutes < 1440) return `${Math.floor(diffMinutes / 60)}h ago`;
-    return `${Math.floor(diffMinutes / 1440)}d ago`;
   };
 
   const getPriceIcon = (change?: number) => {
@@ -128,16 +100,6 @@ const OilPrices = () => {
             Oil & Energy Prices
           </h1>
           <p className="text-muted-foreground mt-1">Real-time commodity prices and market analysis</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <Badge variant="outline" className="flex items-center gap-1">
-            <Clock className="h-3 w-3" />
-            {prices.length > 0 ? formatLastUpdated(prices[0].last_updated) : 'Never'}
-          </Badge>
-          <Button onClick={triggerPriceUpdate} disabled={refreshing} variant="outline" size="sm">
-            <RefreshCw className={`h-4 w-4 mr-1 ${refreshing ? 'animate-spin' : ''}`} />
-            {refreshing ? 'Updating...' : 'Refresh'}
-          </Button>
         </div>
       </div>
 

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Shield, Users, Settings, FileText, BarChart3, Ship, Building2, MapPin, Factory, UserCheck, Cpu, Filter, CreditCard, Video, Layout, Mail, Send, Inbox, Key, HelpCircle, Bell, UserMinus, Wallet, DollarSign, Megaphone, Database, ShoppingCart, Store, Package, Briefcase, Gift, Target, Linkedin } from 'lucide-react';
+import { Shield, Users, Settings, FileText, BarChart3, Ship, Building2, MapPin, Factory, UserCheck, Cpu, Filter, CreditCard, Video, Layout, Mail, Send, Inbox, Key, HelpCircle, Bell, UserMinus, Wallet, DollarSign, Megaphone, Database, ShoppingCart, Store, Package, Briefcase, Gift, Target, Linkedin, Fuel } from 'lucide-react';
 import UserManagement from './UserManagement';
 import SystemSettings from './SystemSettings';
 import AdminNotes from './AdminNotes';
@@ -41,6 +41,7 @@ import RewardProgramsManagement from './RewardProgramsManagement';
 import TalentProgramsManagement from './talent/TalentProgramsManagement';
 import LinkedInManagement from './LinkedInManagement';
 import DocumentPublishing from './DocumentPublishing';
+import OilMarketManagement from './OilMarketManagement';
 
 const AdminPanel = () => {
   const location = useLocation();
@@ -265,6 +266,11 @@ const AdminPanel = () => {
                 <Linkedin className="h-5 w-5 text-blue-600" />
                 <span className="text-xs font-medium">LinkedIn</span>
               </TabsTrigger>
+
+              <TabsTrigger value="oil-market" className="flex flex-col items-center gap-1 p-3 h-auto min-h-[60px] min-w-[80px] border-2 border-amber-200 hover:border-amber-400">
+                <Fuel className="h-5 w-5 text-amber-600" />
+                <span className="text-xs font-medium">Oil Market</span>
+              </TabsTrigger>
             </TabsList>
           </div>
         </div>
@@ -431,6 +437,10 @@ const AdminPanel = () => {
 
         <TabsContent value="linkedin">
           <LinkedInManagement />
+        </TabsContent>
+
+        <TabsContent value="oil-market">
+          <OilMarketManagement />
         </TabsContent>
       </Tabs>
     </div>

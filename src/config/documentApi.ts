@@ -1,8 +1,7 @@
 // Document Processing API Configuration
-// Default: same-origin /api (when built with VITE_DOCUMENT_API_URL=/api) or petrodealhub.com
+// Single source of truth for Replit FastAPI URL
 
-const DEFAULT_API_URL =
-  import.meta.env.VITE_DOCUMENT_API_URL || 'https://petrodealhub.com/api';
+const DEFAULT_API_URL = 'https://fe34d3a6-e8b0-49d1-b955-27b149abae9c-00-1sdj1ekjwvpbv.picard.replit.dev';
 
 // Get the configured API URL (from localStorage override or default)
 export function getDocumentApiUrl(): string {
@@ -23,7 +22,7 @@ export function resetDocumentApiUrl() {
   localStorage.removeItem('document_api_url');
 }
 
-// For backward compatibility
+// @deprecated - Use getDocumentApiUrl() instead. This static value won't update when URL changes.
 export const DOCUMENT_API_URL = getDocumentApiUrl();
 
 // Helper to check if API is available
@@ -102,7 +101,7 @@ export async function parse402Error(response: Response): Promise<string> {
   }
 }
 
-// Fetch helper with error handling (shows backend message on 500)
+// Fetch helper with error handling
 export async function documentApiFetch<T>(
   endpoint: string,
   options: RequestInit = {}
@@ -115,20 +114,10 @@ export async function documentApiFetch<T>(
     },
   });
 
-  const text = await response.text();
   if (!response.ok) {
-    let detail = `Request failed (${response.status})`;
-    try {
-      const err = JSON.parse(text);
-      detail = err.detail || err.message || err.error || detail;
-    } catch {
-      if (text && !text.trimStart().startsWith('<')) detail = text.slice(0, 300);
-    }
-    throw new Error(detail);
+    const error = await response.json().catch(() => ({ detail: 'Request failed' }));
+    throw new Error(error.detail || `HTTP ${response.status}`);
   }
-  try {
-    return JSON.parse(text) as T;
-  } catch {
-    throw new Error('Invalid JSON response');
-  }
+
+  return response.json();
 }

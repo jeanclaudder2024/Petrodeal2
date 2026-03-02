@@ -228,6 +228,7 @@ const FloatingAIAssistant = () => {
           .from('subscription_plans')
           .select('plan_name, price_monthly, price_yearly')
           .eq('is_active', true)
+          .eq('show_in_frontend', true)
           .order('sort_order');
 
         const planInfo = plans?.map(p => `• **${p.plan_name}**: $${p.price_monthly}/month or $${p.price_yearly}/year`).join('\n') || '';

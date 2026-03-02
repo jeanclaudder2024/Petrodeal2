@@ -145,6 +145,7 @@ const PricingPlans: React.FC<PricingPlansProps> = ({
         .from('subscription_plans')
         .select('*')
         .eq('is_active', true)
+        .eq('show_in_frontend', true)
         .order('sort_order', { ascending: true });
 
       if (error) return [];

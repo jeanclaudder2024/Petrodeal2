@@ -27,6 +27,8 @@ interface VesselDocumentGeneratorProps {
   vesselName: string;
 }
 
+const getApiBaseUrl = getDocumentApiUrl;
+
 export default function VesselDocumentGenerator({ vesselImo, vesselName }: VesselDocumentGeneratorProps) {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -199,7 +201,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
       // Fetch ALL templates first, then check permissions from Supabase
       try {
         // Get all templates from API
-        const allResponse = await fetch(`${getDocumentApiUrl()}/templates`);
+        const allResponse = await fetch(`${getApiBaseUrl()}/templates`);
         let allTemplatesMap = new Map<string, DocumentTemplate>();
 
         if (allResponse.ok) {
@@ -383,7 +385,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
         templateName = templateName.slice(0, -5);
       }
 
-      const response = await fetch(`${getDocumentApiUrl()}/generate-document`, {
+      const response = await fetch(`${getApiBaseUrl()}/generate-document`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',

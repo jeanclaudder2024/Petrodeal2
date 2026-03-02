@@ -131,19 +131,38 @@ const PaymentSuccess = () => {
         }
       });
 
-      if (signUpError) {
+      // Check if signup had a real error vs email-related failure
+      const isEmailError = signUpError && (
+        signUpError.message?.toLowerCase().includes('email') ||
+        signUpError.message?.toLowerCase().includes('confirmation') ||
+        signUpError.message?.toLowerCase().includes('smtp') ||
+        signUpError.status === 500
+      );
+
+      if (signUpError && !isEmailError) {
+        // Real signup error (duplicate email, weak password, etc.)
         setPasswordError(`Registration failed: ${signUpError.message}`);
         setIsCreatingAccount(false);
         return;
       }
 
-      if (data.user) {
+      if (isEmailError) {
+        // User was created but email hook failed — continue the flow
+        toast({
+          title: "Account Created!",
+          description: "Verification email may be delayed. You can request a new one from the login page.",
+          variant: "default",
+        });
+      }
+
+      const user = data?.user;
+      if (user) {
         // Send confirmation email
         try {
           await supabase.functions.invoke('send-confirmation-email', {
             body: {
               user: {
-                email: data.user.email,
+                email: user.email,
                 user_metadata: { 
                   full_name: registrationData.fullName,
                   subscription_plan: registrationData.selectedPlan,
@@ -170,8 +189,8 @@ const PaymentSuccess = () => {
           
           await supabase.functions.invoke('send-billing-email', {
             body: {
-              user_email: data.user.email,
-              user_name: registrationData.fullName || data.user.email?.split('@')[0] || 'User',
+              user_email: user.email,
+              user_name: registrationData.fullName || user.email?.split('@')[0] || 'User',
               subscription_details: {
                 plan_name: planName,
                 amount: amount,

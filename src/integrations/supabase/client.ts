@@ -2,24 +2,8 @@
 import { createClient } from '@supabase/supabase-js';
 import type { Database } from './types';
 
-// Get Supabase credentials from environment variables
-// Fallback to default values for production (should be set via .env file)
-const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL || "https://ozjhdxvwqbzcvcywhwjg.supabase.co";
-const SUPABASE_PUBLISHABLE_KEY = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY || "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im96amhkeHZ3cWJ6Y3ZjeXdod2pnIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTU5MDAyNzUsImV4cCI6MjA3MTQ3NjI3NX0.KLAo1KIRR9ofapXPHenoi-ega0PJtkNhGnDHGtniA-Q";
-
-// Debug: Log what we're using (only in development)
-if (import.meta.env.DEV) {
-  console.log('🔧 Supabase Config:', {
-    url: SUPABASE_URL,
-    hasKey: !!SUPABASE_PUBLISHABLE_KEY,
-    keyLength: SUPABASE_PUBLISHABLE_KEY?.length,
-    fromEnv: !!import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY
-  });
-  
-  if (!import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY) {
-    console.warn('⚠️ Using fallback Supabase credentials. Set VITE_SUPABASE_PUBLISHABLE_KEY in .env file for production.');
-  }
-}
+const SUPABASE_URL = "https://xisfommyksvgzaeuvsmh.supabase.co";
+const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inhpc2ZvbW15a3N2Z3phZXV2c21oIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzEzMzYxNDEsImV4cCI6MjA4NjkxMjE0MX0.J81gVoNehHGkEZa6yx_fmPdRnlAbU5qbEA2GEncqgs4";
 
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";

@@ -195,7 +195,8 @@ const SubscriptionManagement = () => {
     features: [''],
     is_popular: false,
     sort_order: 0,
-    is_contact_sales: false
+    is_contact_sales: false,
+    show_in_frontend: true
   });
 
   // Promotion frame form state
@@ -503,7 +504,8 @@ const SubscriptionManagement = () => {
         .insert({
           ...newPlan,
           features: newPlan.features.filter(f => f.trim() !== ''),
-          is_contact_sales: newPlan.is_contact_sales
+          is_contact_sales: newPlan.is_contact_sales,
+          show_in_frontend: newPlan.show_in_frontend
         });
 
       if (error) throw error;
@@ -528,7 +530,8 @@ const SubscriptionManagement = () => {
         features: [''],
         is_popular: false,
         sort_order: 0,
-        is_contact_sales: false
+        is_contact_sales: false,
+        show_in_frontend: true
       });
       fetchData();
     } catch (error) {
@@ -561,7 +564,8 @@ const SubscriptionManagement = () => {
           is_active: editingPlan.is_active,
           is_popular: editingPlan.is_popular,
           sort_order: editingPlan.sort_order,
-          is_contact_sales: (editingPlan as any).is_contact_sales || false
+          is_contact_sales: (editingPlan as any).is_contact_sales || false,
+          show_in_frontend: (editingPlan as any).show_in_frontend ?? true
         })
         .eq('id', editingPlan.id);
 
@@ -1220,6 +1224,19 @@ const SubscriptionManagement = () => {
                           <p className="text-xs text-muted-foreground">When enabled, no price is shown. A "Contact Sales" button replaces pricing.</p>
                         </div>
                       </div>
+                      <div className="col-span-2 flex items-center gap-3 p-3 border rounded-lg bg-muted/30">
+                        <Switch
+                          checked={editingPlan ? (editingPlan as any).show_in_frontend ?? true : newPlan.show_in_frontend}
+                          onCheckedChange={(checked) => editingPlan 
+                            ? setEditingPlan({...editingPlan, show_in_frontend: checked} as any)
+                            : setNewPlan({...newPlan, show_in_frontend: checked})
+                          }
+                        />
+                        <div>
+                          <Label className="font-semibold">Show to Customers</Label>
+                          <p className="text-xs text-muted-foreground">When disabled, this plan is hidden from pricing pages, subscription page, and registration. Useful for internal plans like Free Trial.</p>
+                        </div>
+                      </div>
                     </div>
                     <div className="flex gap-2 mt-6">
                       <Button onClick={editingPlan ? handleUpdatePlan : handleCreatePlan} className="flex-1">
@@ -1254,9 +1271,16 @@ const SubscriptionManagement = () => {
                         <td className="py-3">{(plan as any).is_contact_sales ? <Badge variant="outline">Contact Sales</Badge> : `$${plan.monthly_price}`}</td>
                         <td className="py-3">{(plan as any).is_contact_sales ? <Badge variant="outline">Contact Sales</Badge> : `$${plan.annual_price}`}</td>
                         <td className="py-3">
-                          <Badge variant={plan.is_active ? "default" : "secondary"}>
-                            {plan.is_active ? 'Active' : 'Inactive'}
-                          </Badge>
+                          <div className="flex gap-1">
+                            <Badge variant={plan.is_active ? "default" : "secondary"}>
+                              {plan.is_active ? 'Active' : 'Inactive'}
+                            </Badge>
+                            {!(plan as any).show_in_frontend && (
+                              <Badge variant="outline" className="text-orange-600 border-orange-300">
+                                Hidden
+                              </Badge>
+                            )}
+                          </div>
                         </td>
                         <td className="py-3">
                           <div className="flex gap-1">

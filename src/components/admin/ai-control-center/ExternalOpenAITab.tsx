@@ -39,7 +39,7 @@ const ExternalOpenAITab = () => {
   });
 
   // Generate callback URL
-  const callbackUrl = `${import.meta.env.VITE_SUPABASE_URL || 'https://ozjhdxvwqbzcvcywhwjg.supabase.co'}/functions/v1/agent-callback-receiver`;
+  const callbackUrl = `${import.meta.env.VITE_SUPABASE_URL || 'https://xisfommyksvgzaeuvsmh.supabase.co'}/functions/v1/agent-callback-receiver`;
 
   useEffect(() => {
     fetchWorkflows();
