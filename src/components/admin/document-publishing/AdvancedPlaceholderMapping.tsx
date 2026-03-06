@@ -513,7 +513,7 @@ export default function AdvancedPlaceholderMapping({ templates }: AdvancedPlaceh
     toast.success(`Updated ${updates.length} placeholder mapping(s)`);
   }, [buckets]);
 
-  // Save mappings to Supabase and optionally sync with Replit API
+  // Save mappings to Supabase and optionally sync with VPS API
   const handleSaveMappings = useCallback(async () => {
     if (!selectedTemplateData) {
       toast.error('Please select a template first');
@@ -603,11 +603,11 @@ export default function AdvancedPlaceholderMapping({ templates }: AdvancedPlaceh
         }
       }
       
-      // Prepare records for template_placeholders table WITH file_name for Replit lookup
+      // Prepare records for template_placeholders table WITH file_name for API lookup
       // source must be lowercase ('database' or 'ai') to match check constraint
       const placeholderRecords = Object.entries(mappings).map(([key, value]) => ({
         template_id: actualTemplateId,
-        template_file_name: selectedTemplateData.file_name, // For direct Replit lookup
+        template_file_name: selectedTemplateData.file_name, // For direct API lookup
         placeholder: key,
         source: value.source === 'database' ? 'database' : 'ai',
         database_table: value.table || null,
@@ -667,14 +667,14 @@ export default function AdvancedPlaceholderMapping({ templates }: AdvancedPlaceh
         }
       }
 
-      // Sync with Replit FastAPI - include complete mapping info for Replit to use
+      // Sync with VPS FastAPI - include complete mapping info
       try {
-        const replitMappings = Object.entries(mappings).reduce((acc, [key, value]) => {
+        const apiMappings = Object.entries(mappings).reduce((acc, [key, value]) => {
           acc[key] = {
             source: value.source,
             table: value.table || null,
             column: value.column || null,
-            // Replit will use this to prioritize database queries
+            // API will use this to prioritize database queries
             priority: value.source === 'database' ? 1 : 2,
           };
           return acc;
@@ -686,16 +686,16 @@ export default function AdvancedPlaceholderMapping({ templates }: AdvancedPlaceh
           body: JSON.stringify({
             template_file_name: selectedTemplateData.file_name,
             template_name: selectedTemplateData.name,
-            mappings: replitMappings,
+            mappings: apiMappings,
             total_placeholders: Object.keys(mappings).length,
             database_count: Object.values(mappings).filter(m => m.source === 'database').length,
             ai_count: Object.values(mappings).filter(m => m.source === 'ai').length,
           }),
         });
-        console.log('✅ Replit API sync successful');
+        console.log('✅ VPS API sync successful');
       } catch (apiError) {
         // API sync is optional, don't fail if it's not available
-        console.log('Replit API sync skipped (endpoint may not exist):', apiError);
+        console.log('VPS API sync skipped (endpoint may not exist):', apiError);
       }
 
       toast.success(`Mappings saved! ${Object.values(mappings).filter(m => m.source === 'database').length} database, ${Object.values(mappings).filter(m => m.source === 'ai').length} AI`);

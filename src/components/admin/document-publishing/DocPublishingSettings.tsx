@@ -138,7 +138,7 @@ export default function DocPublishingSettings() {
 
         {/* Migration Guide */}
         <div className="p-4 rounded-lg bg-muted/30 border text-sm space-y-2">
-          <p className="font-medium">Migration Guide for Replit:</p>
+          <p className="font-medium">Migration Guide for VPS Backend:</p>
           <ul className="list-disc list-inside space-y-1 text-xs text-muted-foreground">
             <li>Update CORS to allow your new domain origin</li>
             <li>Ensure all endpoints remain at the same paths (/health, /templates, /generate-document, etc.)</li>

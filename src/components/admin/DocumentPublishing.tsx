@@ -215,7 +215,7 @@ export default function DocumentPublishing() {
           <AlertTriangle className="h-4 w-4 text-warning" />
           <AlertTitle>CORS Configuration Required</AlertTitle>
           <AlertDescription className="text-sm">
-            If you're seeing connection errors, update your Replit FastAPI CORS settings to include:
+            If you're seeing connection errors, update your VPS backend CORS settings to include:
             <code className="block mt-2 p-2 bg-muted rounded text-xs">
               allow_origins=["*"] or add "https://07b81e23-32e6-4ee0-a4ca-0408cd48eca6.lovableproject.com"
             </code>
@@ -291,7 +291,7 @@ export default function DocumentPublishing() {
                       <p>• Database-mapped placeholders will still function normally</p>
                       <p className="font-medium text-foreground mt-2">What to do:</p>
                       <p>• Check your OpenAI API key and credit balance</p>
-                      <p>• Verify the Replit backend is running</p>
+                      <p>• Verify the VPS backend is running</p>
                     </div>
                   )}
                 </div>

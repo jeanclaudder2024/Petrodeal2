@@ -392,7 +392,7 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
         body: JSON.stringify({
           template_name: templateName,
           vessel_imo: vesselImo,
-          // Pass buyer/seller UUIDs so Replit can fetch company data for placeholders
+          // Pass buyer/seller UUIDs so VPS backend can fetch company data for placeholders
           buyer_id: buyer?.id || null,
           seller_id: seller?.id || null
         }),

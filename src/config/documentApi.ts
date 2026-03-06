@@ -1,20 +1,35 @@
 // Document Processing API Configuration
-// Single source of truth for Replit FastAPI URL
+// Single source of truth for VPS FastAPI URL
 
-const DEFAULT_API_URL = 'https://fe34d3a6-e8b0-49d1-b955-27b149abae9c-00-1sdj1ekjwvpbv.picard.replit.dev';
+const DEFAULT_API_URL = 'https://control.petrodealhub.com/api';
+const LEGACY_API_URLS = [
+  'https://fe34d3a6-e8b0-49d1-b955-27b149abae9c-00-1sdj1ekjwvpbv.picard.replit.dev',
+  'https://control.petrodealhub.com'
+];
+
+const normalizeApiUrl = (url: string): string => {
+  const cleaned = url.trim().replace(/\/+$/, '');
+  return LEGACY_API_URLS.includes(cleaned) ? DEFAULT_API_URL : cleaned;
+};
 
 // Get the configured API URL (from localStorage override or default)
 export function getDocumentApiUrl(): string {
   try {
     const saved = localStorage.getItem('document_api_url');
-    if (saved && saved.trim()) return saved.trim();
+    if (saved && saved.trim()) {
+      const normalizedUrl = normalizeApiUrl(saved);
+      if (normalizedUrl !== saved.trim()) {
+        localStorage.setItem('document_api_url', normalizedUrl);
+      }
+      return normalizedUrl;
+    }
   } catch {}
   return DEFAULT_API_URL;
 }
 
 // Set a custom API URL
 export function setDocumentApiUrl(url: string) {
-  localStorage.setItem('document_api_url', url.trim());
+  localStorage.setItem('document_api_url', normalizeApiUrl(url));
 }
 
 // Reset to default
@@ -47,7 +62,7 @@ export interface AIStatus {
   last_error?: string | null;
 }
 
-// Check AI generation status from Replit endpoint
+// Check AI generation status from VPS backend endpoint
 export async function checkAIStatus(): Promise<AIStatus> {
   try {
     const response = await fetch(`${getDocumentApiUrl()}/ai-status`, {
