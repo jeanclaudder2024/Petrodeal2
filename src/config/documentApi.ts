@@ -46,7 +46,7 @@ export async function checkApiHealth(customUrl?: string): Promise<boolean> {
   try {
     const response = await fetch(`${baseUrl}/health`, {
       method: 'GET',
-      signal: AbortSignal.timeout(5000),
+      signal: AbortSignal.timeout(15000),
     });
     return response.ok;
   } catch {
@@ -67,7 +67,7 @@ export async function checkAIStatus(): Promise<AIStatus> {
   try {
     const response = await fetch(`${getDocumentApiUrl()}/ai-status`, {
       method: 'GET',
-      signal: AbortSignal.timeout(5000),
+      signal: AbortSignal.timeout(15000),
     });
     
     if (response.status === 404) {

@@ -201,7 +201,9 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
       // Fetch ALL templates first, then check permissions from Supabase
       try {
         // Get all templates from API
-        const allResponse = await fetch(`${getApiBaseUrl()}/templates`);
+        const allResponse = await fetch(`${getApiBaseUrl()}/templates`, {
+          signal: AbortSignal.timeout(420000)
+        });
         let allTemplatesMap = new Map<string, DocumentTemplate>();
 
         if (allResponse.ok) {
@@ -389,10 +391,10 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
+        signal: AbortSignal.timeout(420000),
         body: JSON.stringify({
           template_name: templateName,
           vessel_imo: vesselImo,
-          // Pass buyer/seller UUIDs so VPS backend can fetch company data for placeholders
           buyer_id: buyer?.id || null,
           seller_id: seller?.id || null
         }),
@@ -474,7 +476,9 @@ export default function VesselDocumentGenerator({ vesselImo, vesselName }: Vesse
         throw new Error(errorMessage);
       }
     } catch (error: any) {
-      const errorMsg = error.message || 'Processing failed';
+      const errorMsg = error.name === 'TimeoutError' 
+        ? 'Document preparation timed out. Please try again.' 
+        : (error.message || 'Processing failed');
       setDownloadFlowStatus({ status: 'failed', message: errorMsg, progress: 0 });
       setProcessingStatus(prev => ({ ...prev, [templateKey]: { status: 'failed', message: errorMsg, progress: 0 } }));
       toast.error(errorMsg);
