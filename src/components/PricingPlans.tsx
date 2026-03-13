@@ -342,6 +342,7 @@ const PricingPlans: React.FC<PricingPlansProps> = ({
         <p className="text-sm text-muted-foreground">
           {isAnnual ? '✨ You save 20% with annual billing!' : 'Switch to annual to save 20%'}
         </p>
+
       </div>
 
       {/* Connected Plans Container */}

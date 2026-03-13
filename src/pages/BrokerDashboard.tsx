@@ -5,6 +5,11 @@ import { Badge } from '@/components/ui/badge';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
+import { Progress } from '@/components/ui/progress';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
+import { Label } from '@/components/ui/label';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { 
   Shield, 
   TrendingUp, 
@@ -26,7 +31,12 @@ import {
   ArrowDownRight,
   BarChart3,
   Ship,
-  Wifi
+  Wifi,
+  RotateCw,
+  Building2,
+  Upload,
+  Star,
+  Award
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -62,6 +72,25 @@ interface BrokerProfile {
   profile_image_url: string;
   created_at: string;
   updated_at: string;
+  broker_unique_id: string;
+}
+
+interface CompanyVerification {
+  id: string;
+  broker_id: string;
+  company_id: number;
+  status: string;
+  reason: string;
+  years_working: number;
+  admin_notes: string;
+  created_at: string;
+  companies?: { id: number; name: string; logo_url?: string };
+}
+
+interface IMFPASummary {
+  total_count: number;
+  latest_reference?: string;
+  total_commission?: number;
 }
 
 interface Deal {
@@ -102,6 +131,13 @@ const BrokerDashboard = () => {
   const [editingProfile, setEditingProfile] = useState(false);
   const [hasCheckedMembership, setHasCheckedMembership] = useState(false);
   const [lastSync, setLastSync] = useState(new Date());
+  const [cardFlipped, setCardFlipped] = useState(false);
+  const [verifications, setVerifications] = useState<CompanyVerification[]>([]);
+  const [imfpaSummary, setImfpaSummary] = useState<IMFPASummary>({ total_count: 0 });
+  const [showVerificationDialog, setShowVerificationDialog] = useState(false);
+  const [verificationForm, setVerificationForm] = useState({ company_id: '', reason: '', years_working: '' });
+  const [companies, setCompanies] = useState<{ id: number; name: string }[]>([]);
+  const [submittingVerification, setSubmittingVerification] = useState(false);
   const [stats, setStats] = useState({
     totalDeals: 0,
     completedDeals: 0,
@@ -205,6 +241,9 @@ const BrokerDashboard = () => {
 
       if (profileData) {
         await loadChatMessages(profileData.id);
+        await loadVerifications(profileData.id);
+        await loadImfpaSummary(profileData.id);
+        await loadCompanies();
       }
     } catch (error) {
       toast({
@@ -235,6 +274,112 @@ const BrokerDashboard = () => {
         .eq('sender_type', 'admin');
     } catch (error) {
       // Error loading chat messages
+    }
+  };
+
+  const loadVerifications = async (brokerId: string) => {
+    try {
+      const { data } = await supabase
+        .from('broker_company_verifications')
+        .select('*')
+        .eq('broker_id', brokerId)
+        .order('created_at', { ascending: false }) as any;
+      
+      // Fetch company names for each verification
+      if (data && data.length > 0) {
+        const companyIds = data.map((v: any) => v.company_id);
+        const { data: companyData } = await supabase
+          .from('companies')
+          .select('id, name, logo_url')
+          .in('id', companyIds);
+        
+        const enriched = data.map((v: any) => ({
+          ...v,
+          companies: companyData?.find((c: any) => c.id === v.company_id)
+        }));
+        setVerifications(enriched);
+      } else {
+        setVerifications([]);
+      }
+    } catch (error) {
+      // Silent fail
+    }
+  };
+
+  const loadImfpaSummary = async (brokerId: string) => {
+    try {
+      // Get deals for this broker, then get IMFPAs for those deals
+      const { data: brokerDeals } = await supabase
+        .from('broker_deals')
+        .select('id')
+        .eq('broker_id', brokerId);
+      
+      if (brokerDeals && brokerDeals.length > 0) {
+        const dealIds = brokerDeals.map(d => d.id);
+        const { data } = await supabase
+          .from('imfpa_agreements')
+          .select('imfpa_id, imfpa_reference_code, commission_value')
+          .in('deal_id', dealIds);
+        if (data) {
+          setImfpaSummary({
+            total_count: data.length,
+            latest_reference: data[0]?.imfpa_reference_code || undefined,
+            total_commission: data.reduce((sum, a) => sum + (a.commission_value || 0), 0)
+          });
+        }
+      }
+    } catch (error) {
+      // Silent fail
+    }
+  };
+
+  const loadCompanies = async () => {
+    try {
+      // First try to load only eligible companies
+      const { data: eligibleData } = await supabase
+        .from('verification_eligible_companies')
+        .select('company_id, companies:company_id(id, name)');
+      
+      if (eligibleData && eligibleData.length > 0) {
+        const mapped = eligibleData
+          .map((e: any) => e.companies)
+          .filter(Boolean);
+        setCompanies(mapped);
+      } else {
+        // Fallback: if no eligible companies configured, show all
+        const { data } = await supabase
+          .from('companies')
+          .select('id, name')
+          .order('name');
+        setCompanies(data || []);
+      }
+    } catch (error) {
+      // Silent fail
+    }
+  };
+
+  const handleSubmitVerification = async () => {
+    if (!profile || !verificationForm.company_id) return;
+    setSubmittingVerification(true);
+    try {
+      const { error } = await supabase
+        .from('broker_company_verifications')
+        .insert({
+          broker_id: profile.id,
+          company_id: parseInt(verificationForm.company_id),
+          reason: verificationForm.reason,
+          years_working: verificationForm.years_working ? parseInt(verificationForm.years_working) : null,
+          status: 'pending'
+        });
+      if (error) throw error;
+      toast({ title: 'Request Submitted', description: 'Your verification request has been sent for review.' });
+      setShowVerificationDialog(false);
+      setVerificationForm({ company_id: '', reason: '', years_working: '' });
+      await loadVerifications(profile.id);
+    } catch (error: any) {
+      toast({ title: 'Error', description: error.message || 'Failed to submit request', variant: 'destructive' });
+    } finally {
+      setSubmittingVerification(false);
     }
   };
 
@@ -668,7 +813,7 @@ const BrokerDashboard = () => {
           {editingProfile ? (
             <EditProfileForm 
               profile={profile}
-              onSave={(updatedProfile) => {
+              onSave={(updatedProfile: any) => {
                 setProfile(updatedProfile);
                 setEditingProfile(false);
               }}
@@ -676,139 +821,346 @@ const BrokerDashboard = () => {
             />
           ) : (
             <>
-              {/* Membership ID Card */}
+              {/* Flippable Membership Card */}
               <Card className="rounded-sm overflow-hidden border-border">
                 <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Shield className="h-5 w-5" />
-                    Broker Membership Card
-                  </CardTitle>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="flex items-center gap-2">
+                      <Shield className="h-5 w-5" />
+                      Broker Membership Card
+                    </CardTitle>
+                    <Button 
+                      variant="ghost" 
+                      size="sm" 
+                      onClick={() => setCardFlipped(!cardFlipped)}
+                      className="rounded-sm text-xs gap-1"
+                    >
+                      <RotateCw className="h-3 w-3" />
+                      {cardFlipped ? 'Show Front' : 'Show IMFPA Info'}
+                    </Button>
+                  </div>
                 </CardHeader>
                 <CardContent className="p-6">
-                  <div className="relative group">
-                    <div className="w-full max-w-md mx-auto bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 rounded-lg p-6 shadow-2xl border border-slate-700">
-                      <div className="absolute inset-0 bg-gradient-to-br from-blue-900/20 to-purple-900/20 rounded-lg"></div>
-                      <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl from-white/5 to-transparent rounded-lg"></div>
-                      
-                      <div className="relative z-10">
-                        <div className="flex items-center justify-between mb-6">
-                          <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 bg-gradient-to-br from-blue-400 to-purple-500 rounded-lg flex items-center justify-center">
-                              <Shield className="h-4 w-4 text-white" />
-                            </div>
-                            <div>
-                              <div className="text-white font-bold text-sm">OIL BROKER</div>
-                              <div className="text-blue-300 text-xs">CERTIFIED MEMBER</div>
-                            </div>
-                          </div>
-                          <Badge 
-                            variant={profile.verified_at ? "default" : "secondary"}
-                            className={`${
-                              profile.verified_at 
-                                ? 'bg-emerald-500 text-white' 
-                                : 'bg-amber-500 text-black'
-                            }`}
-                          >
-                            {profile.verified_at ? "VERIFIED" : "PENDING"}
-                          </Badge>
-                        </div>
-
-                        <div className="flex items-start gap-4 mb-4">
-                          <div className="w-16 h-20 rounded-lg border-2 border-slate-500 overflow-hidden">
-                            {profile.profile_image_url ? (
-                              <img 
-                                src={profile.profile_image_url} 
-                                alt={profile.full_name}
-                                className="w-full h-full object-cover"
-                              />
-                            ) : (
-                              <div className="w-full h-full bg-gradient-to-b from-slate-600 to-slate-700 flex items-center justify-center">
-                                <User className="h-8 w-8 text-slate-400" />
+                  <div className="w-full max-w-md mx-auto" style={{ perspective: '1000px' }}>
+                    <div 
+                      className="relative transition-transform duration-700"
+                      style={{ 
+                        transformStyle: 'preserve-3d',
+                        transform: cardFlipped ? 'rotateY(180deg)' : 'rotateY(0deg)'
+                      }}
+                    >
+                      {/* FRONT of card */}
+                      <div 
+                        className="w-full bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 rounded-lg p-6 shadow-2xl border border-slate-700"
+                        style={{ backfaceVisibility: 'hidden' }}
+                      >
+                        <div className="absolute inset-0 bg-gradient-to-br from-blue-900/20 to-purple-900/20 rounded-lg"></div>
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-gradient-to-bl from-white/5 to-transparent rounded-lg"></div>
+                        
+                        <div className="relative z-10">
+                          <div className="flex items-center justify-between mb-6">
+                            <div className="flex items-center gap-2">
+                              <div className="w-8 h-8 bg-gradient-to-br from-blue-400 to-purple-500 rounded-lg flex items-center justify-center">
+                                <Shield className="h-4 w-4 text-white" />
                               </div>
-                            )}
-                          </div>
-                          
-                          <div className="flex-1 space-y-1">
-                            <div className="text-white font-semibold text-lg leading-tight">
-                              {profile.full_name.toUpperCase()}
-                            </div>
-                            <div className="text-blue-300 text-sm">
-                              {profile.company_name || 'INDEPENDENT BROKER'}
-                            </div>
-                            <div className="text-slate-400 text-xs">
-                              {profile.city && profile.country ? `${profile.city.toUpperCase()}, ${profile.country.toUpperCase()}` : 'LOCATION NOT SET'}
-                            </div>
-                          </div>
-                        </div>
-
-                        <div className="bg-slate-800/50 rounded-lg p-3 mb-4 border border-slate-600">
-                          <div className="flex items-center justify-between">
-                            <div>
-                              <div className="text-slate-400 text-xs uppercase tracking-wide">Broker ID</div>
-                              <div className="text-white font-mono text-sm font-bold tracking-wider">
-                                {profile.id.slice(0, 8).toUpperCase()}-{profile.id.slice(8, 12).toUpperCase()}
+                              <div>
+                                <div className="text-white font-bold text-sm">OIL BROKER</div>
+                                <div className="text-blue-300 text-xs">CERTIFIED MEMBER</div>
                               </div>
                             </div>
-                            <div className="text-right">
-                              <div className="text-slate-400 text-xs">Member Since</div>
-                              <div className="text-white text-sm font-medium">
-                                {new Date(profile.created_at).toLocaleDateString('en-US', { 
-                                  month: '2-digit', 
-                                  year: '2-digit' 
-                                })}
+                            <Badge 
+                              variant={profile.verified_at ? "default" : "secondary"}
+                              className={`${profile.verified_at ? 'bg-emerald-500 text-white' : 'bg-amber-500 text-black'}`}
+                            >
+                              {profile.verified_at ? "VERIFIED" : "PENDING"}
+                            </Badge>
+                          </div>
+
+                          <div className="flex items-start gap-4 mb-4">
+                            <div className="w-16 h-20 rounded-lg border-2 border-slate-500 overflow-hidden">
+                              {profile.profile_image_url ? (
+                                <img src={profile.profile_image_url} alt={profile.full_name} className="w-full h-full object-cover" />
+                              ) : (
+                                <div className="w-full h-full bg-gradient-to-b from-slate-600 to-slate-700 flex items-center justify-center">
+                                  <User className="h-8 w-8 text-slate-400" />
+                                </div>
+                              )}
+                            </div>
+                            <div className="flex-1 space-y-1">
+                              <div className="text-white font-semibold text-lg leading-tight">{profile.full_name.toUpperCase()}</div>
+                              <div className="text-blue-300 text-sm">{profile.company_name || 'INDEPENDENT BROKER'}</div>
+                              <div className="text-slate-400 text-xs">
+                                {profile.city && profile.country ? `${profile.city.toUpperCase()}, ${profile.country.toUpperCase()}` : 'LOCATION NOT SET'}
                               </div>
                             </div>
                           </div>
-                        </div>
 
-                        <div className="flex items-center justify-between text-xs">
-                          <div className="text-slate-400">
-                            EXP: {new Date(Date.now() + 365*24*60*60*1000).toLocaleDateString('en-US', { 
-                              month: '2-digit', 
-                              day: '2-digit',
-                              year: '2-digit' 
-                            })}
+                          <div className="bg-slate-800/50 rounded-lg p-3 mb-4 border border-slate-600">
+                            <div className="flex items-center justify-between">
+                              <div>
+                                <div className="text-slate-400 text-xs uppercase tracking-wide">Broker ID</div>
+                                <div className="text-white font-mono text-sm font-bold tracking-wider">
+                                  {(profile as any).broker_unique_id || 'PDH-BRK-XXXXXX'}
+                                </div>
+                              </div>
+                              <div className="text-right">
+                                <div className="text-slate-400 text-xs">Member Since</div>
+                                <div className="text-white text-sm font-medium">
+                                  {new Date(profile.created_at).toLocaleDateString('en-US', { month: '2-digit', year: '2-digit' })}
+                                </div>
+                              </div>
+                            </div>
                           </div>
-                          <div className="text-slate-400">
-                            {profile.license_number ? `LIC: ${profile.license_number}` : 'NO LICENSE'}
+
+                          <div className="flex items-center justify-between text-xs">
+                            <div className="text-slate-400">
+                              EXP: {new Date(Date.now() + 365*24*60*60*1000).toLocaleDateString('en-US', { month: '2-digit', day: '2-digit', year: '2-digit' })}
+                            </div>
+                            <div className="text-slate-400">
+                              {profile.license_number ? `LIC: ${profile.license_number}` : 'NO LICENSE'}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* BACK of card (IMFPA Info) */}
+                      <div 
+                        className="w-full absolute top-0 left-0 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 rounded-lg p-6 shadow-2xl border border-slate-700"
+                        style={{ backfaceVisibility: 'hidden', transform: 'rotateY(180deg)' }}
+                      >
+                        <div className="absolute inset-0 bg-gradient-to-br from-emerald-900/20 to-blue-900/20 rounded-lg"></div>
+                        <div className="relative z-10">
+                          <div className="flex items-center justify-between mb-5">
+                            <div className="flex items-center gap-2">
+                              <FileText className="h-5 w-5 text-emerald-400" />
+                              <div className="text-white font-bold text-sm">IMFPA SUMMARY</div>
+                            </div>
+                            <Badge className="bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                              {imfpaSummary.total_count} Issued
+                            </Badge>
+                          </div>
+
+                          <div className="space-y-3">
+                            <div className="bg-slate-800/50 rounded-lg p-3 border border-slate-600">
+                              <div className="text-slate-400 text-xs uppercase tracking-wide mb-1">Total IMFPA Agreements</div>
+                              <div className="text-white text-2xl font-bold font-mono">{imfpaSummary.total_count}</div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-3">
+                              <div className="bg-slate-800/50 rounded-lg p-3 border border-slate-600">
+                                <div className="text-slate-400 text-xs uppercase tracking-wide mb-1">Latest Reference</div>
+                                <div className="text-white text-xs font-mono">{imfpaSummary.latest_reference || 'N/A'}</div>
+                              </div>
+                              <div className="bg-slate-800/50 rounded-lg p-3 border border-slate-600">
+                                <div className="text-slate-400 text-xs uppercase tracking-wide mb-1">Total Commission</div>
+                                <div className="text-emerald-400 text-sm font-bold font-mono">
+                                  {imfpaSummary.total_commission ? `${imfpaSummary.total_commission}%` : 'N/A'}
+                                </div>
+                              </div>
+                            </div>
+                            <div className="text-center pt-2">
+                              <p className="text-slate-500 text-[10px] leading-relaxed">
+                                Irrevocable Master Fee Protection Agreement (IMFPA) — This card confirms broker commission 
+                                entitlements under executed agreements. All terms governed by applicable jurisdiction.
+                              </p>
+                            </div>
                           </div>
                         </div>
                       </div>
                     </div>
                   </div>
 
-                  <div className="mt-6 grid grid-cols-2 gap-4 text-sm">
-                    <div className="bg-muted/50 p-3 rounded-md">
-                      <div className="text-muted-foreground text-xs">Status</div>
-                      <div className="font-medium flex items-center gap-1">
-                        {profile.verified_at ? (
-                          <>
-                            <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse"></div>
-                            Active & Verified
-                          </>
-                        ) : (
-                          <>
-                            <div className="w-2 h-2 bg-amber-500 rounded-full animate-pulse"></div>
-                            Awaiting Verification
-                          </>
-                        )}
+                  {/* Trust Indicators */}
+                  <div className="mt-6 grid grid-cols-3 gap-4">
+                    <div className="bg-muted/50 p-3 rounded-md text-center">
+                      <div className="text-muted-foreground text-xs mb-1">Verification Level</div>
+                      <div className="font-semibold text-sm flex items-center justify-center gap-1">
+                        <Award className="h-4 w-4 text-primary" />
+                        {profile.verified_at ? 'Verified' : 'Pending'}
                       </div>
                     </div>
-                    <div className="bg-muted/50 p-3 rounded-md">
-                      <div className="text-muted-foreground text-xs">Last Updated</div>
-                      <div className="font-medium">
-                        {new Date(profile.updated_at).toLocaleDateString()}
+                    <div className="bg-muted/50 p-3 rounded-md text-center">
+                      <div className="text-muted-foreground text-xs mb-1">Verified Companies</div>
+                      <div className="font-semibold text-sm">
+                        {verifications.filter(v => v.status === 'approved').length}
                       </div>
+                    </div>
+                    <div className="bg-muted/50 p-3 rounded-md text-center">
+                      <div className="text-muted-foreground text-xs mb-1">IMFPA Count</div>
+                      <div className="font-semibold text-sm">{imfpaSummary.total_count}</div>
                     </div>
                   </div>
 
-                  <div className="mt-4 text-center">
-                    <p className="text-xs text-muted-foreground">
-                      Present this ID for all official broker transactions and verifications.
-                    </p>
+                  {/* Trust Score */}
+                  <div className="mt-4 bg-muted/30 p-4 rounded-md border border-border">
+                    <div className="flex items-center justify-between mb-2">
+                      <span className="text-sm font-medium flex items-center gap-1.5">
+                        <Star className="h-4 w-4 text-amber-500" />
+                        Broker Trust Score
+                      </span>
+                      <span className="text-sm font-bold font-mono">
+                        {Math.min(100, 
+                          (profile.verified_at ? 30 : 0) + 
+                          (verifications.filter(v => v.status === 'approved').length * 15) +
+                          (imfpaSummary.total_count * 10) +
+                          (stats.completedDeals * 5)
+                        )} / 100
+                      </span>
+                    </div>
+                    <Progress 
+                      value={Math.min(100, 
+                        (profile.verified_at ? 30 : 0) + 
+                        (verifications.filter(v => v.status === 'approved').length * 15) +
+                        (imfpaSummary.total_count * 10) +
+                        (stats.completedDeals * 5)
+                      )} 
+                      className="h-2" 
+                    />
                   </div>
                 </CardContent>
               </Card>
+
+              {/* Verified Companies Section */}
+              <Card className="rounded-sm border-border">
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <CardTitle className="flex items-center gap-2 text-base">
+                      <Building2 className="h-5 w-5" />
+                      Verified Companies
+                    </CardTitle>
+                    <Button 
+                      size="sm" 
+                      className="rounded-sm"
+                      onClick={() => setShowVerificationDialog(true)}
+                    >
+                      <Plus className="h-4 w-4 mr-1" />
+                      Request Verification
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {/* Approved verifications - Professional badges */}
+                  {verifications.filter(v => v.status === 'approved').length > 0 ? (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mb-6">
+                      {verifications.filter(v => v.status === 'approved').map((v) => (
+                        <div key={v.id} className="relative bg-card border border-border rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow">
+                          <div className="absolute -top-2 -right-2 w-6 h-6 bg-emerald-500 rounded-full flex items-center justify-center shadow-sm">
+                            <CheckCircle className="h-4 w-4 text-white" />
+                          </div>
+                          <div className="flex items-center gap-3 mb-3">
+                            <div className="w-12 h-12 rounded-full border-2 border-border overflow-hidden bg-muted">
+                              {profile.profile_image_url ? (
+                                <img src={profile.profile_image_url} alt={profile.full_name} className="w-full h-full object-cover" />
+                              ) : (
+                                <div className="w-full h-full flex items-center justify-center">
+                                  <User className="h-6 w-6 text-muted-foreground" />
+                                </div>
+                              )}
+                            </div>
+                            <div className="w-px h-10 bg-border" />
+                            <div className="w-12 h-12 rounded-lg border border-border overflow-hidden bg-muted flex items-center justify-center">
+                              {v.companies?.logo_url ? (
+                                <img src={v.companies.logo_url} alt={v.companies?.name} className="w-full h-full object-contain p-1" />
+                              ) : (
+                                <Building2 className="h-6 w-6 text-muted-foreground" />
+                              )}
+                            </div>
+                          </div>
+                          <div>
+                            <div className="font-semibold text-sm text-foreground">{v.companies?.name || 'Company'}</div>
+                            <Badge variant="outline" className="mt-1 text-[10px] border-emerald-500 text-emerald-600 bg-emerald-500/10">
+                              <CheckCircle className="h-2.5 w-2.5 mr-1" />
+                              Verified Broker
+                            </Badge>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground mb-4">No verified companies yet. Request verification to build your credibility.</p>
+                  )}
+
+                  {/* All verification requests */}
+                  {verifications.length > 0 && (
+                    <div>
+                      <h4 className="text-sm font-semibold mb-3 text-muted-foreground uppercase tracking-wider">All Requests</h4>
+                      <div className="space-y-2">
+                        {verifications.map((v) => (
+                          <div key={v.id} className="flex items-center justify-between bg-muted/20 rounded-sm px-4 py-2 border border-border/50">
+                            <div className="flex items-center gap-2">
+                              <Building2 className="h-4 w-4 text-muted-foreground" />
+                              <span className="text-sm font-medium">{v.companies?.name || 'Company'}</span>
+                            </div>
+                            <Badge 
+                              variant="outline"
+                              className={`rounded-sm text-xs ${
+                                v.status === 'approved' ? 'border-emerald-500 text-emerald-600 bg-emerald-500/10' :
+                                v.status === 'rejected' ? 'border-red-500 text-red-600 bg-red-500/10' :
+                                'border-amber-500 text-amber-600 bg-amber-500/10'
+                              }`}
+                            >
+                              {v.status === 'approved' ? 'Verified' : v.status === 'rejected' ? 'Rejected' : 'Pending Review'}
+                            </Badge>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Verification Request Dialog */}
+              <Dialog open={showVerificationDialog} onOpenChange={setShowVerificationDialog}>
+                <DialogContent className="sm:max-w-md">
+                  <DialogHeader>
+                    <DialogTitle>Request Company Verification</DialogTitle>
+                    <DialogDescription>Submit a request to be verified as a broker for a specific company.</DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4">
+                    <div>
+                      <Label>Company</Label>
+                      <Select 
+                        value={verificationForm.company_id} 
+                        onValueChange={(val) => setVerificationForm(prev => ({ ...prev, company_id: val }))}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select a company" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {companies.map(c => (
+                            <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label>Reason for Verification</Label>
+                      <Textarea 
+                        placeholder="Explain your relationship with this company..."
+                        value={verificationForm.reason}
+                        onChange={(e) => setVerificationForm(prev => ({ ...prev, reason: e.target.value }))}
+                      />
+                    </div>
+                    <div>
+                      <Label>Years Working with Company</Label>
+                      <Input 
+                        type="number" 
+                        placeholder="e.g. 5"
+                        value={verificationForm.years_working}
+                        onChange={(e) => setVerificationForm(prev => ({ ...prev, years_working: e.target.value }))}
+                      />
+                    </div>
+                  </div>
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setShowVerificationDialog(false)}>Cancel</Button>
+                    <Button 
+                      onClick={handleSubmitVerification} 
+                      disabled={!verificationForm.company_id || submittingVerification}
+                    >
+                      {submittingVerification ? 'Submitting...' : 'Submit Request'}
+                    </Button>
+                  </DialogFooter>
+                </DialogContent>
+              </Dialog>
 
               {/* Profile Information */}
               <Card className="rounded-sm border-border">
@@ -817,12 +1169,7 @@ const BrokerDashboard = () => {
                     <User className="h-5 w-5" />
                     Complete Profile Information
                   </CardTitle>
-                  <Button 
-                    variant="outline" 
-                    size="sm"
-                    className="rounded-sm"
-                    onClick={() => setEditingProfile(true)}
-                  >
+                  <Button variant="outline" size="sm" className="rounded-sm" onClick={() => setEditingProfile(true)}>
                     <Settings className="h-4 w-4 mr-2" />
                     Edit Profile
                   </Button>
@@ -833,11 +1180,7 @@ const BrokerDashboard = () => {
                       <div className="flex-shrink-0">
                         <div className="w-32 h-32 rounded-lg border-2 border-border overflow-hidden">
                           {profile.profile_image_url ? (
-                            <img 
-                              src={profile.profile_image_url} 
-                              alt={profile.full_name}
-                              className="w-full h-full object-cover"
-                            />
+                            <img src={profile.profile_image_url} alt={profile.full_name} className="w-full h-full object-cover" />
                           ) : (
                             <div className="w-full h-full bg-muted flex items-center justify-center">
                               <User className="h-16 w-16 text-muted-foreground" />
@@ -857,9 +1200,7 @@ const BrokerDashboard = () => {
                           </div>
                           <div>
                             <span className="text-muted-foreground">Experience:</span>
-                            <p className="font-medium">
-                              {profile.years_experience ? `${profile.years_experience} years` : 'Not specified'}
-                            </p>
+                            <p className="font-medium">{profile.years_experience ? `${profile.years_experience} years` : 'Not specified'}</p>
                           </div>
                         </div>
                       </div>
@@ -878,26 +1219,11 @@ const BrokerDashboard = () => {
                         Personal Information
                       </h4>
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
-                        <div>
-                          <span className="text-muted-foreground">Full Name:</span>
-                          <p className="font-medium">{profile.full_name}</p>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground">Phone:</span>
-                          <p className="font-medium">{profile.phone}</p>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground">City:</span>
-                          <p className="font-medium">{profile.city || 'Not specified'}</p>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground">Country:</span>
-                          <p className="font-medium">{profile.country || 'Not specified'}</p>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground">Address:</span>
-                          <p className="font-medium">{profile.address || 'Not specified'}</p>
-                        </div>
+                        <div><span className="text-muted-foreground">Full Name:</span><p className="font-medium">{profile.full_name}</p></div>
+                        <div><span className="text-muted-foreground">Phone:</span><p className="font-medium">{profile.phone}</p></div>
+                        <div><span className="text-muted-foreground">City:</span><p className="font-medium">{profile.city || 'Not specified'}</p></div>
+                        <div><span className="text-muted-foreground">Country:</span><p className="font-medium">{profile.country || 'Not specified'}</p></div>
+                        <div><span className="text-muted-foreground">Address:</span><p className="font-medium">{profile.address || 'Not specified'}</p></div>
                       </div>
                     </div>
 
@@ -907,18 +1233,9 @@ const BrokerDashboard = () => {
                         Company Information
                       </h4>
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 text-sm">
-                        <div>
-                          <span className="text-muted-foreground">Company Name:</span>
-                          <p className="font-medium">{profile.company_name || 'Not specified'}</p>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground">License Number:</span>
-                          <p className="font-medium">{profile.license_number || 'Not provided'}</p>
-                        </div>
-                        <div>
-                          <span className="text-muted-foreground">Years Experience:</span>
-                          <p className="font-medium">{profile.years_experience || 'Not specified'}</p>
-                        </div>
+                        <div><span className="text-muted-foreground">Company Name:</span><p className="font-medium">{profile.company_name || 'Not specified'}</p></div>
+                        <div><span className="text-muted-foreground">License Number:</span><p className="font-medium">{profile.license_number || 'Not provided'}</p></div>
+                        <div><span className="text-muted-foreground">Years Experience:</span><p className="font-medium">{profile.years_experience || 'Not specified'}</p></div>
                       </div>
                     </div>
 

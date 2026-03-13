@@ -29,7 +29,8 @@ import {
   User,
   Settings,
   DollarSign,
-  Building2
+  Building2,
+  ShieldCheck
 } from 'lucide-react';
 import DealStepTemplates from './DealStepTemplates';
 import BrokerPricingManagement from './BrokerPricingManagement';
@@ -134,6 +135,13 @@ const BrokerManagement = () => {
   const [chatMessage, setChatMessage] = useState('');
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isStepDialogOpen, setIsStepDialogOpen] = useState(false);
+  const [companyVerifications, setCompanyVerifications] = useState<any[]>([]);
+  const [verificationFilter, setVerificationFilter] = useState('all');
+  const [eligibleCompanies, setEligibleCompanies] = useState<any[]>([]);
+  const [allCompanies, setAllCompanies] = useState<any[]>([]);
+  const [addEligibleDialogOpen, setAddEligibleDialogOpen] = useState(false);
+  const [selectedEligibleCompanyId, setSelectedEligibleCompanyId] = useState('');
+  const [editVerificationDialog, setEditVerificationDialog] = useState<any>(null);
   const { toast } = useToast();
 
   useEffect(() => {
@@ -194,6 +202,36 @@ const BrokerManagement = () => {
       if (stepsError) throw stepsError;
       setDealSteps(stepsData || []);
 
+      // Fetch company verifications
+      const { data: verificationsData } = await db
+        .from('broker_company_verifications')
+        .select('*')
+        .order('created_at', { ascending: false });
+      
+      if (verificationsData) {
+        // Enrich with broker and company names
+        const enriched = await Promise.all((verificationsData as any[]).map(async (v: any) => {
+          const broker = brokersData?.find((b: any) => b.id === v.broker_id);
+          const { data: company } = await db.from('companies').select('id, name').eq('id', v.company_id).single();
+          return { ...v, broker_name: broker?.full_name || 'Unknown', company_name: company?.name || 'Unknown' };
+        }));
+        setCompanyVerifications(enriched);
+      }
+
+      // Fetch eligible companies
+      const { data: eligibleData } = await db
+        .from('verification_eligible_companies')
+        .select('*, companies:company_id(id, name, logo_url)')
+        .order('created_at', { ascending: false });
+      setEligibleCompanies(eligibleData || []);
+
+      // Fetch all companies for the eligible dropdown
+      const { data: allCompData } = await db
+        .from('companies')
+        .select('id, name')
+        .order('name');
+      setAllCompanies(allCompData || []);
+
     } catch (error) {
       toast({
         title: "Error",
@@ -202,6 +240,116 @@ const BrokerManagement = () => {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleApproveVerification = async (verificationId: string) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const { error } = await supabase
+        .from('broker_company_verifications')
+        .update({ 
+          status: 'approved', 
+          reviewed_by: user?.id,
+          reviewed_at: new Date().toISOString()
+        })
+        .eq('id', verificationId);
+      if (error) throw error;
+      toast({ title: "Success", description: "Verification approved" });
+      fetchData();
+    } catch (error) {
+      toast({ title: "Error", description: "Failed to approve verification", variant: "destructive" });
+    }
+  };
+
+  const handleRejectVerification = async (verificationId: string) => {
+    const notes = prompt("Reason for rejection:");
+    if (!notes) return;
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const { error } = await supabase
+        .from('broker_company_verifications')
+        .update({ 
+          status: 'rejected', 
+          admin_notes: notes,
+          reviewed_by: user?.id,
+          reviewed_at: new Date().toISOString()
+        })
+        .eq('id', verificationId);
+      if (error) throw error;
+      toast({ title: "Success", description: "Verification rejected" });
+      fetchData();
+    } catch (error) {
+      toast({ title: "Error", description: "Failed to reject verification", variant: "destructive" });
+    }
+  };
+
+  const handleDeleteVerification = async (verificationId: string) => {
+    if (!confirm('Are you sure you want to delete this verification request?')) return;
+    try {
+      const { error } = await supabase
+        .from('broker_company_verifications')
+        .delete()
+        .eq('id', verificationId);
+      if (error) throw error;
+      toast({ title: "Success", description: "Verification deleted" });
+      fetchData();
+    } catch (error) {
+      toast({ title: "Error", description: "Failed to delete verification", variant: "destructive" });
+    }
+  };
+
+  const handleEditVerification = async () => {
+    if (!editVerificationDialog) return;
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const { error } = await supabase
+        .from('broker_company_verifications')
+        .update({
+          status: editVerificationDialog.status,
+          admin_notes: editVerificationDialog.admin_notes,
+          reviewed_by: user?.id,
+          reviewed_at: new Date().toISOString()
+        })
+        .eq('id', editVerificationDialog.id);
+      if (error) throw error;
+      toast({ title: "Success", description: "Verification updated" });
+      setEditVerificationDialog(null);
+      fetchData();
+    } catch (error) {
+      toast({ title: "Error", description: "Failed to update verification", variant: "destructive" });
+    }
+  };
+
+  const handleAddEligibleCompany = async () => {
+    if (!selectedEligibleCompanyId) return;
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      const { error } = await supabase
+        .from('verification_eligible_companies')
+        .insert({ company_id: parseInt(selectedEligibleCompanyId), added_by: user?.id });
+      if (error) throw error;
+      toast({ title: "Success", description: "Company added to eligible list" });
+      setAddEligibleDialogOpen(false);
+      setSelectedEligibleCompanyId('');
+      fetchData();
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message || "Failed to add company", variant: "destructive" });
+    }
+  };
+
+  const handleRemoveEligibleCompany = async (id: string) => {
+    if (!confirm('Remove this company from the eligible list?')) return;
+    try {
+      const { error } = await supabase
+        .from('verification_eligible_companies')
+        .delete()
+        .eq('id', id);
+      if (error) throw error;
+      toast({ title: "Success", description: "Company removed from eligible list" });
+      fetchData();
+    } catch (error) {
+      toast({ title: "Error", description: "Failed to remove company", variant: "destructive" });
     }
   };
 
@@ -472,6 +620,9 @@ const BrokerManagement = () => {
           </TabsTrigger>
           <TabsTrigger value="deal-companies" className="flex items-center gap-1 text-xs md:text-sm whitespace-nowrap">
             <Building2 className="h-3 w-3" /> Deal Companies
+          </TabsTrigger>
+          <TabsTrigger value="verifications" className="flex items-center gap-1 text-xs md:text-sm whitespace-nowrap">
+            <ShieldCheck className="h-3 w-3" /> Verifications
           </TabsTrigger>
         </TabsList>
 
@@ -1038,6 +1189,261 @@ const BrokerManagement = () => {
         {/* Deal Companies Tab */}
         <TabsContent value="deal-companies">
           <DealCompaniesManagement />
+        </TabsContent>
+
+        {/* Broker Verifications Tab */}
+        <TabsContent value="verifications">
+          <Card className="trading-card">
+            <CardHeader>
+              <div className="flex items-center justify-between">
+                <div>
+                  <CardTitle className="flex items-center gap-2">
+                    <ShieldCheck className="h-5 w-5 text-primary" />
+                    Broker Company Verifications
+                  </CardTitle>
+                  <CardDescription>Manage broker verification requests with oil companies</CardDescription>
+                </div>
+                <div className="flex items-center gap-2">
+                  {['all', 'pending', 'approved', 'rejected'].map(f => (
+                    <Button 
+                      key={f} 
+                      variant={verificationFilter === f ? 'default' : 'outline'} 
+                      size="sm"
+                      onClick={() => setVerificationFilter(f)}
+                      className="text-xs capitalize"
+                    >
+                      {f}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                <div className="text-center bg-muted/50 rounded-md p-3">
+                  <div className="text-2xl font-bold text-primary">{companyVerifications.length}</div>
+                  <div className="text-sm text-muted-foreground">Total Requests</div>
+                </div>
+                <div className="text-center bg-muted/50 rounded-md p-3">
+                  <div className="text-2xl font-bold text-emerald-600">{companyVerifications.filter((v: any) => v.status === 'approved').length}</div>
+                  <div className="text-sm text-muted-foreground">Approved</div>
+                </div>
+                <div className="text-center bg-muted/50 rounded-md p-3">
+                  <div className="text-2xl font-bold text-amber-600">{companyVerifications.filter((v: any) => v.status === 'pending').length}</div>
+                  <div className="text-sm text-muted-foreground">Pending</div>
+                </div>
+              </div>
+
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Broker</TableHead>
+                    <TableHead>Company</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Years Working</TableHead>
+                    <TableHead>Date</TableHead>
+                    <TableHead>Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {companyVerifications
+                    .filter((v: any) => verificationFilter === 'all' || v.status === verificationFilter)
+                    .map((v: any) => (
+                    <TableRow key={v.id}>
+                      <TableCell className="font-medium">{v.broker_name}</TableCell>
+                      <TableCell>{v.company_name}</TableCell>
+                      <TableCell>
+                        <Badge 
+                          variant="outline"
+                          className={`text-xs ${
+                            v.status === 'approved' ? 'border-emerald-500 text-emerald-600 bg-emerald-500/10' :
+                            v.status === 'rejected' ? 'border-red-500 text-red-600 bg-red-500/10' :
+                            'border-amber-500 text-amber-600 bg-amber-500/10'
+                          }`}
+                        >
+                          {v.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>{v.years_working || '—'}</TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {new Date(v.created_at).toLocaleDateString()}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          {v.status === 'pending' && (
+                            <>
+                              <Button 
+                                size="sm" 
+                                variant="outline"
+                                className="text-xs border-emerald-500 text-emerald-600 hover:bg-emerald-500/10"
+                                onClick={() => handleApproveVerification(v.id)}
+                              >
+                                <CheckCircle className="h-3 w-3 mr-1" />
+                                Approve
+                              </Button>
+                              <Button 
+                                size="sm" 
+                                variant="outline"
+                                className="text-xs border-red-500 text-red-600 hover:bg-red-500/10"
+                                onClick={() => handleRejectVerification(v.id)}
+                              >
+                                <XCircle className="h-3 w-3 mr-1" />
+                                Reject
+                              </Button>
+                            </>
+                          )}
+                          <Button 
+                            size="sm" 
+                            variant="outline"
+                            className="text-xs"
+                            onClick={() => setEditVerificationDialog({ ...v })}
+                          >
+                            <Edit className="h-3 w-3 mr-1" />
+                            Edit
+                          </Button>
+                          <Button 
+                            size="sm" 
+                            variant="outline"
+                            className="text-xs text-destructive hover:bg-destructive/10"
+                            onClick={() => handleDeleteVerification(v.id)}
+                          >
+                            <Trash2 className="h-3 w-3" />
+                          </Button>
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {companyVerifications.filter((v: any) => verificationFilter === 'all' || v.status === verificationFilter).length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={6} className="text-center py-8 text-muted-foreground">
+                        No verification requests found.
+                      </TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+
+              {/* Eligible Companies Management */}
+              <Separator className="my-6" />
+              <div className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h3 className="text-base font-semibold flex items-center gap-2">
+                      <Building2 className="h-4 w-4 text-primary" />
+                      Eligible Companies for Verification
+                    </h3>
+                    <p className="text-sm text-muted-foreground">Only these companies will appear in the broker's verification request dropdown.</p>
+                  </div>
+                  <Button size="sm" onClick={() => setAddEligibleDialogOpen(true)}>
+                    <Plus className="h-4 w-4 mr-1" />
+                    Add Company
+                  </Button>
+                </div>
+                
+                {eligibleCompanies.length === 0 ? (
+                  <div className="text-center py-6 text-muted-foreground border border-dashed rounded-md">
+                    No eligible companies configured. All companies will be available for verification requests.
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                    {eligibleCompanies.map((ec: any) => (
+                      <div key={ec.id} className="flex items-center justify-between bg-muted/50 border border-border rounded-md px-3 py-2">
+                        <div className="flex items-center gap-2">
+                          <Building2 className="h-4 w-4 text-muted-foreground" />
+                          <span className="text-sm font-medium">{ec.companies?.name || 'Unknown'}</span>
+                        </div>
+                        <Button 
+                          size="sm" 
+                          variant="ghost" 
+                          className="h-7 w-7 p-0 text-destructive hover:bg-destructive/10"
+                          onClick={() => handleRemoveEligibleCompany(ec.id)}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Edit Verification Dialog */}
+          <Dialog open={!!editVerificationDialog} onOpenChange={(open) => !open && setEditVerificationDialog(null)}>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Edit Verification</DialogTitle>
+                <DialogDescription>Update the status and admin notes for this verification request.</DialogDescription>
+              </DialogHeader>
+              {editVerificationDialog && (
+                <div className="space-y-4">
+                  <div>
+                    <Label>Broker</Label>
+                    <p className="text-sm font-medium">{editVerificationDialog.broker_name}</p>
+                  </div>
+                  <div>
+                    <Label>Company</Label>
+                    <p className="text-sm font-medium">{editVerificationDialog.company_name}</p>
+                  </div>
+                  <div>
+                    <Label>Status</Label>
+                    <select 
+                      className="w-full border border-border rounded-md px-3 py-2 text-sm bg-background"
+                      value={editVerificationDialog.status}
+                      onChange={(e) => setEditVerificationDialog((prev: any) => ({ ...prev, status: e.target.value }))}
+                    >
+                      <option value="pending">Pending</option>
+                      <option value="approved">Approved</option>
+                      <option value="rejected">Rejected</option>
+                    </select>
+                  </div>
+                  <div>
+                    <Label>Admin Notes</Label>
+                    <Textarea
+                      value={editVerificationDialog.admin_notes || ''}
+                      onChange={(e) => setEditVerificationDialog((prev: any) => ({ ...prev, admin_notes: e.target.value }))}
+                      placeholder="Add notes..."
+                    />
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <Button variant="outline" onClick={() => setEditVerificationDialog(null)}>Cancel</Button>
+                    <Button onClick={handleEditVerification}>Save Changes</Button>
+                  </div>
+                </div>
+              )}
+            </DialogContent>
+          </Dialog>
+
+          {/* Add Eligible Company Dialog */}
+          <Dialog open={addEligibleDialogOpen} onOpenChange={setAddEligibleDialogOpen}>
+            <DialogContent className="sm:max-w-md">
+              <DialogHeader>
+                <DialogTitle>Add Eligible Company</DialogTitle>
+                <DialogDescription>Select a company that brokers can request verification for.</DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div>
+                  <Label>Company</Label>
+                  <select
+                    className="w-full border border-border rounded-md px-3 py-2 text-sm bg-background"
+                    value={selectedEligibleCompanyId}
+                    onChange={(e) => setSelectedEligibleCompanyId(e.target.value)}
+                  >
+                    <option value="">Select a company...</option>
+                    {allCompanies
+                      .filter(c => !eligibleCompanies.some((ec: any) => ec.company_id === c.id))
+                      .map(c => (
+                        <option key={c.id} value={c.id.toString()}>{c.name}</option>
+                      ))}
+                  </select>
+                </div>
+                <div className="flex justify-end gap-2">
+                  <Button variant="outline" onClick={() => setAddEligibleDialogOpen(false)}>Cancel</Button>
+                  <Button onClick={handleAddEligibleCompany} disabled={!selectedEligibleCompanyId}>Add Company</Button>
+                </div>
+              </div>
+            </DialogContent>
+          </Dialog>
         </TabsContent>
       </Tabs>
 

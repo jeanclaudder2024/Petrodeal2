@@ -48,6 +48,22 @@ const SUGGESTED_SPECIALIZATIONS = ['Crude Oil', 'EN590', 'Jet Fuel', 'LNG', 'Die
 // Predefined trading regions
 const TRADING_REGIONS = ['Middle East', 'Europe', 'Asia Pacific', 'Africa', 'North America', 'South America', 'CIS'];
 
+// Common languages
+const COMMON_LANGUAGES = ['English', 'Arabic', 'French', 'Spanish', 'Mandarin', 'Russian', 'German', 'Portuguese', 'Hindi', 'Japanese', 'Korean', 'Turkish', 'Italian'];
+
+// Common certifications
+const COMMON_CERTIFICATIONS = ['ISO 9001', 'API Certified', 'ISCC', 'IFIA Member', 'ICC Certified', 'GAFTA Member'];
+
+// Education options
+const EDUCATION_OPTIONS = [
+  { value: 'high_school', label: 'High School' },
+  { value: 'bachelors', label: "Bachelor's Degree" },
+  { value: 'masters', label: "Master's / MBA" },
+  { value: 'phd', label: 'PhD / Doctorate' },
+  { value: 'professional', label: 'Professional Certification' },
+  { value: 'other', label: 'Other' },
+];
+
 // Experience options
 const EXPERIENCE_OPTIONS = [
   { value: '0-2', label: '0–2 years' },
@@ -106,6 +122,10 @@ const BrokerSetup = () => {
   const [profileImagePreview, setProfileImagePreview] = useState<string>('');
   const [specializationList, setSpecializationList] = useState<string[]>([]);
   const [regionList, setRegionList] = useState<string[]>([]);
+  const [languageList, setLanguageList] = useState<string[]>([]);
+  const [certificationList, setCertificationList] = useState<string[]>([]);
+  const [educationSelection, setEducationSelection] = useState<string>('');
+  const [customEducation, setCustomEducation] = useState<string>('');
   const [currentStep, setCurrentStep] = useState(0);
   const [countryCode, setCountryCode] = useState('+1');
   const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({});
@@ -167,11 +187,14 @@ const BrokerSetup = () => {
     });
     if (specializationList.length > 0) filled++;
     if (regionList.length > 0) filled++;
+    if (languageList.length > 0) filled++;
+    if (certificationList.length > 0) filled++;
+    if (educationSelection) filled++;
     if (passportDocument || profileImagePreview) filled++;
     
-    const total = allFields.length + 3; // +3 for specializations, regions, passport
+    const total = allFields.length + 6; // +6 for specializations, regions, languages, certifications, education, passport
     return Math.round((filled / total) * 100);
-  }, [formData, specializationList, regionList, passportDocument, profileImagePreview]);
+  }, [formData, specializationList, regionList, languageList, certificationList, educationSelection, passportDocument, profileImagePreview]);
 
   useEffect(() => {
     if (user && !hasCheckedMembership) {
@@ -256,6 +279,17 @@ const BrokerSetup = () => {
         });
         if (profile.specializations) setSpecializationList(profile.specializations);
         if ((profile as any).preferred_regions) setRegionList((profile as any).preferred_regions);
+        if ((profile as any).languages) setLanguageList((profile as any).languages);
+        if ((profile as any).certifications) setCertificationList((profile as any).certifications);
+        if ((profile as any).education) {
+          const matchedOption = EDUCATION_OPTIONS.find(opt => opt.label === (profile as any).education || opt.value === (profile as any).education);
+          if (matchedOption) {
+            setEducationSelection(matchedOption.value);
+          } else {
+            setEducationSelection('other');
+            setCustomEducation((profile as any).education);
+          }
+        }
         if (profile.profile_image_url) setProfileImagePreview(profile.profile_image_url);
 
         if (profile.verified_at) {
@@ -467,9 +501,9 @@ const BrokerSetup = () => {
         website: formData.website || null,
         linkedin_url: formData.linkedin_url || null,
         twitter_url: formData.twitter_url || null,
-        languages: formData.languages ? formData.languages.split(',').map(s => s.trim()) : null,
-        certifications: formData.certifications ? formData.certifications.split(',').map(s => s.trim()) : null,
-        education: formData.education || null,
+        languages: languageList.length > 0 ? languageList : null,
+        certifications: certificationList.length > 0 ? certificationList : null,
+        education: educationSelection === 'other' ? customEducation : (EDUCATION_OPTIONS.find(o => o.value === educationSelection)?.label || formData.education || null),
         trading_volume: formData.trading_volume || null,
         commission_rate: formData.commission_rate ? parseFloat(formData.commission_rate) : null,
         preferred_regions: regionList.length > 0 ? regionList : null,
@@ -791,35 +825,111 @@ const BrokerSetup = () => {
 
                     <div>
                       <Label htmlFor="address">Address</Label>
-                      <Input
-                        id="address"
-                        name="address"
-                        value={formData.address}
-                        onChange={handleInputChange}
-                      />
+                      <div className="relative">
+                        <MapPin className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                        <Input
+                          id="address"
+                          name="address"
+                          value={formData.address}
+                          onChange={handleInputChange}
+                          className="pl-9"
+                          placeholder="Enter your address"
+                        />
+                      </div>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <Label htmlFor="languages">Languages (comma-separated)</Label>
-                        <Input
-                          id="languages"
-                          name="languages"
-                          placeholder="English, Arabic, French"
-                          value={formData.languages}
-                          onChange={handleInputChange}
-                        />
+                    {/* Languages - Tag-based multi-select */}
+                    <div>
+                      <Label>Languages</Label>
+                      <div className="flex flex-wrap gap-1.5 mb-2">
+                        {COMMON_LANGUAGES.filter(l => !languageList.includes(l)).map(lang => (
+                          <Button
+                            key={lang}
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-7 text-xs"
+                            onClick={() => setLanguageList(prev => [...prev, lang])}
+                          >
+                            <Plus className="h-3 w-3 mr-1" /> {lang}
+                          </Button>
+                        ))}
                       </div>
-                      <div>
-                        <Label htmlFor="education">Education</Label>
-                        <Input
-                          id="education"
-                          name="education"
-                          placeholder="MBA in Finance"
-                          value={formData.education}
-                          onChange={handleInputChange}
-                        />
+                      <div className="flex flex-wrap gap-2 mb-2">
+                        {languageList.map((lang, index) => (
+                          <Badge key={index} variant="secondary" className="flex items-center gap-1">
+                            {lang}
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-4 w-4 p-0 hover:bg-transparent"
+                              onClick={() => setLanguageList(prev => prev.filter(l => l !== lang))}
+                            >
+                              <X className="h-3 w-3" />
+                            </Button>
+                          </Badge>
+                        ))}
                       </div>
+                      <div className="flex gap-2">
+                        <Input
+                          placeholder="Add other language"
+                          onKeyPress={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              const val = e.currentTarget.value.trim();
+                              if (val && !languageList.includes(val)) {
+                                setLanguageList(prev => [...prev, val]);
+                              }
+                              e.currentTarget.value = '';
+                            }
+                          }}
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={(e) => {
+                            const input = e.currentTarget.previousElementSibling as HTMLInputElement;
+                            const val = input.value.trim();
+                            if (val && !languageList.includes(val)) {
+                              setLanguageList(prev => [...prev, val]);
+                            }
+                            input.value = '';
+                          }}
+                        >
+                          <Plus className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+
+                    {/* Education - Select dropdown */}
+                    <div>
+                      <Label htmlFor="education">Education</Label>
+                      <Select
+                        value={educationSelection}
+                        onValueChange={(value) => {
+                          setEducationSelection(value);
+                          if (value !== 'other') setCustomEducation('');
+                        }}
+                      >
+                        <SelectTrigger>
+                          <SelectValue placeholder="Select your education level" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {EDUCATION_OPTIONS.map(opt => (
+                            <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      {educationSelection === 'other' && (
+                        <Input
+                          className="mt-2"
+                          placeholder="Enter your education details"
+                          value={customEducation}
+                          onChange={(e) => setCustomEducation(e.target.value)}
+                        />
+                      )}
                     </div>
                   </div>
                 )}
@@ -902,25 +1012,78 @@ const BrokerSetup = () => {
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <Label htmlFor="license_number">License Number</Label>
-                        <Input
-                          id="license_number"
-                          name="license_number"
-                          value={formData.license_number}
-                          onChange={handleInputChange}
-                        />
+                    <div>
+                      <Label htmlFor="license_number">License Number</Label>
+                      <Input
+                        id="license_number"
+                        name="license_number"
+                        value={formData.license_number}
+                        onChange={handleInputChange}
+                      />
+                    </div>
+
+                    {/* Certifications - Tag-based multi-select */}
+                    <div>
+                      <Label>Certifications</Label>
+                      <div className="flex flex-wrap gap-1.5 mb-2">
+                        {COMMON_CERTIFICATIONS.filter(c => !certificationList.includes(c)).map(cert => (
+                          <Button
+                            key={cert}
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="h-7 text-xs"
+                            onClick={() => setCertificationList(prev => [...prev, cert])}
+                          >
+                            <Plus className="h-3 w-3 mr-1" /> {cert}
+                          </Button>
+                        ))}
                       </div>
-                      <div>
-                        <Label htmlFor="certifications">Certifications (comma-separated)</Label>
+                      <div className="flex flex-wrap gap-2 mb-2">
+                        {certificationList.map((cert, index) => (
+                          <Badge key={index} variant="secondary" className="flex items-center gap-1">
+                            {cert}
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              className="h-4 w-4 p-0 hover:bg-transparent"
+                              onClick={() => setCertificationList(prev => prev.filter(c => c !== cert))}
+                            >
+                              <X className="h-3 w-3" />
+                            </Button>
+                          </Badge>
+                        ))}
+                      </div>
+                      <div className="flex gap-2">
                         <Input
-                          id="certifications"
-                          name="certifications"
-                          placeholder="ISO 9001, API Certified"
-                          value={formData.certifications}
-                          onChange={handleInputChange}
+                          placeholder="Add other certification"
+                          onKeyPress={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              const val = e.currentTarget.value.trim();
+                              if (val && !certificationList.includes(val)) {
+                                setCertificationList(prev => [...prev, val]);
+                              }
+                              e.currentTarget.value = '';
+                            }
+                          }}
                         />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={(e) => {
+                            const input = e.currentTarget.previousElementSibling as HTMLInputElement;
+                            const val = input.value.trim();
+                            if (val && !certificationList.includes(val)) {
+                              setCertificationList(prev => [...prev, val]);
+                            }
+                            input.value = '';
+                          }}
+                        >
+                          <Plus className="h-4 w-4" />
+                        </Button>
                       </div>
                     </div>
 
@@ -1013,14 +1176,18 @@ const BrokerSetup = () => {
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                       <div>
                         <Label htmlFor="website">Website</Label>
-                        <Input
-                          id="website"
-                          name="website"
-                          placeholder="https://example.com"
-                          value={formData.website}
-                          onChange={handleInputChange}
-                          onBlur={() => handleBlur('website')}
-                        />
+                        <div className="relative">
+                          <Globe className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                          <Input
+                            id="website"
+                            name="website"
+                            placeholder="https://example.com"
+                            value={formData.website}
+                            onChange={handleInputChange}
+                            onBlur={() => handleBlur('website')}
+                            className="pl-9"
+                          />
+                        </div>
                         {websiteValidation === 'valid' && (
                           <p className="text-xs text-emerald-600 mt-1 flex items-center gap-1"><CheckCircle className="h-3 w-3" /> Valid URL</p>
                         )}
@@ -1030,14 +1197,18 @@ const BrokerSetup = () => {
                       </div>
                       <div>
                         <Label htmlFor="linkedin_url">LinkedIn Profile</Label>
-                        <Input
-                          id="linkedin_url"
-                          name="linkedin_url"
-                          placeholder="https://linkedin.com/in/username"
-                          value={formData.linkedin_url}
-                          onChange={handleInputChange}
-                          onBlur={() => handleBlur('linkedin_url')}
-                        />
+                        <div className="relative">
+                          <Linkedin className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                          <Input
+                            id="linkedin_url"
+                            name="linkedin_url"
+                            placeholder="https://linkedin.com/in/username"
+                            value={formData.linkedin_url}
+                            onChange={handleInputChange}
+                            onBlur={() => handleBlur('linkedin_url')}
+                            className="pl-9"
+                          />
+                        </div>
                         {linkedinValidation === 'valid' && (
                           <p className="text-xs text-emerald-600 mt-1 flex items-center gap-1"><CheckCircle className="h-3 w-3" /> Valid LinkedIn</p>
                         )}
@@ -1046,14 +1217,18 @@ const BrokerSetup = () => {
                         )}
                       </div>
                       <div>
-                        <Label htmlFor="twitter_url">Twitter Profile</Label>
-                        <Input
-                          id="twitter_url"
-                          name="twitter_url"
-                          placeholder="https://twitter.com/username"
-                          value={formData.twitter_url}
-                          onChange={handleInputChange}
-                        />
+                        <Label htmlFor="twitter_url">Twitter / X Profile</Label>
+                        <div className="relative">
+                          <Twitter className="absolute left-3 top-3 h-4 w-4 text-muted-foreground" />
+                          <Input
+                            id="twitter_url"
+                            name="twitter_url"
+                            placeholder="https://twitter.com/username"
+                            value={formData.twitter_url}
+                            onChange={handleInputChange}
+                            className="pl-9"
+                          />
+                        </div>
                       </div>
                     </div>
                   </div>

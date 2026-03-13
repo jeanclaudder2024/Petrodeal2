@@ -100,6 +100,9 @@ serve(async (req) => {
         const session = event.data.object as Stripe.Checkout.Session;
         logStep("Checkout session completed", { sessionId: session.id });
         
+        // Validate plan_tier restriction on applied discount
+        await validateCouponPlanTier(session, stripe);
+        
         if (session.subscription) {
           await handleSubscriptionCreated(session, stripe, supabaseClient);
         }
@@ -173,6 +176,93 @@ serve(async (req) => {
     });
   }
 });
+
+async function validateCouponPlanTier(
+  session: Stripe.Checkout.Session,
+  stripe: Stripe
+) {
+  try {
+    const sessionTier = (session.metadata as any)?.tier || (session.metadata as any)?.plan_tier;
+    if (!sessionTier) {
+      logStep("No tier metadata on session, skipping coupon validation");
+      return;
+    }
+
+    let couponId: string | null = null;
+
+    // Preferred source: subscription discount (reliable for Stripe-hosted promo entry)
+    if (session.subscription) {
+      try {
+        const subscription = await stripe.subscriptions.retrieve(session.subscription as string, {
+          expand: ["discount.coupon"],
+        });
+
+        if (subscription.discount?.coupon) {
+          couponId =
+            typeof subscription.discount.coupon === "string"
+              ? subscription.discount.coupon
+              : subscription.discount.coupon.id;
+        }
+      } catch (subscriptionErr) {
+        logStep("Could not resolve subscription discount for coupon validation", {
+          error: subscriptionErr instanceof Error ? subscriptionErr.message : "Unknown",
+          subscriptionId: session.subscription,
+        });
+      }
+    }
+
+    // Fallback: session discount object
+    if (!couponId && session.discount?.coupon) {
+      couponId =
+        typeof session.discount.coupon === "string"
+          ? session.discount.coupon
+          : session.discount.coupon.id;
+    }
+
+    if (!couponId) {
+      logStep("No coupon found on checkout session/subscription");
+      return;
+    }
+
+    const coupon = await stripe.coupons.retrieve(couponId);
+    const couponPlanTier = coupon.metadata?.plan_tier;
+
+    if (couponPlanTier && couponPlanTier !== 'all' && couponPlanTier !== sessionTier) {
+      logStep("PLAN TIER MISMATCH: Coupon restricted to different plan", {
+        couponId,
+        couponPlanTier,
+        sessionTier,
+        sessionId: session.id,
+      });
+
+      // Remove unauthorized discount from subscription checkout flows
+      if (session.subscription) {
+        try {
+          await stripe.subscriptions.update(session.subscription as string, {
+            discounts: [],
+          });
+          logStep("Removed unauthorized discount from subscription", {
+            subscriptionId: session.subscription,
+          });
+        } catch (removeErr) {
+          logStep("Failed to remove unauthorized discount", {
+            error: removeErr instanceof Error ? removeErr.message : 'Unknown',
+          });
+        }
+      } else {
+        logStep("Tier mismatch on non-subscription checkout; post-payment discount removal not supported", {
+          sessionId: session.id,
+        });
+      }
+    } else {
+      logStep("Coupon plan_tier validation passed", { couponPlanTier, sessionTier });
+    }
+  } catch (error) {
+    logStep("Error validating coupon plan_tier", {
+      error: error instanceof Error ? error.message : 'Unknown',
+    });
+  }
+}
 
 async function handleSubscriptionCreated(
   session: Stripe.Checkout.Session,

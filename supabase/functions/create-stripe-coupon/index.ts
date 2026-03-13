@@ -17,6 +17,65 @@ interface CouponRequest {
   plan_tier?: string;
 }
 
+// Map plan_tier to a human-readable Stripe product name
+function productNameForTier(tier: string): string {
+  const map: Record<string, string> = {
+    basic: "PetroDealHub Basic Plan",
+    professional: "PetroDealHub Professional Plan",
+    enterprise: "PetroDealHub Enterprise Plan",
+    broker: "Broker Lifetime Membership",
+  };
+  return map[tier] || `PetroDealHub ${tier.charAt(0).toUpperCase() + tier.slice(1)} Plan`;
+}
+
+// Find or create a Stripe product for the given plan tier
+async function findOrCreateProduct(secretKey: string, tier: string): Promise<string> {
+  const name = productNameForTier(tier);
+
+  // Search for existing product
+  const searchResp = await fetch(
+    `https://api.stripe.com/v1/products/search?query=${encodeURIComponent(`name:"${name}" AND active:"true"`)}`,
+    {
+      headers: {
+        'Authorization': `Bearer ${secretKey}`,
+        'Stripe-Version': '2023-10-16',
+      },
+    }
+  );
+
+  if (searchResp.ok) {
+    const searchData = await searchResp.json();
+    if (searchData.data && searchData.data.length > 0) {
+      console.log(`[CREATE-STRIPE-COUPON] Found existing product for tier "${tier}":`, searchData.data[0].id);
+      return searchData.data[0].id;
+    }
+  }
+
+  // Create new product
+  const createParams = new URLSearchParams();
+  createParams.append('name', name);
+  createParams.append('metadata[plan_tier]', tier);
+
+  const createResp = await fetch('https://api.stripe.com/v1/products', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${secretKey}`,
+      'Content-Type': 'application/x-www-form-urlencoded',
+      'Stripe-Version': '2023-10-16',
+    },
+    body: createParams.toString(),
+  });
+
+  if (!createResp.ok) {
+    const err = await createResp.json();
+    throw new Error(`Failed to create Stripe product: ${err.error?.message || 'Unknown error'}`);
+  }
+
+  const product = await createResp.json();
+  console.log(`[CREATE-STRIPE-COUPON] Created product for tier "${tier}":`, product.id);
+  return product.id;
+}
+
 serve(async (req: Request): Promise<Response> => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -51,10 +110,10 @@ serve(async (req: Request): Promise<Response> => {
 
     const couponData: CouponRequest = await req.json();
     
-    // Sanitize promo code - only alphanumeric, hyphens, underscores allowed
+    // Sanitize promo code
     const sanitizedPromoCode = couponData.promo_code
-      .replace(/\s+/g, '_')  // Replace spaces with underscores
-      .replace(/[^a-zA-Z0-9\-_]/g, '')  // Remove invalid characters
+      .replace(/\s+/g, '_')
+      .replace(/[^a-zA-Z0-9\-_]/g, '')
       .toUpperCase();
     
     if (!sanitizedPromoCode) {
@@ -69,10 +128,18 @@ serve(async (req: Request): Promise<Response> => {
     
     console.log('[CREATE-STRIPE-COUPON] Creating coupon:', { ...couponData, promo_code: sanitizedPromoCode });
 
+    // If plan_tier is specific (not 'all'), find or create a product for restriction
+    let restrictProductId: string | undefined;
+    const planTier = couponData.plan_tier || 'all';
+    if (planTier !== 'all') {
+      restrictProductId = await findOrCreateProduct(secretKey, planTier);
+    }
+
     // Create the coupon in Stripe
     const couponParams = new URLSearchParams();
     couponParams.append('percent_off', couponData.discount_percentage.toString());
     couponParams.append('name', couponData.discount_name);
+    couponParams.append('metadata[plan_tier]', planTier);
     
     // Set duration based on billing cycle
     if (couponData.billing_cycle === 'monthly') {
@@ -89,11 +156,17 @@ serve(async (req: Request): Promise<Response> => {
       couponParams.append('max_redemptions', couponData.max_redemptions.toString());
     }
 
-    // Set redeem_by (Unix timestamp) - Stripe limits to 5 years max
+    // Restrict coupon to specific product if plan_tier is not 'all'
+    if (restrictProductId) {
+      couponParams.append('applies_to[products][]', restrictProductId);
+      console.log('[CREATE-STRIPE-COUPON] Restricting coupon to product:', restrictProductId);
+    }
+
+    // Set redeem_by
     let validUntil = new Date(couponData.valid_until);
     const maxDate = new Date();
     maxDate.setFullYear(maxDate.getFullYear() + 5);
-    maxDate.setDate(maxDate.getDate() - 1); // One day before 5 year limit for safety
+    maxDate.setDate(maxDate.getDate() - 1);
     
     if (validUntil > maxDate) {
       console.log('[CREATE-STRIPE-COUPON] Date exceeds 5 year limit, capping to max date');
@@ -154,11 +227,9 @@ serve(async (req: Request): Promise<Response> => {
       const errorData = await promoResponse.json();
       console.log('[CREATE-STRIPE-COUPON] Promo code creation response:', errorData);
       
-      // If promo code already exists, try to find and use it
       if (errorData.error?.message?.includes('already exists')) {
         console.log('[CREATE-STRIPE-COUPON] Promo code exists, fetching existing one...');
         
-        // List promotion codes to find the existing one
         const listResponse = await fetch(
           `https://api.stripe.com/v1/promotion_codes?code=${sanitizedPromoCode}&active=true`,
           {
@@ -206,7 +277,7 @@ serve(async (req: Request): Promise<Response> => {
       .from('subscription_discounts')
       .upsert({
         promo_code: sanitizedPromoCode,
-        plan_tier: couponData.plan_tier || 'all',
+        plan_tier: planTier,
         discount_percentage: couponData.discount_percentage,
         billing_cycle: couponData.billing_cycle,
         discount_name: couponData.discount_name,
@@ -234,7 +305,8 @@ serve(async (req: Request): Promise<Response> => {
         success: true, 
         message: 'Discount code created successfully',
         coupon_id: stripeCoupon.id,
-        promo_code_id: stripePromo.id
+        promo_code_id: stripePromo.id,
+        restricted_to_product: restrictProductId || null
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

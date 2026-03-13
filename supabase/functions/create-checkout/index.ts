@@ -7,13 +7,11 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Helper logging function for debugging
 const logStep = (step: string, details?: any) => {
   const detailsStr = details ? ` - ${JSON.stringify(details)}` : '';
   console.log(`[CREATE-CHECKOUT] ${step}${detailsStr}`);
 };
 
-// Get Stripe config based on mode from database
 async function getStripeConfig(supabaseClient: any) {
   const { data: configData } = await supabaseClient
     .from('stripe_configuration')
@@ -26,7 +24,6 @@ async function getStripeConfig(supabaseClient: any) {
     ? Deno.env.get("STRIPE_SECRET_KEY_LIVE")
     : Deno.env.get("STRIPE_SECRET_KEY_TEST");
 
-  // Fallback to legacy key
   if (!secretKey) {
     secretKey = Deno.env.get("STRIPE_SECRET_KEY");
     logStep(`Using legacy STRIPE_SECRET_KEY (mode: ${mode})`);
@@ -40,6 +37,40 @@ async function getStripeConfig(supabaseClient: any) {
   return { secretKey, mode };
 }
 
+// Map plan tier to human-readable product name
+function productNameForTier(tier: string): string {
+  const map: Record<string, string> = {
+    basic: "PetroDealHub Basic Plan",
+    professional: "PetroDealHub Professional Plan",
+    enterprise: "PetroDealHub Enterprise Plan",
+  };
+  return map[tier] || `PetroDealHub ${tier.charAt(0).toUpperCase() + tier.slice(1)} Plan`;
+}
+
+// Find or create a persistent Stripe product for the plan tier
+async function findOrCreateProduct(stripe: Stripe, tier: string, description: string): Promise<string> {
+  const name = productNameForTier(tier);
+
+  const products = await stripe.products.search({
+    query: `name:"${name}" AND active:"true"`,
+    limit: 1,
+  });
+
+  if (products.data.length > 0) {
+    logStep("Found existing product", { tier, productId: products.data[0].id });
+    return products.data[0].id;
+  }
+
+  const product = await stripe.products.create({
+    name,
+    description,
+    metadata: { plan_tier: tier },
+  });
+
+  logStep("Created new product", { tier, productId: product.id });
+  return product.id;
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -48,7 +79,6 @@ serve(async (req) => {
   try {
     logStep("Function started");
 
-    // Create a Supabase client using the anon key for auth
     const supabaseClient = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_ANON_KEY") ?? ""
@@ -58,7 +88,6 @@ serve(async (req) => {
     let user = null;
     let userEmail = null;
 
-    // Check if this is an authenticated request
     if (authHeader && authHeader !== "Bearer null" && authHeader !== "Bearer undefined") {
       const token = authHeader.replace("Bearer ", "");
       logStep("Getting user from token");
@@ -66,7 +95,6 @@ serve(async (req) => {
       const { data: userData, error: userError } = await supabaseClient.auth.getUser(token);
       if (userError) {
         logStep("Authentication error", { error: userError.message });
-        // Don't throw error for registration flow - continue without auth
       } else if (userData.user?.email) {
         user = userData.user;
         userEmail = user.email;
@@ -74,7 +102,6 @@ serve(async (req) => {
       }
     }
 
-    // Get request body to check for email (for registration flow)
     let requestBody;
     try {
       requestBody = await req.json();
@@ -84,7 +111,6 @@ serve(async (req) => {
       throw new Error("Invalid request body - please check your request");
     }
 
-    // For registration flow, get email from request body
     if (!userEmail && requestBody.email) {
       userEmail = requestBody.email;
       logStep("Using email from registration flow", { email: userEmail });
@@ -100,14 +126,12 @@ serve(async (req) => {
       throw new Error("Subscription tier is required");
     }
 
-    // Create service role client for database operations
     const supabaseService = createClient(
       Deno.env.get("SUPABASE_URL") ?? "",
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
       { auth: { persistSession: false } }
     );
 
-    // Get Stripe config based on mode
     const { secretKey, mode } = await getStripeConfig(supabaseService);
     logStep("Stripe key found", { mode });
 
@@ -125,12 +149,12 @@ serve(async (req) => {
 
     let discountPercentage = 0;
     try {
-      // First check subscription_discounts
       const { data: discountData } = await supabaseService
         .from('subscription_discounts')
         .select('discount_percentage')
-        .eq('plan_tier', tier)
+        .in('plan_tier', [tier, 'all'])
         .eq('is_active', true)
+        .is('stripe_promo_code_id', null)
         .or(`valid_until.is.null,valid_until.gt.${new Date().toISOString()}`)
         .order('discount_percentage', { ascending: false })
         .limit(1)
@@ -141,7 +165,6 @@ serve(async (req) => {
         logStep("Subscription discount found", { discountPercentage });
       }
 
-      // Also check promotion_frames for higher discounts
       const now = new Date().toISOString();
       const { data: promoData } = await supabaseService
         .from('promotion_frames')
@@ -166,7 +189,7 @@ serve(async (req) => {
     }
 
     // Fetch actual pricing from database
-    let monthlyAmount = 2999; // Fallback Basic monthly ($29.99)
+    let monthlyAmount = 2999;
     let productName = "PetroDealHub Basic Plan";
     
     try {
@@ -178,19 +201,18 @@ serve(async (req) => {
         .maybeSingle();
 
       if (planData) {
-        monthlyAmount = Math.round(planData.monthly_price * 100); // Convert to cents
+        monthlyAmount = Math.round(planData.monthly_price * 100);
         productName = planData.plan_name;
         logStep("Dynamic pricing fetched from database", { tier, monthlyAmount, productName });
       } else {
-        // Fallback to hardcoded pricing if plan not found in database
         if (tier === 'basic') {
-          monthlyAmount = 2999; // Basic: $29.99
+          monthlyAmount = 2999;
           productName = "PetroDealHub Basic Plan";
         } else if (tier === 'professional') {
-          monthlyAmount = 8999; // Professional: $89.99
+          monthlyAmount = 8999;
           productName = "PetroDealHub Professional Plan";
         } else if (tier === 'enterprise') {
-          monthlyAmount = 19999; // Enterprise: $199.99
+          monthlyAmount = 19999;
           productName = "PetroDealHub Enterprise Plan";
         }
         logStep("Using fallback pricing (plan not found in database)", { tier, monthlyAmount, productName });
@@ -199,12 +221,11 @@ serve(async (req) => {
       logStep("Error fetching plan pricing, using fallback", { error: planError instanceof Error ? planError.message : 'Plan error' });
     }
 
-    // Apply annual discount (2 months free = ~17% discount)
+    // Apply annual discount
     let unitAmount = monthlyAmount;
     let interval = 'month';
     
     if (billing_cycle === 'annual') {
-      // For annual billing, fetch the annual price from database if available
       try {
         const { data: annualPlanData } = await supabaseService
           .from('subscription_plans')
@@ -214,15 +235,13 @@ serve(async (req) => {
           .maybeSingle();
 
         if (annualPlanData && annualPlanData.annual_price) {
-          unitAmount = Math.round(annualPlanData.annual_price * 100); // Convert to cents
+          unitAmount = Math.round(annualPlanData.annual_price * 100);
           logStep("Using database annual pricing", { tier, annualPrice: annualPlanData.annual_price, unitAmount });
         } else {
-          // Fallback: 10 months price for 12 months (17% discount)
           unitAmount = Math.round(monthlyAmount * 10);
           logStep("Using fallback annual pricing (17% discount)", { tier, unitAmount });
         }
       } catch (annualError) {
-        // Fallback: 10 months price for 12 months (17% discount)
         unitAmount = Math.round(monthlyAmount * 10);
         logStep("Error fetching annual pricing, using fallback", { error: annualError instanceof Error ? annualError.message : 'Annual pricing error' });
       }
@@ -238,10 +257,13 @@ serve(async (req) => {
     }
     logStep("Final pricing", { unitAmount, interval, discountPercentage });
 
+    // Find or create a persistent Stripe product for this tier
+    const productDescription = `PetroDealHub ${tier.charAt(0).toUpperCase() + tier.slice(1)} Subscription with 5-day free trial`;
+    const productId = await findOrCreateProduct(stripe, tier, productDescription);
+
     const origin = req.headers.get("origin") || "https://preview--aivessel-trade-flow.lovable.app";
     logStep("Creating Stripe session", { origin, mode });
 
-    // Configure subscription options based on payment type
     const subscriptionData: any = {
       customer: customerId,
       customer_email: customerId ? undefined : userEmail,
@@ -249,11 +271,7 @@ serve(async (req) => {
         {
           price_data: {
             currency: "usd",
-            product_data: { 
-              name: productName,
-              description: `PetroDealHub ${tier.charAt(0).toUpperCase() + tier.slice(1)} Subscription with 5-day free trial`,
-              images: [`${origin}/lovable-uploads/92162cb9-ec10-41e2-bb64-5e35030478d1.png`]
-            },
+            product: productId,
             unit_amount: unitAmount,
             recurring: { interval },
           },
@@ -263,16 +281,16 @@ serve(async (req) => {
       mode: "subscription",
       success_url: `${origin}/payment-success?session_id={CHECKOUT_SESSION_ID}&success=true`,
       cancel_url: `${origin}/auth?mode=signup&cancelled=true`,
-      allow_promotion_codes: true,
       billing_address_collection: 'auto',
       metadata: {
         tier: tier,
+        plan_tier: tier,
         billing_cycle: billing_cycle,
         discount_applied: discountPercentage.toString(),
         user_id: user?.id || 'registration_pending',
         email: userEmail,
         payment_type: payment_type,
-        stripe_mode: mode
+        stripe_mode: mode,
       },
       subscription_data: {
         trial_period_days: 5,
@@ -283,6 +301,9 @@ serve(async (req) => {
         }
       }
     };
+
+    // Allow Stripe's native promo code field on the hosted checkout page
+    subscriptionData.allow_promotion_codes = true;
 
     const session = await stripe.checkout.sessions.create(subscriptionData);
 

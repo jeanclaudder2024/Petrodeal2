@@ -11,7 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { CreditCard, Plus, Trash2, CheckCircle2, Loader2, Percent, Shield } from 'lucide-react';
+import { CreditCard, Plus, Trash2, CheckCircle2, Loader2, Percent, Shield, Pencil } from 'lucide-react';
 
 interface Discount {
   id: string;
@@ -22,6 +22,7 @@ interface Discount {
   valid_until: string;
   is_active: boolean;
   created_at: string;
+  plan_tier?: string;
 }
 
 export default function StripeConfiguration() {
@@ -31,6 +32,15 @@ export default function StripeConfiguration() {
   const [isLiveMode, setIsLiveMode] = useState(false);
   const [discounts, setDiscounts] = useState<Discount[]>([]);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false);
+  const [editingDiscount, setEditingDiscount] = useState<Discount | null>(null);
+  const [editForm, setEditForm] = useState({
+    discount_name: '',
+    plan_tier: 'all',
+    valid_until: '',
+    is_active: true,
+    first_time_only: false,
+  });
   
   const [discountForm, setDiscountForm] = useState({
     promo_code: '',
@@ -40,6 +50,7 @@ export default function StripeConfiguration() {
     valid_until: '',
     max_redemptions: '',
     first_time_only: false,
+    plan_tier: 'all',
   });
 
   useEffect(() => {
@@ -186,6 +197,7 @@ export default function StripeConfiguration() {
           valid_until: discountForm.valid_until,
           max_redemptions: discountForm.max_redemptions ? parseInt(discountForm.max_redemptions) : null,
           first_time_only: discountForm.first_time_only,
+          plan_tier: discountForm.plan_tier,
         }
       });
 
@@ -194,7 +206,7 @@ export default function StripeConfiguration() {
       if (data.success) {
         toast({ title: "Discount Created", description: "Promo code created successfully" });
         setIsDialogOpen(false);
-        setDiscountForm({ promo_code: '', discount_name: '', discount_percentage: 10, billing_cycle: 'both', valid_until: '', max_redemptions: '', first_time_only: false });
+        setDiscountForm({ promo_code: '', discount_name: '', discount_percentage: 10, billing_cycle: 'both', valid_until: '', max_redemptions: '', first_time_only: false, plan_tier: 'all' });
         loadDiscounts();
       } else {
         throw new Error(data.message);
@@ -215,6 +227,45 @@ export default function StripeConfiguration() {
       loadDiscounts();
     } catch (error: any) {
       toast({ title: "Error", description: error.message, variant: "destructive" });
+    }
+  };
+
+  const openEditDialog = (discount: Discount) => {
+    setEditingDiscount(discount);
+    setEditForm({
+      discount_name: discount.discount_name,
+      plan_tier: discount.plan_tier || 'all',
+      valid_until: discount.valid_until ? discount.valid_until.split('T')[0] : '',
+      is_active: discount.is_active,
+      first_time_only: (discount as any).first_time_only || false,
+    });
+    setIsEditDialogOpen(true);
+  };
+
+  const updateDiscount = async () => {
+    if (!editingDiscount) return;
+    setLoading(true);
+    try {
+      const { error } = await supabase
+        .from('subscription_discounts' as any)
+        .update({
+          discount_name: editForm.discount_name,
+          plan_tier: editForm.plan_tier,
+          valid_until: editForm.valid_until,
+          is_active: editForm.is_active,
+          first_time_only: editForm.first_time_only,
+        } as any)
+        .eq('id', editingDiscount.id);
+
+      if (error) throw error;
+      toast({ title: "Updated", description: "Discount updated successfully" });
+      setIsEditDialogOpen(false);
+      setEditingDiscount(null);
+      loadDiscounts();
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -304,6 +355,18 @@ export default function StripeConfiguration() {
                         </Select>
                       </div>
                     </div>
+                    <div>
+                      <Label>Applicable Plan</Label>
+                      <Select value={discountForm.plan_tier} onValueChange={(v) => setDiscountForm({ ...discountForm, plan_tier: v })}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="all">All Plans</SelectItem>
+                          <SelectItem value="basic">Basic</SelectItem>
+                          <SelectItem value="professional">Professional</SelectItem>
+                          <SelectItem value="broker">Broker</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                     <div><Label>Valid Until *</Label><Input type="date" value={discountForm.valid_until} onChange={(e) => setDiscountForm({ ...discountForm, valid_until: e.target.value })} /></div>
                     <div className="flex items-center gap-2"><Switch checked={discountForm.first_time_only} onCheckedChange={(v) => setDiscountForm({ ...discountForm, first_time_only: v })} /><Label>First-time only</Label></div>
                     <Button onClick={createDiscount} disabled={loading} className="w-full">{loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}Create</Button>
@@ -316,15 +379,19 @@ export default function StripeConfiguration() {
                 <div className="text-center py-8 text-muted-foreground">No discount codes yet</div>
               ) : (
                 <Table>
-                  <TableHeader><TableRow><TableHead>Code</TableHead><TableHead>Discount</TableHead><TableHead>Valid Until</TableHead><TableHead>Status</TableHead><TableHead>Actions</TableHead></TableRow></TableHeader>
+                  <TableHeader><TableRow><TableHead>Code</TableHead><TableHead>Discount</TableHead><TableHead>Plan</TableHead><TableHead>Valid Until</TableHead><TableHead>Status</TableHead><TableHead>Actions</TableHead></TableRow></TableHeader>
                   <TableBody>
                     {discounts.map((d) => (
                       <TableRow key={d.id}>
                         <TableCell className="font-mono font-semibold">{d.promo_code}</TableCell>
                         <TableCell>{d.discount_percentage}%</TableCell>
+                        <TableCell><Badge variant="outline">{d.plan_tier === 'all' || !d.plan_tier ? 'All Plans' : d.plan_tier.charAt(0).toUpperCase() + d.plan_tier.slice(1)}</Badge></TableCell>
                         <TableCell>{new Date(d.valid_until).toLocaleDateString()}</TableCell>
                         <TableCell><Badge variant={d.is_active ? 'default' : 'secondary'}>{d.is_active ? 'Active' : 'Inactive'}</Badge></TableCell>
-                        <TableCell><Button variant="ghost" size="sm" onClick={() => deleteDiscount(d.id)}><Trash2 className="h-4 w-4" /></Button></TableCell>
+                        <TableCell className="flex gap-1">
+                          <Button variant="ghost" size="sm" onClick={() => openEditDialog(d)}><Pencil className="h-4 w-4" /></Button>
+                          <Button variant="ghost" size="sm" onClick={() => deleteDiscount(d.id)}><Trash2 className="h-4 w-4" /></Button>
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -334,6 +401,37 @@ export default function StripeConfiguration() {
           </Card>
         </TabsContent>
       </Tabs>
+
+      {/* Edit Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit Discount</DialogTitle>
+            <DialogDescription>
+              Code: <span className="font-mono font-semibold">{editingDiscount?.promo_code}</span> — {editingDiscount?.discount_percentage}% off (immutable in Stripe)
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div><Label>Name</Label><Input value={editForm.discount_name} onChange={(e) => setEditForm({ ...editForm, discount_name: e.target.value })} /></div>
+            <div>
+              <Label>Applicable Plan</Label>
+              <Select value={editForm.plan_tier} onValueChange={(v) => setEditForm({ ...editForm, plan_tier: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Plans</SelectItem>
+                  <SelectItem value="basic">Basic</SelectItem>
+                  <SelectItem value="professional">Professional</SelectItem>
+                  <SelectItem value="broker">Broker</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div><Label>Valid Until</Label><Input type="date" value={editForm.valid_until} onChange={(e) => setEditForm({ ...editForm, valid_until: e.target.value })} /></div>
+            <div className="flex items-center gap-2"><Switch checked={editForm.is_active} onCheckedChange={(v) => setEditForm({ ...editForm, is_active: v })} /><Label>Active</Label></div>
+            <div className="flex items-center gap-2"><Switch checked={editForm.first_time_only} onCheckedChange={(v) => setEditForm({ ...editForm, first_time_only: v })} /><Label>First-time only</Label></div>
+            <Button onClick={updateDiscount} disabled={loading} className="w-full">{loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}Save Changes</Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

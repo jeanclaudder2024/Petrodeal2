@@ -225,6 +225,11 @@ const Subscription = () => {
         return;
       }
 
+      if (data?.error) {
+        toast.error(data.error);
+        return;
+      }
+
       if (data?.url) {
         window.open(data.url, '_blank');
         toast.success('Opening Stripe checkout...');

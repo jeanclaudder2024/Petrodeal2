@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import ThemeToggle from '@/components/ThemeToggle';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import {
   DropdownMenu,
@@ -131,6 +132,8 @@ export function MobileHeader({ onMenuToggle, showSearch, onSearchToggle }: Mobil
           >
             <Settings className="h-4 w-4" />
           </Button>
+
+          <ThemeToggle />
 
           {/* User Menu */}
           {user && (

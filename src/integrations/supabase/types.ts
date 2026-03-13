@@ -733,6 +733,73 @@ export type Database = {
           },
         ]
       }
+      broker_company_verifications: {
+        Row: {
+          admin_notes: string | null
+          broker_id: string
+          company_id: number
+          created_at: string
+          id: string
+          reason: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+          supporting_document_url: string | null
+          updated_at: string
+          years_working: number | null
+        }
+        Insert: {
+          admin_notes?: string | null
+          broker_id: string
+          company_id: number
+          created_at?: string
+          id?: string
+          reason?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          supporting_document_url?: string | null
+          updated_at?: string
+          years_working?: number | null
+        }
+        Update: {
+          admin_notes?: string | null
+          broker_id?: string
+          company_id?: number
+          created_at?: string
+          id?: string
+          reason?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          supporting_document_url?: string | null
+          updated_at?: string
+          years_working?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "broker_company_verifications_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "broker_profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "broker_company_verifications_broker_id_fkey"
+            columns: ["broker_id"]
+            isOneToOne: false
+            referencedRelation: "broker_profiles_public"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "broker_company_verifications_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       broker_deal_companies: {
         Row: {
           company_id: number
@@ -1021,6 +1088,7 @@ export type Database = {
           additional_documents: string[] | null
           address: string | null
           bio: string | null
+          broker_unique_id: string | null
           business_registration: string | null
           certifications: string[] | null
           city: string | null
@@ -1059,6 +1127,7 @@ export type Database = {
           additional_documents?: string[] | null
           address?: string | null
           bio?: string | null
+          broker_unique_id?: string | null
           business_registration?: string | null
           certifications?: string[] | null
           city?: string | null
@@ -1097,6 +1166,7 @@ export type Database = {
           additional_documents?: string[] | null
           address?: string | null
           bio?: string | null
+          broker_unique_id?: string | null
           business_registration?: string | null
           certifications?: string[] | null
           city?: string | null
@@ -7344,6 +7414,35 @@ export type Database = {
           utm_term?: string | null
         }
         Relationships: []
+      }
+      verification_eligible_companies: {
+        Row: {
+          added_by: string | null
+          company_id: number
+          created_at: string | null
+          id: string
+        }
+        Insert: {
+          added_by?: string | null
+          company_id: number
+          created_at?: string | null
+          id?: string
+        }
+        Update: {
+          added_by?: string | null
+          company_id?: number
+          created_at?: string | null
+          id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "verification_eligible_companies_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: true
+            referencedRelation: "companies"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       vessel_connections: {
         Row: {
