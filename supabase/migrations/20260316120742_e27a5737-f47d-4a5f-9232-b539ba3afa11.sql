@@ -1,0 +1,1 @@
+ALTER TABLE broker_deal_companies DROP CONSTRAINT IF EXISTS broker_deal_companies_display_order_key;

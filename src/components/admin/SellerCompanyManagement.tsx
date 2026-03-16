@@ -14,6 +14,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Store, Plus, Edit, Trash2, Search, Sparkles, CreditCard, Shield, Factory, Users, MapPin, FileText, Image, Upload } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { ALL_COUNTRY_NAMES } from '@/utils/countries';
 import { useBulkCompanyUpload, GeneratedCompanyData } from '@/hooks/useBulkCompanyUpload';
 import { BulkCompanyUploadDialog } from './BulkCompanyUploadDialog';
 
@@ -78,14 +79,6 @@ interface BankAccount {
   currency: string;
   is_primary: boolean;
 }
-
-const COUNTRIES = [
-  'United States', 'United Kingdom', 'France', 'Germany', 'Netherlands', 'Belgium',
-  'Switzerland', 'Italy', 'Spain', 'UAE', 'Saudi Arabia', 'Qatar', 'Kuwait', 'Bahrain',
-  'Oman', 'Iraq', 'Iran', 'Russia', 'China', 'Japan', 'South Korea', 'Singapore',
-  'Malaysia', 'Indonesia', 'India', 'Nigeria', 'Angola', 'Libya', 'Algeria', 'Egypt',
-  'Brazil', 'Venezuela', 'Mexico', 'Canada', 'Australia', 'Norway', 'Denmark', 'Sweden'
-];
 
 const SellerCompanyManagement = () => {
   const [companies, setCompanies] = useState<SellerCompany[]>([]);
@@ -557,7 +550,7 @@ const SellerCompanyManagement = () => {
                                 <SelectValue placeholder="Select country" />
                               </SelectTrigger>
                               <SelectContent>
-                                {COUNTRIES.map(country => (
+                                {ALL_COUNTRY_NAMES.map(country => (
                                   <SelectItem key={country} value={country}>{country}</SelectItem>
                                 ))}
                               </SelectContent>
@@ -816,7 +809,7 @@ const SellerCompanyManagement = () => {
                                 <SelectValue placeholder="Select country" />
                               </SelectTrigger>
                               <SelectContent>
-                                {COUNTRIES.map(country => (
+                                {ALL_COUNTRY_NAMES.map(country => (
                                   <SelectItem key={country} value={country}>{country}</SelectItem>
                                 ))}
                               </SelectContent>
@@ -873,7 +866,7 @@ const SellerCompanyManagement = () => {
                                 <SelectValue placeholder="Select country" />
                               </SelectTrigger>
                               <SelectContent>
-                                {COUNTRIES.map(country => (
+                                {ALL_COUNTRY_NAMES.map(country => (
                                   <SelectItem key={country} value={country}>{country}</SelectItem>
                                 ))}
                               </SelectContent>

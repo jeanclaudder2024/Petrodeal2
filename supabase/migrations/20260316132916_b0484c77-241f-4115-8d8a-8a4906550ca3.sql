@@ -1,0 +1,1 @@
+UPDATE subscription_discounts SET is_active = false WHERE discount_name IN ('testtt', 'sisi', 'TESTDIB', 'sisi258', 'winter');

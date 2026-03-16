@@ -157,9 +157,9 @@ const PricingPlans: React.FC<PricingPlansProps> = ({
 
   // Check if discount applies to current billing cycle
   const getDiscountForPlan = (planTier: string, billingCycle: string) => {
-    // Check subscription_discounts first - filter by billing_cycle
+    // Check subscription_discounts first - filter by billing_cycle and match 'all' tiers
     const subscriptionDiscount = discounts.find(d => 
-      d.plan_tier === planTier && 
+      (d.plan_tier === planTier || d.plan_tier === 'all') && 
       (d.billing_cycle === billingCycle || d.billing_cycle === 'both')
     );
     
@@ -356,7 +356,8 @@ const PricingPlans: React.FC<PricingPlansProps> = ({
             const period = isAnnual ? 'year' : 'month';
             const isCurrentPlan = currentTier === plan.tier;
             const discount = getDiscountForPlan(plan.tier, currentBillingCycle);
-            const discountedPrice = discount ? price * (100 - discount.discount_percentage) / 100 : price;
+            const effectiveDiscount = discount ? Math.min(discount.discount_percentage, 95) : 0;
+            const discountedPrice = discount ? price * (100 - effectiveDiscount) / 100 : price;
             const isSelected = isSelectedFromUrl(plan.tier);
             
             return (

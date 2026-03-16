@@ -184,7 +184,7 @@ const App = () => (
             path="/support-center" 
             element={
               <AppLayout>
-                <ProtectedRoute>
+                <ProtectedRoute requireSubscription={false}>
                   <SupportCenter />
                 </ProtectedRoute>
               </AppLayout>
@@ -194,7 +194,7 @@ const App = () => (
             path="/my-tickets" 
             element={
               <AppLayout>
-                <ProtectedRoute>
+                <ProtectedRoute requireSubscription={false}>
                   <MyTickets />
                 </ProtectedRoute>
               </AppLayout>
@@ -212,7 +212,7 @@ const App = () => (
             path="/ticket/:id" 
             element={
               <AppLayout>
-                <ProtectedRoute>
+                <ProtectedRoute requireSubscription={false}>
                   <TicketDetail />
                 </ProtectedRoute>
               </AppLayout>
@@ -222,7 +222,7 @@ const App = () => (
             path="/support-admin" 
             element={
               <AppLayout>
-                <ProtectedRoute>
+                <ProtectedRoute requireSubscription={false}>
                   <SupportAdmin />
                 </ProtectedRoute>
               </AppLayout>

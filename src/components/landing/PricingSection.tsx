@@ -149,9 +149,9 @@ const PricingSection = () => {
       };
     }
     
-    // Fall back to subscription discounts
+    // Fall back to subscription discounts (also match plan_tier='all')
     const discount = discounts.find(d => 
-      d.plan_tier === planTier && 
+      (d.plan_tier === planTier || d.plan_tier === 'all') && 
       (d.billing_cycle === 'both' || d.billing_cycle === billingCycle)
     );
     
@@ -167,7 +167,9 @@ const PricingSection = () => {
   };
 
   const calculateDiscountedPrice = (originalPrice: number, discountPercentage: number) => {
-    return originalPrice * (1 - discountPercentage / 100);
+    // Safety cap: never allow more than 95% discount on frontend display
+    const effectiveDiscount = Math.min(discountPercentage, 95);
+    return originalPrice * (1 - effectiveDiscount / 100);
   };
 
   const staticPlans = [{

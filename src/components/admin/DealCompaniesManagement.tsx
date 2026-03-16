@@ -208,11 +208,13 @@ const DealCompaniesManagement = () => {
 
     setSaving(index);
     try {
+      // For new inserts, use max existing display_order + 1 to avoid collisions
+      const maxOrder = dealCompanies.reduce((max, dc) => Math.max(max, dc.display_order), 0);
       const data = {
         company_id: parseInt(form.companyId),
         role: form.role,
         product_tags: form.productTags,
-        display_order: index + 1,
+        display_order: form.id ? index + 1 : maxOrder + 1,
         is_enabled: form.isEnabled,
       };
 

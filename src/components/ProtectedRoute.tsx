@@ -15,7 +15,7 @@ interface ProtectedRouteProps {
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({ 
   children, 
-  requireSubscription = false,
+  requireSubscription = true,
   fallbackMessage = "This feature requires an active subscription"
 }) => {
   const { user, loading: authLoading } = useAuth();
@@ -92,8 +92,8 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     return null; // Will redirect via useEffect
   }
 
-  // Account is locked - show overlay
-  if (isLocked) {
+  // Account is locked - show overlay (bypass for broker/support/subscription routes)
+  if (isLocked && requireSubscription !== false) {
     return <LockedAccountOverlay reason={lockReason} />;
   }
 
@@ -109,8 +109,8 @@ const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     );
   }
 
-  // No access at all (expired trial)
-  if (!hasAccess) {
+  // No access at all (expired trial) - bypass for routes marked requireSubscription={false}
+  if (!hasAccess && requireSubscription !== false) {
     return (
       <AccessGate 
         fallbackMessage="Your access has expired. Please subscribe to continue using the platform."

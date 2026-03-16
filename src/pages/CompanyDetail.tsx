@@ -138,7 +138,7 @@ const CompanyDetail = () => {
 
   const hasBrokerMembership = brokerMembership && 
     brokerMembership.membership_status === 'active' && 
-    brokerMembership.payment_status === 'completed';
+    (brokerMembership.payment_status === 'completed' || brokerMembership.payment_status === 'paid');
 
   const fetchCompany = async (companyId: number) => {
     setLoading(true);
