@@ -2,8 +2,10 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/contexts/AuthContext';
 import { useAccess } from '@/contexts/AccessContext';
 import { useSearchParams, useNavigate, Link } from 'react-router-dom';
-import { Loader2, Clock, Sparkles } from 'lucide-react';
+import { Loader2, Clock, Sparkles, Gift, CheckCircle } from 'lucide-react';
 import { db, supabase } from '@/lib/supabase-helper';
+import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 import { toast } from 'sonner';
 import PricingPlans from '@/components/PricingPlans';
 import SubscriptionStatus from '@/components/SubscriptionStatus';
@@ -207,6 +209,9 @@ const Subscription = () => {
     }
   };
 
+  const [specialPromoCode, setSpecialPromoCode] = useState('');
+  const [specialPromoApplied, setSpecialPromoApplied] = useState(false);
+
   const handleCheckout = async (tier: string, billingCycle: string) => {
     if (!user) {
       toast.error('Please log in to subscribe');
@@ -215,8 +220,15 @@ const Subscription = () => {
 
     setProcessingCheckout(true);
     try {
+      const body: any = { tier, billing_cycle: billingCycle };
+      
+      // If special promo code is entered, pass it
+      if (specialPromoCode.trim()) {
+        body.special_promo_code = specialPromoCode.trim().toUpperCase();
+      }
+
       const { data, error } = await supabase.functions.invoke('create-checkout', {
-        body: { tier, billing_cycle: billingCycle }
+        body
       });
       
       if (error) {
@@ -327,6 +339,49 @@ const Subscription = () => {
           onRefreshStatus={checkSubscription}
           onManageSubscription={handleManageSubscription}
         />
+      )}
+
+      {/* Special Promo Code Input */}
+      {user && !subscriptionData?.subscribed && (
+        <div className="mb-6 p-4 border rounded-lg bg-muted/30">
+          <div className="flex items-center gap-2 mb-2">
+            <Gift className="h-5 w-5 text-primary" />
+            <h3 className="font-semibold text-foreground">Have a Special Promo Code?</h3>
+          </div>
+          <p className="text-sm text-muted-foreground mb-3">
+            Enter your special promo code below before selecting a plan. It will be applied at checkout with no trial period.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-2 max-w-md">
+            <Input
+              value={specialPromoCode}
+              onChange={(e) => {
+                setSpecialPromoCode(e.target.value.toUpperCase());
+                setSpecialPromoApplied(false);
+              }}
+              placeholder="Enter promo code..."
+              className="font-mono"
+            />
+            {specialPromoCode && (
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setSpecialPromoApplied(true);
+                  toast.success(`Promo code "${specialPromoCode}" will be applied at checkout`);
+                }}
+                className="w-full sm:w-auto whitespace-nowrap"
+              >
+                <CheckCircle className="h-4 w-4 mr-1" />
+                Apply
+              </Button>
+            )}
+          </div>
+          {specialPromoApplied && (
+            <p className="text-sm text-green-600 mt-2 flex items-center gap-1">
+              <CheckCircle className="h-4 w-4" />
+              Code "{specialPromoCode}" will be applied — no 5-day trial
+            </p>
+          )}
+        </div>
       )}
 
       {/* Always show pricing plans */}

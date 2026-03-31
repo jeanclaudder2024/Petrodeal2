@@ -93,6 +93,32 @@ interface IMFPASummary {
   total_commission?: number;
 }
 
+interface AssignedIMFPA {
+  imfpa_id: string;
+  deal_id: string;
+  imfpa_reference_code: string | null;
+  status: string;
+  broker_role: string | null;
+  broker_entity_name: string | null;
+  seller_entity_name: string | null;
+  buyer_entity_name: string | null;
+  commodity_type: string | null;
+  commission_type: string | null;
+  commission_value: number | null;
+  currency: string | null;
+  payment_method: string | null;
+  payment_trigger: string | null;
+  valid_from: string | null;
+  valid_until: string | null;
+  governing_law: string | null;
+  jurisdiction: string | null;
+  signed_by_broker: boolean;
+  signed_by_seller: boolean;
+  signed_by_buyer: boolean;
+  created_by: string | null;
+  assigned_to_broker_id: string | null;
+}
+
 interface Deal {
   id: string;
   deal_type: string;
@@ -134,6 +160,8 @@ const BrokerDashboard = () => {
   const [cardFlipped, setCardFlipped] = useState(false);
   const [verifications, setVerifications] = useState<CompanyVerification[]>([]);
   const [imfpaSummary, setImfpaSummary] = useState<IMFPASummary>({ total_count: 0 });
+  const [assignedImfpas, setAssignedImfpas] = useState<AssignedIMFPA[]>([]);
+  const [selectedAssignedImfpa, setSelectedAssignedImfpa] = useState<string | null>(null);
   const [showVerificationDialog, setShowVerificationDialog] = useState(false);
   const [verificationForm, setVerificationForm] = useState({ company_id: '', reason: '', years_working: '' });
   const [companies, setCompanies] = useState<{ id: number; name: string }[]>([]);
@@ -327,6 +355,22 @@ const BrokerDashboard = () => {
             total_commission: data.reduce((sum, a) => sum + (a.commission_value || 0), 0)
           });
         }
+      }
+
+      // Also load admin-assigned IMFPAs
+      const { data: assignedData } = await supabase
+        .from('imfpa_agreements')
+        .select('*')
+        .eq('assigned_to_broker_id', brokerId)
+        .order('created_at', { ascending: false });
+      
+      if (assignedData) {
+        setAssignedImfpas(assignedData as any as AssignedIMFPA[]);
+        // Update summary count to include assigned ones
+        setImfpaSummary(prev => ({
+          ...prev,
+          total_count: prev.total_count + assignedData.filter((a: any) => !brokerDeals?.some(d => d.id === a.deal_id)).length,
+        }));
       }
     } catch (error) {
       // Silent fail
@@ -776,33 +820,90 @@ const BrokerDashboard = () => {
         <TabsContent value="imfpa" className="space-y-6">
           <IMFPAInfoNotice />
           
-          {deals.length === 0 ? (
-            <Card className="rounded-sm">
-              <CardContent className="text-center py-12">
-                <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                <p className="text-muted-foreground">No deals to create IMFPA for. Create a deal first.</p>
-              </CardContent>
-            </Card>
-          ) : (
-            <div className="space-y-4">
-              <p className="text-sm text-muted-foreground">Select a deal to view/create its IMFPA agreement:</p>
-              {deals.map((deal, index) => (
-                <Card key={deal.id} className="cursor-pointer hover:shadow-md rounded-sm" onClick={() => setSelectedDeal(deal.id)}>
-                  <CardContent className="p-4 flex items-center justify-between">
-                    <span>Deal #{deals.length - index} - {deal.cargo_type || deal.deal_type}</span>
-                    <Badge variant="outline">{deal.status}</Badge>
+          {/* Assigned IMFPA Deals from Admin */}
+          {assignedImfpas.length > 0 && (
+            <div className="space-y-3">
+              <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                <Shield className="h-4 w-4 text-amber-500" />
+                Assigned IMFPA Deals
+              </h3>
+              {assignedImfpas.map(a => (
+                <Card 
+                  key={a.imfpa_id} 
+                  className={`rounded-sm cursor-pointer hover:shadow-md transition-shadow ${
+                    selectedAssignedImfpa === a.imfpa_id ? 'border-primary ring-1 ring-primary/20' : 'border-amber-500/30 bg-amber-500/5'
+                  }`}
+                  onClick={() => setSelectedAssignedImfpa(selectedAssignedImfpa === a.imfpa_id ? null : a.imfpa_id)}
+                >
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Badge className="bg-amber-500/20 text-amber-700 dark:text-amber-400 border-amber-500/30 text-[10px]">
+                          Assigned by Admin
+                        </Badge>
+                        <span className="font-mono text-xs text-muted-foreground">{a.imfpa_reference_code || 'Draft'}</span>
+                      </div>
+                      <Badge variant="outline" className="text-xs">{a.status}</Badge>
+                    </div>
+                    <div className="mt-2 text-sm">
+                      <span className="text-muted-foreground">S:</span> {a.seller_entity_name || 'TBD'} → <span className="text-muted-foreground">B:</span> {a.buyer_entity_name || 'TBD'}
+                    </div>
+                    <div className="mt-1 text-xs text-muted-foreground">
+                      {a.commodity_type?.replace(/_/g, ' ')} • {a.commission_value ? `${a.commission_value}${a.commission_type === 'percentage' ? '%' : ` ${a.currency}`}` : 'Commission TBD'}
+                    </div>
                   </CardContent>
                 </Card>
               ))}
-              {selectedDeal && deals.find(d => d.id === selectedDeal) && (
+              {selectedAssignedImfpa && assignedImfpas.find(a => a.imfpa_id === selectedAssignedImfpa) && (
                 <IMFPAAgreement 
-                  dealId={selectedDeal}
-                  dealInfo={deals.find(d => d.id === selectedDeal)!}
-                  brokerProfile={{ full_name: profile.full_name, company_name: profile.company_name, country: profile.country }}
+                  imfpaData={assignedImfpas.find(a => a.imfpa_id === selectedAssignedImfpa) as any}
+                  isAdminAssigned={true}
+                  brokerProfile={{ id: profile.id, full_name: profile.full_name, company_name: profile.company_name, country: profile.country }}
                 />
               )}
             </div>
           )}
+
+          {/* My Deal IMFPAs */}
+          <div className="space-y-3">
+            <h3 className="text-sm font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+              <FileText className="h-4 w-4" />
+              My Deal IMFPAs
+            </h3>
+            {deals.length === 0 ? (
+              <Card className="rounded-sm">
+                <CardContent className="text-center py-12">
+                  <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                  <p className="text-muted-foreground">No deals to create IMFPA for. Create a deal first.</p>
+                </CardContent>
+              </Card>
+            ) : (
+              <div className="space-y-3">
+                {deals.map((deal, index) => (
+                  <Card 
+                    key={deal.id} 
+                    className={`cursor-pointer hover:shadow-md rounded-sm transition-shadow ${selectedDeal === deal.id ? 'border-primary ring-1 ring-primary/20' : ''}`}
+                    onClick={() => setSelectedDeal(selectedDeal === deal.id ? null : deal.id)}
+                  >
+                    <CardContent className="p-4 flex items-center justify-between">
+                      <div>
+                        <span className="font-medium text-sm">Deal #{deals.length - index}</span>
+                        <span className="text-muted-foreground text-sm ml-2">— {deal.cargo_type || deal.deal_type}</span>
+                      </div>
+                      <Badge variant="outline" className="text-xs">{deal.status}</Badge>
+                    </CardContent>
+                  </Card>
+                ))}
+                {selectedDeal && deals.find(d => d.id === selectedDeal) && (
+                  <IMFPAAgreement 
+                    dealId={selectedDeal}
+                    dealInfo={deals.find(d => d.id === selectedDeal)!}
+                    brokerProfile={{ id: profile.id, full_name: profile.full_name, company_name: profile.company_name, country: profile.country }}
+                  />
+                )}
+              </div>
+            )}
+          </div>
         </TabsContent>
 
         <TabsContent value="contacts" className="space-y-6">

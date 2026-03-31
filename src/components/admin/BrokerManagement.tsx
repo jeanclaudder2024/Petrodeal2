@@ -606,25 +606,27 @@ const BrokerManagement = () => {
       </Card>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
-        <TabsList className="flex flex-nowrap overflow-x-auto w-full">
-          <TabsTrigger value="brokers" className="text-xs md:text-sm whitespace-nowrap">Brokers</TabsTrigger>
-          <TabsTrigger value="deals" className="text-xs md:text-sm whitespace-nowrap">Deals</TabsTrigger>
-          <TabsTrigger value="imfpa" className="text-xs md:text-sm whitespace-nowrap">IMFPA</TabsTrigger>
-          <TabsTrigger value="chat" className="text-xs md:text-sm whitespace-nowrap">Chat</TabsTrigger>
-          <TabsTrigger value="steps" className="text-xs md:text-sm whitespace-nowrap">Steps</TabsTrigger>
-          <TabsTrigger value="templates" className="flex items-center gap-1 text-xs md:text-sm whitespace-nowrap">
-            <Settings className="h-3 w-3" /> Templates
-          </TabsTrigger>
-          <TabsTrigger value="pricing" className="flex items-center gap-1 text-xs md:text-sm whitespace-nowrap">
-            <DollarSign className="h-3 w-3" /> Pricing
-          </TabsTrigger>
-          <TabsTrigger value="deal-companies" className="flex items-center gap-1 text-xs md:text-sm whitespace-nowrap">
-            <Building2 className="h-3 w-3" /> Deal Companies
-          </TabsTrigger>
-          <TabsTrigger value="verifications" className="flex items-center gap-1 text-xs md:text-sm whitespace-nowrap">
-            <ShieldCheck className="h-3 w-3" /> Verifications
-          </TabsTrigger>
-        </TabsList>
+        <div className="w-full overflow-x-auto -mx-1 px-1 pb-2">
+          <TabsList className="inline-flex min-w-max gap-1 h-auto flex-nowrap p-1">
+            <TabsTrigger value="brokers" className="text-xs md:text-sm whitespace-nowrap px-2.5 py-1.5">Brokers</TabsTrigger>
+            <TabsTrigger value="deals" className="text-xs md:text-sm whitespace-nowrap px-2.5 py-1.5">Deals</TabsTrigger>
+            <TabsTrigger value="imfpa" className="text-xs md:text-sm whitespace-nowrap px-2.5 py-1.5 font-semibold">IMFPA</TabsTrigger>
+            <TabsTrigger value="chat" className="text-xs md:text-sm whitespace-nowrap px-2.5 py-1.5">Chat</TabsTrigger>
+            <TabsTrigger value="steps" className="text-xs md:text-sm whitespace-nowrap px-2.5 py-1.5">Steps</TabsTrigger>
+            <TabsTrigger value="templates" className="flex items-center gap-1 text-xs md:text-sm whitespace-nowrap px-2.5 py-1.5">
+              <Settings className="h-3 w-3" /> Templates
+            </TabsTrigger>
+            <TabsTrigger value="pricing" className="flex items-center gap-1 text-xs md:text-sm whitespace-nowrap px-2.5 py-1.5">
+              <DollarSign className="h-3 w-3" /> Pricing
+            </TabsTrigger>
+            <TabsTrigger value="deal-companies" className="flex items-center gap-1 text-xs md:text-sm whitespace-nowrap px-2.5 py-1.5">
+              <Building2 className="h-3 w-3" /> Companies
+            </TabsTrigger>
+            <TabsTrigger value="verifications" className="flex items-center gap-1 text-xs md:text-sm whitespace-nowrap px-2.5 py-1.5">
+              <ShieldCheck className="h-3 w-3" /> Verify
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
         <TabsContent value="brokers">
           <Card className="trading-card">

@@ -3268,6 +3268,7 @@ export type Database = {
       }
       imfpa_agreements: {
         Row: {
+          assigned_to_broker_id: string | null
           bank_name: string | null
           bank_swift: string | null
           beneficiary_account_masked: string | null
@@ -3280,6 +3281,7 @@ export type Database = {
           commission_value: number | null
           commodity_type: string | null
           created_at: string | null
+          created_by: string | null
           currency: string | null
           deal_id: string | null
           document_url: string | null
@@ -3300,6 +3302,7 @@ export type Database = {
           valid_until: string | null
         }
         Insert: {
+          assigned_to_broker_id?: string | null
           bank_name?: string | null
           bank_swift?: string | null
           beneficiary_account_masked?: string | null
@@ -3312,6 +3315,7 @@ export type Database = {
           commission_value?: number | null
           commodity_type?: string | null
           created_at?: string | null
+          created_by?: string | null
           currency?: string | null
           deal_id?: string | null
           document_url?: string | null
@@ -3332,6 +3336,7 @@ export type Database = {
           valid_until?: string | null
         }
         Update: {
+          assigned_to_broker_id?: string | null
           bank_name?: string | null
           bank_swift?: string | null
           beneficiary_account_masked?: string | null
@@ -3344,6 +3349,7 @@ export type Database = {
           commission_value?: number | null
           commodity_type?: string | null
           created_at?: string | null
+          created_by?: string | null
           currency?: string | null
           deal_id?: string | null
           document_url?: string | null
@@ -3370,6 +3376,44 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "broker_deals"
             referencedColumns: ["id"]
+          },
+        ]
+      }
+      imfpa_status_history: {
+        Row: {
+          changed_by: string | null
+          created_at: string | null
+          id: string
+          imfpa_id: string
+          new_status: string
+          notes: string | null
+          old_status: string | null
+        }
+        Insert: {
+          changed_by?: string | null
+          created_at?: string | null
+          id?: string
+          imfpa_id: string
+          new_status: string
+          notes?: string | null
+          old_status?: string | null
+        }
+        Update: {
+          changed_by?: string | null
+          created_at?: string | null
+          id?: string
+          imfpa_id?: string
+          new_status?: string
+          notes?: string | null
+          old_status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "imfpa_status_history_imfpa_id_fkey"
+            columns: ["imfpa_id"]
+            isOneToOne: false
+            referencedRelation: "imfpa_agreements"
+            referencedColumns: ["imfpa_id"]
           },
         ]
       }
@@ -4902,6 +4946,208 @@ export type Database = {
         }
         Relationships: []
       }
+      referral_conversions: {
+        Row: {
+          approved_by: string | null
+          bonus_earned: number
+          created_at: string
+          id: string
+          promo_code_id: string
+          referral_member_id: string
+          status: string
+          subscriber_email: string | null
+          subscriber_user_id: string | null
+          subscription_amount: number
+          subscription_type: string
+        }
+        Insert: {
+          approved_by?: string | null
+          bonus_earned?: number
+          created_at?: string
+          id?: string
+          promo_code_id: string
+          referral_member_id: string
+          status?: string
+          subscriber_email?: string | null
+          subscriber_user_id?: string | null
+          subscription_amount?: number
+          subscription_type?: string
+        }
+        Update: {
+          approved_by?: string | null
+          bonus_earned?: number
+          created_at?: string
+          id?: string
+          promo_code_id?: string
+          referral_member_id?: string
+          status?: string
+          subscriber_email?: string | null
+          subscriber_user_id?: string | null
+          subscription_amount?: number
+          subscription_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "referral_conversions_promo_code_id_fkey"
+            columns: ["promo_code_id"]
+            isOneToOne: false
+            referencedRelation: "referral_promo_codes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "referral_conversions_referral_member_id_fkey"
+            columns: ["referral_member_id"]
+            isOneToOne: false
+            referencedRelation: "referral_members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      referral_members: {
+        Row: {
+          bank_account: string | null
+          bank_holder_name: string | null
+          bank_name: string | null
+          bank_swift: string | null
+          created_at: string
+          created_by: string | null
+          id: string
+          notes: string | null
+          pending_balance: number
+          status: string
+          total_earned: number
+          total_paid: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          bank_account?: string | null
+          bank_holder_name?: string | null
+          bank_name?: string | null
+          bank_swift?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          notes?: string | null
+          pending_balance?: number
+          status?: string
+          total_earned?: number
+          total_paid?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          bank_account?: string | null
+          bank_holder_name?: string | null
+          bank_name?: string | null
+          bank_swift?: string | null
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          notes?: string | null
+          pending_balance?: number
+          status?: string
+          total_earned?: number
+          total_paid?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      referral_payout_requests: {
+        Row: {
+          admin_notes: string | null
+          amount: number
+          created_at: string
+          id: string
+          processed_at: string | null
+          processed_by: string | null
+          referral_member_id: string
+          status: string
+        }
+        Insert: {
+          admin_notes?: string | null
+          amount?: number
+          created_at?: string
+          id?: string
+          processed_at?: string | null
+          processed_by?: string | null
+          referral_member_id: string
+          status?: string
+        }
+        Update: {
+          admin_notes?: string | null
+          amount?: number
+          created_at?: string
+          id?: string
+          processed_at?: string | null
+          processed_by?: string | null
+          referral_member_id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "referral_payout_requests_referral_member_id_fkey"
+            columns: ["referral_member_id"]
+            isOneToOne: false
+            referencedRelation: "referral_members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      referral_promo_codes: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          bonus_amount: number
+          bonus_type: string
+          code: string
+          code_type: string
+          created_at: string
+          id: string
+          max_uses: number | null
+          referral_member_id: string
+          status: string
+          usage_count: number
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          bonus_amount?: number
+          bonus_type?: string
+          code: string
+          code_type?: string
+          created_at?: string
+          id?: string
+          max_uses?: number | null
+          referral_member_id: string
+          status?: string
+          usage_count?: number
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          bonus_amount?: number
+          bonus_type?: string
+          code?: string
+          code_type?: string
+          created_at?: string
+          id?: string
+          max_uses?: number | null
+          referral_member_id?: string
+          status?: string
+          usage_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "referral_promo_codes_referral_member_id_fkey"
+            columns: ["referral_member_id"]
+            isOneToOne: false
+            referencedRelation: "referral_members"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       refineries: {
         Row: {
           active_vessels: number | null
@@ -5728,6 +5974,54 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      special_promo_codes: {
+        Row: {
+          code: string
+          created_at: string
+          discount_percentage: number
+          free_months: number
+          id: string
+          is_active: boolean
+          max_redemptions: number | null
+          plan_tier: string
+          redemption_count: number
+          stripe_coupon_id: string | null
+          stripe_promo_code_id: string | null
+          updated_at: string
+          valid_until: string | null
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          discount_percentage: number
+          free_months: number
+          id?: string
+          is_active?: boolean
+          max_redemptions?: number | null
+          plan_tier: string
+          redemption_count?: number
+          stripe_coupon_id?: string | null
+          stripe_promo_code_id?: string | null
+          updated_at?: string
+          valid_until?: string | null
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          discount_percentage?: number
+          free_months?: number
+          id?: string
+          is_active?: boolean
+          max_redemptions?: number | null
+          plan_tier?: string
+          redemption_count?: number
+          stripe_coupon_id?: string | null
+          stripe_promo_code_id?: string | null
+          updated_at?: string
+          valid_until?: string | null
+        }
+        Relationships: []
       }
       sponsor_banners: {
         Row: {

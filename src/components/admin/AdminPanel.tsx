@@ -42,6 +42,7 @@ import TalentProgramsManagement from './talent/TalentProgramsManagement';
 import LinkedInManagement from './LinkedInManagement';
 import DocumentPublishing from './DocumentPublishing';
 import OilMarketManagement from './OilMarketManagement';
+import ReferralProgramManagement from './ReferralProgramManagement';
 
 const AdminPanel = () => {
   const location = useLocation();
@@ -271,6 +272,11 @@ const AdminPanel = () => {
                 <Fuel className="h-5 w-5 text-amber-600" />
                 <span className="text-xs font-medium">Oil Market</span>
               </TabsTrigger>
+
+              <TabsTrigger value="referral-programs" className="flex flex-col items-center gap-1 p-3 h-auto min-h-[60px] min-w-[80px] border-2 border-emerald-200 hover:border-emerald-400">
+                <Gift className="h-5 w-5 text-emerald-600" />
+                <span className="text-xs font-medium">Referral</span>
+              </TabsTrigger>
             </TabsList>
           </div>
         </div>
@@ -441,6 +447,10 @@ const AdminPanel = () => {
 
         <TabsContent value="oil-market">
           <OilMarketManagement />
+        </TabsContent>
+
+        <TabsContent value="referral-programs">
+          <ReferralProgramManagement />
         </TabsContent>
       </Tabs>
     </div>

@@ -4,7 +4,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
 const logStep = (step: string, details?: any) => {
@@ -121,9 +121,42 @@ serve(async (req) => {
       throw new Error("User email required for checkout");
     }
 
-    const { tier, billing_cycle = 'monthly', payment_type = 'subscribe_now', trial_days = 0 } = requestBody;
+    const { tier, billing_cycle = 'monthly', payment_type = 'subscribe_now', trial_days = 0, special_promo_code } = requestBody;
     if (!tier) {
       throw new Error("Subscription tier is required");
+    }
+
+    // Check for special promo code
+    let specialPromo: any = null;
+    if (special_promo_code) {
+      logStep("Checking special promo code", { code: special_promo_code });
+      const supabaseServiceEarly = createClient(
+        Deno.env.get("SUPABASE_URL") ?? "",
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
+        { auth: { persistSession: false } }
+      );
+      const { data: promoData } = await supabaseServiceEarly
+        .from('special_promo_codes')
+        .select('*')
+        .eq('code', special_promo_code.toUpperCase())
+        .eq('is_active', true)
+        .maybeSingle();
+
+      if (promoData) {
+        // Validate plan tier
+        if (promoData.plan_tier !== tier) {
+          logStep("Special promo not valid for this plan", { promoTier: promoData.plan_tier, requestedTier: tier });
+        } else if (promoData.valid_until && new Date(promoData.valid_until) < new Date()) {
+          logStep("Special promo expired", { valid_until: promoData.valid_until });
+        } else if (promoData.max_redemptions && promoData.redemption_count >= promoData.max_redemptions) {
+          logStep("Special promo max redemptions reached");
+        } else {
+          specialPromo = promoData;
+          logStep("Valid special promo found", { code: promoData.code, discount: promoData.discount_percentage, months: promoData.free_months });
+        }
+      } else {
+        logStep("Special promo code not found or inactive");
+      }
     }
 
     const supabaseService = createClient(
@@ -293,17 +326,35 @@ serve(async (req) => {
         stripe_mode: mode,
       },
       subscription_data: {
-        trial_period_days: 5,
+        trial_period_days: specialPromo ? undefined : 5,
         metadata: {
           plan_tier: tier,
           billing_cycle: billing_cycle,
-          signup_source: 'website'
+          signup_source: 'website',
+          ...(specialPromo ? { special_promo_code: specialPromo.code, special_promo_months: specialPromo.free_months.toString() } : {})
         }
       }
     };
 
-    // Allow Stripe's native promo code field on the hosted checkout page
-    subscriptionData.allow_promotion_codes = true;
+    if (specialPromo && specialPromo.stripe_promo_code_id) {
+      // Attach the special promo discount directly — no trial, coupon pre-applied
+      subscriptionData.discounts = [{ promotion_code: specialPromo.stripe_promo_code_id }];
+      logStep("Applied special promo to session", { code: specialPromo.code, stripePromoId: specialPromo.stripe_promo_code_id });
+
+      // Increment redemption count
+      const supabaseServiceUpdate = createClient(
+        Deno.env.get("SUPABASE_URL") ?? "",
+        Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "",
+        { auth: { persistSession: false } }
+      );
+      await supabaseServiceUpdate
+        .from('special_promo_codes')
+        .update({ redemption_count: (specialPromo.redemption_count || 0) + 1 })
+        .eq('id', specialPromo.id);
+    } else {
+      // Allow Stripe's native promo code field on the hosted checkout page
+      subscriptionData.allow_promotion_codes = true;
+    }
 
     const session = await stripe.checkout.sessions.create(subscriptionData);
 

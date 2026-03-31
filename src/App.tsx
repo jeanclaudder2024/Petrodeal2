@@ -76,6 +76,7 @@ import SupportAdmin from "./pages/SupportAdmin";
 import Subscription from "./pages/Subscription";
 import Admin from "./pages/Admin";
 import Map from "./pages/Map";
+import ReferralDashboardPage from "./pages/ReferralDashboard";
 import NotFound from "./pages/NotFound";
 import ProtectedRoute from "./components/ProtectedRoute";
 
@@ -472,6 +473,16 @@ const App = () => (
                 <AppLayout>
                   <ProtectedRoute>
                     <Map />
+                  </ProtectedRoute>
+                </AppLayout>
+              } 
+            />
+            <Route 
+              path="/referral-dashboard" 
+              element={
+                <AppLayout>
+                  <ProtectedRoute requireSubscription={false}>
+                    <ReferralDashboardPage />
                   </ProtectedRoute>
                 </AppLayout>
               } 

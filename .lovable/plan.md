@@ -1,62 +1,73 @@
 
+Goal: fix the real promo-creation failure and make the Special Promo UI usable on mobile, without changing the overall promo structure.
 
-# Fix: Free Trial Plan Visibility + Document Access for Trial Users
+What I found
+- The edge function is not failing at boot anymore. The logs show it starts correctly and reaches Stripe.
+- The real backend error is now:
+  `Invalid string ... must be at most 40 characters`
+- This happens in `supabase/functions/create-special-promo/index.ts` when creating the Stripe coupon:
+  the generated `couponParams.name` is too long.
+- Mobile also needs improvement:
+  - `src/pages/Subscription.tsx` uses a single-row promo input/button on a 360px screen, so it gets cramped.
+  - `src/components/admin/StripeConfiguration.tsx` uses fixed 3-column tabs and wide tables without mobile overflow handling.
 
-## What's Happening Now
+Implementation plan
 
-1. You created a "Free Trial" plan in admin with `plan_tier: 'Trial'` (capital T)
-2. But when users register, the `handle_new_user()` trigger sets their `subscription_tier` to `'trial'` (lowercase)
-3. The VesselDocumentGenerator looks up plans by `plan_tier` matching the user's `subscription_tier` -- `'trial'` != `'Trial'`, so no plan is found, and documents stay locked
-4. There's no "show/hide from frontend" toggle, so the Free Trial plan would appear on the pricing page, subscription page, and registration steps -- which you don't want
+1. Fix the real Stripe error in `create-special-promo`
+- Replace the long Stripe coupon `name` with a short safe label under 40 chars, or remove the `name` entirely and keep full details only in metadata.
+- Keep the current structure:
+  - code
+  - discount_percentage
+  - free_months
+  - plan_tier
+  - no free trial behavior
+- Add stricter input normalization before Stripe call:
+  - uppercase code
+  - trim spaces
+  - reject empty/invalid values early
+- Improve error handling so Stripe validation errors return a clear readable message instead of only “edge function no 2xx”.
 
-## Plan
+2. Improve admin Special Promo UX in `src/components/admin/StripeConfiguration.tsx`
+- Keep the existing “Special Promo Codes” tab and form.
+- Add clearer validation/help text so admins know the promo code will create:
+  “X months at Y% off, no 5-day trial”.
+- Improve failure display so the toast shows the backend message when Stripe rejects the request.
+- Make the tab layout mobile-friendly:
+  - use horizontally scrollable tabs instead of a squeezed 3-column grid
+  - wrap the Special Promo table in `overflow-x-auto`
+  - ensure dialog content and action button remain comfortable on small screens
 
-### 1. Add `show_in_frontend` column to `subscription_plans` table
+3. Fix the mobile Special Promo input on `src/pages/Subscription.tsx`
+- Change the promo code input area from one tight horizontal row to:
+  - stacked layout on mobile
+  - horizontal layout on larger screens
+- Make the Apply button full width on small screens.
+- Keep the current behavior of passing `special_promo_code` into checkout.
+- Preserve the confirmation text: “no 5-day trial”.
 
-Add a new boolean column `show_in_frontend` (default `true`) to control whether a plan appears on customer-facing pages (pricing, subscription, registration step 5). Internal-only plans like "Free Trial" will have this set to `false`.
+4. Hardening pass on checkout flow
+- Review `supabase/functions/create-checkout/index.ts` to keep special promo behavior consistent:
+  - valid special promo => skip 5-day trial
+  - invalid special promo => do not crash checkout
+- Align CORS headers with the standard Supabase edge-function header set for consistency.
 
-### 2. Fix plan_tier case mismatch
+5. Verification after implementation
+- Admin test:
+  - create a code like `VIPFREE3`
+  - confirm the coupon is created successfully in Stripe
+  - confirm a DB row is saved in `special_promo_codes`
+- Checkout test:
+  - enter the code on subscription page
+  - confirm checkout opens
+  - confirm the subscription has no 5-day trial and uses the special discount
+- Mobile test:
+  - verify admin Stripe tab is scrollable and usable on narrow screens
+  - verify subscription promo input/button is easy to use at 360px width
 
-Update your existing "Free Trial" plan's `plan_tier` from `'Trial'` to `'trial'` (lowercase) so it matches the value stored in `subscribers.subscription_tier` by the `handle_new_user()` trigger.
+Files to update
+- `supabase/functions/create-special-promo/index.ts`
+- `src/components/admin/StripeConfiguration.tsx`
+- `src/pages/Subscription.tsx`
+- `supabase/functions/create-checkout/index.ts` (hardening only)
 
-### 3. Add visibility toggle to admin Plan form
-
-In `SubscriptionManagement.tsx`, add a "Show to customers" Switch in the plan create/edit dialog. This controls the `show_in_frontend` value.
-
-### 4. Filter plans on customer-facing pages
-
-Update these files to add `.eq('show_in_frontend', true)` when fetching plans:
-- `src/components/MultiStepRegistration.tsx` (registration step 5)
-- `src/components/PricingPlans.tsx` (subscription page)
-- `src/components/landing/PricingSection.tsx` (landing page pricing)
-- `src/components/FloatingAIAssistant.tsx` (AI assistant pricing info)
-
-Admin pages (Doc Publishing Plan Access, admin Subscription Management) will NOT filter by this column -- they show all plans so you can assign documents to the Free Trial plan.
-
-### 5. VesselDocumentGenerator already works correctly
-
-Once the `plan_tier` case is fixed to `'trial'` (lowercase), the existing template permission lookup logic will work:
-- User has `subscription_tier = 'trial'`
-- System finds plan with `plan_tier = 'trial'`
-- System checks `plan_template_permissions` for that plan's ID
-- Documents assigned to the Free Trial plan become visible/downloadable
-
-## After Implementation
-
-1. Go to Admin > Subscription > Plans -- you'll see the "Show to customers" toggle
-2. Make sure "Free Trial" has it OFF
-3. Go to Admin > Doc Publishing > Plan Access -- you'll see the Free Trial plan listed
-4. Assign document templates to the Free Trial plan
-5. Trial users will see those documents unlocked on vessel pages
-
-## Files Changed
-
-| File | Change |
-|---|---|
-| Database migration | Add `show_in_frontend` column, fix `plan_tier` case |
-| `src/components/admin/SubscriptionManagement.tsx` | Add visibility toggle in plan form + save it |
-| `src/components/MultiStepRegistration.tsx` | Filter by `show_in_frontend = true` |
-| `src/components/PricingPlans.tsx` | Filter by `show_in_frontend = true` |
-| `src/components/landing/PricingSection.tsx` | Filter by `show_in_frontend = true` |
-| `src/components/FloatingAIAssistant.tsx` | Filter by `show_in_frontend = true` |
-
+No database migration is needed for this fix, because the table structure already supports the feature.

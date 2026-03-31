@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { 
   Bell, 
@@ -10,7 +10,8 @@ import {
   ChevronDown,
   Home,
   Shield,
-  HelpCircle
+  HelpCircle,
+  Gift
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -27,6 +28,7 @@ import {
 import { useAuth } from '@/contexts/AuthContext';
 import { useUserRole } from '@/hooks/useUserRole';
 import { useIsMobile } from '@/hooks/use-mobile';
+import { supabase } from '@/integrations/supabase/client';
 
 interface MobileHeaderProps {
   onMenuToggle?: () => void;
@@ -41,6 +43,14 @@ export function MobileHeader({ onMenuToggle, showSearch, onSearchToggle }: Mobil
   const { isAdmin } = useUserRole();
   const isMobile = useIsMobile();
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [isReferralMember, setIsReferralMember] = useState(false);
+
+  useEffect(() => {
+    if (user?.id) {
+      supabase.from('referral_members').select('id').eq('user_id', user.id).eq('status', 'active').maybeSingle()
+        .then(({ data }) => setIsReferralMember(!!data));
+    }
+  }, [user?.id]);
 
   if (!isMobile) {
     return null;
@@ -228,6 +238,16 @@ export function MobileHeader({ onMenuToggle, showSearch, onSearchToggle }: Mobil
       {/* Quick Actions Bar */}
       <div className="px-4 pb-3">
         <div className="flex items-center gap-2 overflow-x-auto">
+          {isReferralMember && (
+            <Button 
+              size="sm" 
+              className="flex-shrink-0 bg-red-600 text-white hover:bg-red-700"
+              onClick={() => navigate('/referral-dashboard')}
+            >
+              <Gift className="h-4 w-4 mr-2" />
+              Referral Dashboard
+            </Button>
+          )}
           <Button 
             variant="outline" 
             size="sm" 

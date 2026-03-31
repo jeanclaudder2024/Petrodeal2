@@ -12,12 +12,14 @@ import {
   Map,
   HelpCircle,
   BookOpen,
-  MoreHorizontal
+  MoreHorizontal,
+  Gift
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/contexts/AuthContext';
 import { useUserRole } from '@/hooks/useUserRole';
+import { supabase } from '@/integrations/supabase/client';
 
 const primaryNavItems = [
   { title: 'Dashboard', url: '/dashboard', icon: LayoutDashboard },
@@ -44,6 +46,14 @@ export function MobileBottomNav() {
 
   const currentPath = location.pathname;
   const [showMore, setShowMore] = React.useState(false);
+  const [isReferralMember, setIsReferralMember] = React.useState(false);
+
+  React.useEffect(() => {
+    if (user?.id) {
+      supabase.from('referral_members').select('id').eq('user_id', user.id).eq('status', 'active').maybeSingle()
+        .then(({ data }) => setIsReferralMember(!!data));
+    }
+  }, [user?.id]);
 
   const isActive = (url: string) => currentPath === url;
 
@@ -102,6 +112,19 @@ export function MobileBottomNav() {
             <div className="p-4">
               <h3 className="text-sm font-semibold text-muted-foreground mb-3 px-2">More Options</h3>
               <div className="grid grid-cols-2 gap-2">
+                {isReferralMember && (
+                  <Button
+                    variant="ghost"
+                    className="flex items-center gap-3 p-3 h-auto justify-start bg-red-600 text-white hover:bg-red-700 hover:text-white col-span-2"
+                    onClick={() => {
+                      navigate('/referral-dashboard');
+                      setShowMore(false);
+                    }}
+                  >
+                    <Gift className="h-5 w-5" />
+                    <span className="font-medium">Referral Program</span>
+                  </Button>
+                )}
                 {secondaryNavItems.map((item) => {
                   const active = isActive(item.url);
                   return (

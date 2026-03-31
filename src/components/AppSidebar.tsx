@@ -32,6 +32,8 @@ import {
 import { useAuth } from '@/contexts/AuthContext';
 import { useUserRole } from '@/hooks/useUserRole';
 import { useLanguage } from '@/contexts/LanguageContext';
+import { supabase } from '@/integrations/supabase/client';
+import { Gift } from 'lucide-react';
 
 const getMainItems = (t: (key: string) => string) => [
   { title: t('navigation.dashboard'), url: '/dashboard', icon: LayoutDashboard },
@@ -65,11 +67,19 @@ const getBrokerItems = (t: (key: string, fallback?: string) => string) => [
 export function AppSidebar() {
   const { state } = useSidebar();
   const location = useLocation();
-  const { signOut } = useAuth();
+  const { signOut, user } = useAuth();
   const { isAdmin } = useUserRole();
   const { t } = useLanguage();
   const currentPath = location.pathname;
   const collapsed = state === "collapsed";
+  const [isReferralMember, setIsReferralMember] = React.useState(false);
+
+  React.useEffect(() => {
+    if (user?.id) {
+      supabase.from('referral_members').select('id').eq('user_id', user.id).eq('status', 'active').maybeSingle()
+        .then(({ data }) => setIsReferralMember(!!data));
+    }
+  }, [user?.id]);
 
   const isActive = (path: string) => currentPath === path;
   const getNavCls = ({ isActive }: { isActive: boolean }) =>
@@ -392,6 +402,37 @@ export function AppSidebar() {
                       {!collapsed && (
                         <span className="font-medium animate-fade-in">API & Webhooks</span>
                       )}
+                    </NavLink>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
+
+        {/* Referral Program - conditional */}
+        {isReferralMember && (
+          <SidebarGroup className="px-2 py-2">
+            <SidebarGroupLabel className={`${collapsed ? 'sr-only' : 'px-2 text-xs uppercase tracking-wider text-muted-foreground/80 font-semibold'}`}>
+              Referral
+            </SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu className="space-y-1">
+                <SidebarMenuItem>
+                  <SidebarMenuButton asChild>
+                    <NavLink
+                      to="/referral-dashboard"
+                      className={({ isActive }) => `
+                        flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all duration-300 ease-out
+                        transform hover:scale-[1.02]
+                        ${isActive
+                          ? 'bg-red-600 text-white border-l-4 border-red-800 shadow-lg'
+                          : 'bg-red-600 text-white hover:bg-red-700'
+                        }
+                      `}
+                    >
+                      <Gift className={`transition-all duration-300 ${collapsed ? 'h-5 w-5' : 'h-4 w-4'} text-white`} />
+                      {!collapsed && <span className="font-medium animate-fade-in">Referral Program</span>}
                     </NavLink>
                   </SidebarMenuButton>
                 </SidebarMenuItem>

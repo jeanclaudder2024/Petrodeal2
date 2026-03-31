@@ -11,7 +11,8 @@ import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
-import { CreditCard, Plus, Trash2, CheckCircle2, Loader2, Percent, Shield, Pencil } from 'lucide-react';
+import { CreditCard, Plus, Trash2, CheckCircle2, Loader2, Percent, Shield, Pencil, Gift } from 'lucide-react';
+import { Slider } from '@/components/ui/slider';
 
 interface Discount {
   id: string;
@@ -23,6 +24,21 @@ interface Discount {
   is_active: boolean;
   created_at: string;
   plan_tier?: string;
+}
+
+interface SpecialPromo {
+  id: string;
+  code: string;
+  discount_percentage: number;
+  free_months: number;
+  plan_tier: string;
+  is_active: boolean;
+  max_redemptions: number | null;
+  redemption_count: number;
+  valid_until: string | null;
+  stripe_coupon_id: string | null;
+  stripe_promo_code_id: string | null;
+  created_at: string;
 }
 
 export default function StripeConfiguration() {
@@ -53,9 +69,22 @@ export default function StripeConfiguration() {
     plan_tier: 'all',
   });
 
+  // Special Promo state
+  const [specialPromos, setSpecialPromos] = useState<SpecialPromo[]>([]);
+  const [isSpecialDialogOpen, setIsSpecialDialogOpen] = useState(false);
+  const [specialForm, setSpecialForm] = useState({
+    code: '',
+    discount_percentage: 100,
+    free_months: 3,
+    plan_tier: 'basic',
+    valid_until: '',
+    max_redemptions: '',
+  });
+
   useEffect(() => {
     loadConfiguration();
     loadDiscounts();
+    loadSpecialPromos();
   }, []);
 
   const loadConfiguration = async () => {
@@ -71,7 +100,6 @@ export default function StripeConfiguration() {
       }
 
       if (data) {
-        // Use stripe_mode column (not is_live_mode)
         setIsLiveMode((data as any).stripe_mode === 'live');
       }
     } catch (error) {
@@ -96,13 +124,29 @@ export default function StripeConfiguration() {
     }
   };
 
+  const loadSpecialPromos = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('special_promo_codes' as any)
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error loading special promos:', error);
+        return;
+      }
+      setSpecialPromos((data || []) as unknown as SpecialPromo[]);
+    } catch (error) {
+      console.error('Error loading special promos:', error);
+    }
+  };
+
   const toggleStripeMode = async () => {
     setLoading(true);
     try {
       const newMode = !isLiveMode;
       const modeValue = newMode ? 'live' : 'test';
       
-      // Check if a record exists first
       const { data: existing } = await supabase
         .from('stripe_configuration' as any)
         .select('id')
@@ -110,7 +154,6 @@ export default function StripeConfiguration() {
 
       let error;
       if (existing && (existing as any).id) {
-        // Update existing record
         const result = await supabase
           .from('stripe_configuration' as any)
           .update({
@@ -120,7 +163,6 @@ export default function StripeConfiguration() {
           .eq('id', (existing as any).id);
         error = result.error;
       } else {
-        // Insert new record
         const result = await supabase
           .from('stripe_configuration' as any)
           .insert({
@@ -269,12 +311,77 @@ export default function StripeConfiguration() {
     }
   };
 
+  // Special Promo Code functions
+  const createSpecialPromo = async () => {
+    if (!specialForm.code) {
+      toast({ title: "Validation Error", description: "Please enter a promo code", variant: "destructive" });
+      return;
+    }
+
+    setLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('create-special-promo', {
+        body: {
+          code: specialForm.code.toUpperCase(),
+          discount_percentage: specialForm.discount_percentage,
+          free_months: specialForm.free_months,
+          plan_tier: specialForm.plan_tier,
+          valid_until: specialForm.valid_until || null,
+          max_redemptions: specialForm.max_redemptions ? parseInt(specialForm.max_redemptions) : null,
+        }
+      });
+
+      if (error) throw error;
+
+      if (data.success) {
+        toast({ title: "Special Promo Created", description: `Code ${specialForm.code.toUpperCase()} created in Stripe` });
+        setIsSpecialDialogOpen(false);
+        setSpecialForm({ code: '', discount_percentage: 100, free_months: 3, plan_tier: 'basic', valid_until: '', max_redemptions: '' });
+        loadSpecialPromos();
+      } else {
+        throw new Error(data.message);
+      }
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message || "Failed to create special promo", variant: "destructive" });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const toggleSpecialPromo = async (promo: SpecialPromo) => {
+    try {
+      const { error } = await supabase
+        .from('special_promo_codes' as any)
+        .update({ is_active: !promo.is_active } as any)
+        .eq('id', promo.id);
+
+      if (error) throw error;
+      toast({ title: promo.is_active ? "Deactivated" : "Activated" });
+      loadSpecialPromos();
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    }
+  };
+
+  const deleteSpecialPromo = async (id: string) => {
+    if (!confirm('Are you sure? This will not delete the coupon from Stripe.')) return;
+    try {
+      const { error } = await supabase.from('special_promo_codes' as any).delete().eq('id', id);
+      if (error) throw error;
+      toast({ title: "Deleted" });
+      loadSpecialPromos();
+    } catch (error: any) {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    }
+  };
+
   return (
     <div className="space-y-6">
       <Tabs defaultValue="configuration">
-        <TabsList className="grid w-full grid-cols-2">
+        <TabsList className="flex w-full overflow-x-auto">
           <TabsTrigger value="configuration">Configuration</TabsTrigger>
           <TabsTrigger value="discounts">Stripe Promo Codes</TabsTrigger>
+          <TabsTrigger value="special">Special Promo Codes</TabsTrigger>
         </TabsList>
 
         <TabsContent value="configuration" className="space-y-6">
@@ -396,6 +503,154 @@ export default function StripeConfiguration() {
                     ))}
                   </TableBody>
                 </Table>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Special Promo Codes Tab */}
+        <TabsContent value="special" className="space-y-6">
+          <Card>
+            <CardHeader className="flex flex-row items-center justify-between">
+              <div>
+                <CardTitle className="flex items-center gap-2"><Gift className="h-5 w-5" />Special Promo Codes</CardTitle>
+                <CardDescription>X months at a discount with NO free trial — billing starts immediately</CardDescription>
+              </div>
+              <Dialog open={isSpecialDialogOpen} onOpenChange={setIsSpecialDialogOpen}>
+                <DialogTrigger asChild><Button><Plus className="h-4 w-4 mr-2" />Create Special Promo</Button></DialogTrigger>
+                <DialogContent className="max-w-md">
+                  <DialogHeader>
+                    <DialogTitle>Create Special Promo Code</DialogTitle>
+                    <DialogDescription>
+                      Create a promo code that gives X months at a discount with no 5-day free trial
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-4">
+                    <div>
+                      <Label>Promo Code *</Label>
+                      <Input 
+                        value={specialForm.code} 
+                        onChange={(e) => setSpecialForm({ ...specialForm, code: e.target.value.toUpperCase().replace(/\s/g, '') })} 
+                        placeholder="VIPFREE3" 
+                      />
+                    </div>
+                    <div>
+                      <Label>Plan *</Label>
+                      <Select value={specialForm.plan_tier} onValueChange={(v) => setSpecialForm({ ...specialForm, plan_tier: v })}>
+                        <SelectTrigger><SelectValue /></SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="basic">Basic</SelectItem>
+                          <SelectItem value="professional">Professional</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div>
+                      <Label>Free Months: {specialForm.free_months}</Label>
+                      <Slider
+                        value={[specialForm.free_months]}
+                        onValueChange={([v]) => setSpecialForm({ ...specialForm, free_months: v })}
+                        min={1}
+                        max={12}
+                        step={1}
+                        className="mt-2"
+                      />
+                      <div className="flex justify-between text-xs text-muted-foreground mt-1">
+                        <span>1 month</span>
+                        <span>12 months</span>
+                      </div>
+                    </div>
+                    <div>
+                      <Label>Discount: {specialForm.discount_percentage}%</Label>
+                      <Slider
+                        value={[specialForm.discount_percentage]}
+                        onValueChange={([v]) => setSpecialForm({ ...specialForm, discount_percentage: v })}
+                        min={1}
+                        max={100}
+                        step={1}
+                        className="mt-2"
+                      />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        100% = completely free, 50% = half price
+                      </p>
+                    </div>
+                    <div>
+                      <Label>Valid Until (optional)</Label>
+                      <Input 
+                        type="date" 
+                        value={specialForm.valid_until} 
+                        onChange={(e) => setSpecialForm({ ...specialForm, valid_until: e.target.value })} 
+                      />
+                    </div>
+                    <div>
+                      <Label>Max Redemptions (optional)</Label>
+                      <Input 
+                        type="number" 
+                        min="1" 
+                        value={specialForm.max_redemptions} 
+                        onChange={(e) => setSpecialForm({ ...specialForm, max_redemptions: e.target.value })} 
+                        placeholder="Unlimited" 
+                      />
+                    </div>
+
+                    {/* Preview */}
+                    <div className="p-3 bg-muted rounded-lg text-sm space-y-1">
+                      <p className="font-semibold">Preview:</p>
+                      <p>Code: <span className="font-mono">{specialForm.code || '...'}</span></p>
+                      <p>{specialForm.discount_percentage}% off for {specialForm.free_months} month{specialForm.free_months > 1 ? 's' : ''} on {specialForm.plan_tier}</p>
+                      <p className="text-muted-foreground">No 5-day free trial — billing starts immediately</p>
+                    </div>
+
+                    <Button onClick={createSpecialPromo} disabled={loading} className="w-full">
+                      {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Gift className="h-4 w-4 mr-2" />}
+                      Create in Stripe
+                    </Button>
+                  </div>
+                </DialogContent>
+              </Dialog>
+            </CardHeader>
+            <CardContent>
+              {specialPromos.length === 0 ? (
+                <div className="text-center py-8 text-muted-foreground">
+                  <Gift className="h-12 w-12 mx-auto mb-3 opacity-30" />
+                  <p>No special promo codes yet</p>
+                  <p className="text-sm">Create one to offer free months without a trial period</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto"><Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Code</TableHead>
+                      <TableHead>Plan</TableHead>
+                      <TableHead>Discount</TableHead>
+                      <TableHead>Months</TableHead>
+                      <TableHead>Redeemed</TableHead>
+                      <TableHead>Valid Until</TableHead>
+                      <TableHead>Status</TableHead>
+                      <TableHead>Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {specialPromos.map((p) => (
+                      <TableRow key={p.id}>
+                        <TableCell className="font-mono font-semibold">{p.code}</TableCell>
+                        <TableCell><Badge variant="outline">{p.plan_tier.charAt(0).toUpperCase() + p.plan_tier.slice(1)}</Badge></TableCell>
+                        <TableCell>{p.discount_percentage}%</TableCell>
+                        <TableCell>{p.free_months} mo</TableCell>
+                        <TableCell>{p.redemption_count}{p.max_redemptions ? `/${p.max_redemptions}` : ''}</TableCell>
+                        <TableCell>{p.valid_until ? new Date(p.valid_until).toLocaleDateString() : '∞'}</TableCell>
+                        <TableCell><Badge variant={p.is_active ? 'default' : 'secondary'}>{p.is_active ? 'Active' : 'Inactive'}</Badge></TableCell>
+                        <TableCell className="flex gap-1">
+                          <Button variant="ghost" size="sm" onClick={() => toggleSpecialPromo(p)}>
+                            {p.is_active ? 'Disable' : 'Enable'}
+                          </Button>
+                          <Button variant="ghost" size="sm" onClick={() => deleteSpecialPromo(p.id)}>
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table></div>
               )}
             </CardContent>
           </Card>
